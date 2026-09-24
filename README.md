@@ -32,6 +32,8 @@ Perfect where an exception-type lookup table would also be perfect, and below ch
 
 The upstream project reproduces an interface pattern using off-the-shelf open models, explicitly not a model trained for typed decisions. These numbers are the size of that gap on this workload.
 
+Full measurements, including the model comparison and what each iteration of the question tree fixed, are in [docs/FINDINGS.md](docs/FINDINGS.md).
+
 ### Why the prompt is rendered locally
 
 Qwen3's packaged chat template ends a prompt at `<|im_start|>assistant\n`, which leaves the model free to open a reasoning block. The first sampled position would then hold the distribution over `<think>`, not over the answer letters, and every declared option would read as near-zero mass. Upstream avoids this by rendering with `enable_thinking=False`, which closes an empty reasoning block inside the prompt itself.
