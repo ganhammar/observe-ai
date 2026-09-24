@@ -91,10 +91,112 @@ public sealed class RowResultDto
     };
 }
 
+/// <summary>identify's result. Only Error is set when Parsed is false; every other field is only set when it is true.</summary>
+public sealed class IdentifyResultDto
+{
+    [JsonPropertyName("parsed")]
+    public required bool Parsed { get; init; }
+
+    [JsonPropertyName("runtime")]
+    public string? Runtime { get; init; }
+
+    [JsonPropertyName("exceptionType")]
+    public string? ExceptionType { get; init; }
+
+    [JsonPropertyName("fingerprint")]
+    public string? Fingerprint { get; init; }
+
+    [JsonPropertyName("signature")]
+    public string? Signature { get; init; }
+
+    [JsonPropertyName("namespacePrefix")]
+    public string? NamespacePrefix { get; init; }
+
+    [JsonPropertyName("resourceKind")]
+    public string? ResourceKind { get; init; }
+
+    [JsonPropertyName("resourceName")]
+    public string? ResourceName { get; init; }
+
+    [JsonPropertyName("frames")]
+    public IReadOnlyList<Frame>? Frames { get; init; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; init; }
+
+    public static IdentifyResultDto From(IdentifyResult result) => new()
+    {
+        Parsed = result.Parsed,
+        Runtime = result.Runtime,
+        ExceptionType = result.ExceptionType,
+        Fingerprint = result.Fingerprint,
+        Signature = result.Signature,
+        NamespacePrefix = result.NamespacePrefix,
+        ResourceKind = result.ResourceKind?.ToString(),
+        ResourceName = result.ResourceName,
+        Frames = result.Frames,
+        Error = result.Error,
+    };
+}
+
+/// <summary>escalate's result: what to run, what it would have verified, and the issue drafted from both.</summary>
+public sealed class EscalateResultDto
+{
+    [JsonPropertyName("fetchCommands")]
+    public required IReadOnlyList<string[]> FetchCommands { get; init; }
+
+    [JsonPropertyName("frameVerdicts")]
+    public required IReadOnlyList<FrameVerdict> FrameVerdicts { get; init; }
+
+    [JsonPropertyName("draft")]
+    public required Draft Draft { get; init; }
+
+    public static EscalateResultDto From(EscalateResult result) => new()
+    {
+        FetchCommands = result.FetchCommands,
+        FrameVerdicts = result.FrameVerdicts,
+        Draft = result.Draft,
+    };
+}
+
+/// <summary>
+/// The Lambda response shape. Only Results is set for triage, keeping that
+/// action's wire format exactly as it was before identify and escalate existed;
+/// Identify and Escalate are each set only by their own action. Repo/ResolvedBy
+/// (resolve-repo) and Allowed/Tripped/Count/Limit (check-rate) stay flat here
+/// rather than nested under their own key, because the state machine reads
+/// them straight off the ResultPath it assigns their task to (for example
+/// $.repo.repo, $.rate.tripped), the same way $.verdict.results[0] reads
+/// Results.
+/// </summary>
 public sealed class LambdaResponse
 {
     [JsonPropertyName("results")]
-    public required IReadOnlyList<RowResultDto> Results { get; init; }
+    public IReadOnlyList<RowResultDto>? Results { get; init; }
+
+    [JsonPropertyName("identify")]
+    public IdentifyResultDto? Identify { get; init; }
+
+    [JsonPropertyName("escalate")]
+    public EscalateResultDto? Escalate { get; init; }
+
+    [JsonPropertyName("repo")]
+    public string? Repo { get; init; }
+
+    [JsonPropertyName("resolvedBy")]
+    public string? ResolvedBy { get; init; }
+
+    [JsonPropertyName("allowed")]
+    public bool? Allowed { get; init; }
+
+    [JsonPropertyName("tripped")]
+    public bool? Tripped { get; init; }
+
+    [JsonPropertyName("count")]
+    public long? Count { get; init; }
+
+    [JsonPropertyName("limit")]
+    public long? Limit { get; init; }
 }
 
 [JsonSourceGenerationOptions(
@@ -104,4 +206,6 @@ public sealed class LambdaResponse
 [JsonSerializable(typeof(LambdaResponse))]
 [JsonSerializable(typeof(RowResultDto))]
 [JsonSerializable(typeof(TopToken))]
+[JsonSerializable(typeof(IdentifyResultDto))]
+[JsonSerializable(typeof(EscalateResultDto))]
 public partial class LambdaJsonContext : JsonSerializerContext;

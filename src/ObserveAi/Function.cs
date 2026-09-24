@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Amazon;
 using Amazon.BedrockRuntime;
+using Amazon.DynamoDBv2;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.RuntimeSupport;
 using Amazon.Lambda.Serialization.SystemTextJson;
@@ -9,15 +10,15 @@ using Amazon.Runtime;
 namespace ObserveAi;
 
 /// <summary>
-/// AWS Lambda entrypoint scoring SemIf rows against Bedrock Custom Model Import.
-///
-/// Mirrors src/observe_ai/handler.py. The Bedrock client is created lazily on
-/// first invocation and reused across warm invocations, since constructing it on
-/// every call would be wasted work in a warm container.
+/// AWS Lambda entrypoint for the pipeline stages a Step Functions state machine drives, selected
+/// by an "action" field on the event: identify, resolve-repo, triage, check-rate, or escalate (a
+/// missing action means triage). One deployment, one binary; the flow between stages lives in the
+/// state machine, not here.
 /// </summary>
 public static class Function
 {
     private static readonly Lazy<IBedrockInvoker> LazyClient = new(CreateClient);
+    private static readonly Lazy<IAmazonDynamoDB> LazyDynamo = new(() => new AmazonDynamoDBClient());
     private static readonly Lazy<QuestionTree> LazyTree = new(QuestionTree.LoadEmbedded);
 
     public static async Task Main()
@@ -29,17 +30,9 @@ public static class Function
         await bootstrap.RunAsync();
     }
 
-    /// <summary>
-    /// Scores a single SemIf row or a {"rows": [...]} batch, returning {"results": [...]}.
-    ///
-    /// Takes an already-parsed event: a direct Lambda invoke, or a consumer
-    /// reading rows off a queue such as SQS. No API Gateway / HTTP body parsing
-    /// is implemented here.
-    /// </summary>
     public static Task<LambdaResponse> FunctionHandlerAsync(JsonElement lambdaEvent, ILambdaContext context)
     {
-        var modelArn = Environment.GetEnvironmentVariable("MODEL_ARN")
-            ?? throw new InvalidOperationException("MODEL_ARN environment variable is not set");
+        var modelArn = RequireEnv("MODEL_ARN");
         // SEMIF_MODE picks the triage path: the tree of sub-questions (default), or
         // the single flat question it replaced, kept so the two can be compared
         // against a deployed model without shipping code.
@@ -49,13 +42,73 @@ public static class Function
         // deployed model without shipping code.
         var api = Environment.GetEnvironmentVariable("SEMIF_API") ?? "completion";
 
-        return ScoreRowsAsync(lambdaEvent, LazyClient.Value, modelArn, mode, api, context);
+        return DispatchAsync(lambdaEvent, LazyClient.Value, modelArn, mode, api, context);
     }
 
     /// <summary>
-    /// The handler's body with the Bedrock client passed in, so a test can supply a
-    /// fake invoker instead of one built from real AWS configuration.
+    /// The handler's body with the Bedrock client passed in, so a test can
+    /// supply a fake invoker instead of one built from real AWS configuration.
     /// </summary>
+    internal static Task<LambdaResponse> DispatchAsync(
+        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, string api,
+        ILambdaContext context, RepoResolver.ReadCache? readCache = null, RepoResolver.WriteCache? writeCache = null,
+        Caps.UpdateItem? updateRate = null)
+    {
+        var action = lambdaEvent.ValueKind == JsonValueKind.Object
+            && lambdaEvent.TryGetProperty("action", out var actionProperty)
+            && actionProperty.ValueKind == JsonValueKind.String
+                ? actionProperty.GetString()!
+                : "triage";
+
+        return action switch
+        {
+            "identify" => Task.FromResult(RunIdentify(lambdaEvent)),
+            "resolve-repo" => RunResolveRepoAsync(lambdaEvent, context, readCache, writeCache),
+            "triage" => ScoreRowsAsync(lambdaEvent, client, modelArn, mode, api, context),
+            "check-rate" => RunCheckRateAsync(lambdaEvent, updateRate),
+            "escalate" => RunEscalateAsync(lambdaEvent, client, modelArn, context),
+            _ => throw new InvalidOperationException($"Unknown action: '{action}'"),
+        };
+    }
+
+    /// <summary>logGroupName is required; namespacePrefix is absent when identify found no in-app frame to name one from.</summary>
+    private static async Task<LambdaResponse> RunResolveRepoAsync(
+        JsonElement lambdaEvent, ILambdaContext context, RepoResolver.ReadCache? readCache, RepoResolver.WriteCache? writeCache)
+    {
+        var logGroupName = RequireString(lambdaEvent, "logGroupName");
+        var namespacePrefix = lambdaEvent.TryGetProperty("namespacePrefix", out var ns) && ns.ValueKind == JsonValueKind.String ? ns.GetString() : null;
+        var accountId = context.InvokedFunctionArn.Split(':').ElementAtOrDefault(4) ?? "";
+        var resolution = await Pipeline.ResolveRepoAsync(
+            logGroupName, namespacePrefix, RequireEnv("NAMESPACE_CACHE_TABLE"), RequireEnv("AWS_REGION"), accountId,
+            readCache ?? LazyDynamo.Value.GetItemAsync, writeCache ?? LazyDynamo.Value.PutItemAsync,
+            DateTimeOffset.UtcNow).ConfigureAwait(false);
+        return new LambdaResponse { Repo = resolution?.Repo, ResolvedBy = resolution?.Source.ToString() };
+    }
+
+    /// <summary>Buckets are keyed by hour; two hours of slack past the boundary is plenty for the TTL sweep to catch up.</summary>
+    private static async Task<LambdaResponse> RunCheckRateAsync(JsonElement lambdaEvent, Caps.UpdateItem? updateRate)
+    {
+        var repo = RequireString(lambdaEvent, "repo");
+        var perRepoLimit = long.Parse(RequireEnv("ISSUES_PER_REPO_PER_HOUR"));
+        var globalLimit = long.Parse(RequireEnv("ISSUES_PER_HOUR"));
+        var result = await Caps.TryConsumeAsync(
+            updateRate ?? Caps.Against(LazyDynamo.Value), RequireEnv("RATE_TABLE"), repo, perRepoLimit, globalLimit,
+            DateTimeOffset.UtcNow, TimeSpan.FromHours(2)).ConfigureAwait(false);
+        return new LambdaResponse { Allowed = result.Allowed, Tripped = result.Tripped, Count = result.Count, Limit = result.Limit };
+    }
+
+    private static LambdaResponse RunIdentify(JsonElement lambdaEvent)
+    {
+        var logGroupName = RequireString(lambdaEvent, "logGroupName");
+        var message = RequireString(lambdaEvent, "message");
+        var appPrefixes = lambdaEvent.TryGetProperty("appPrefixes", out var prefixes) && prefixes.ValueKind == JsonValueKind.Array
+            ? prefixes.EnumerateArray().Select(p => p.GetString() ?? "").ToList()
+            : [];
+
+        return new LambdaResponse { Identify = IdentifyResultDto.From(Pipeline.Identify(logGroupName, message, appPrefixes)) };
+    }
+
+    /// <summary>Scores a single SemIf row or a {"rows": [...]} batch, returning {"results": [...]}, unchanged from before actions existed.</summary>
     internal static async Task<LambdaResponse> ScoreRowsAsync(
         JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, string api,
         ILambdaContext context)
@@ -64,7 +117,7 @@ public static class Function
         var results = new List<RowResultDto>(rows.Count);
         foreach (var row in rows)
         {
-            results.Add(await ScoreRowAsync(row, client, modelArn, mode, api, context).ConfigureAwait(false));
+            results.Add(await Pipeline.TriageRowAsync(row, client, modelArn, mode, api, LazyTree, context).ConfigureAwait(false));
         }
 
         var failures = results.Count(result => result.Error is not null);
@@ -84,61 +137,50 @@ public static class Function
         return [lambdaEvent];
     }
 
-    private static async Task<RowResultDto> ScoreRowAsync(
-        JsonElement row, IBedrockInvoker client, string modelArn, string mode, string api, ILambdaContext context)
+    private static async Task<LambdaResponse> RunEscalateAsync(
+        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, ILambdaContext context)
     {
-        if (row.ValueKind != JsonValueKind.Object)
-        {
-            var kind = DescribeKind(row);
-            context.Logger.LogWarning($"Row rejected: expected an object, got {kind}");
-            return RowResultDto.FromError(null, $"Row must be a JSON object, got {kind}");
-        }
-
-        string? rowId = row.TryGetProperty("id", out var idProperty) && idProperty.ValueKind == JsonValueKind.String
-            ? idProperty.GetString()
-            : null;
-
-        try
-        {
-            if (mode == "flat")
-            {
-                var score = await BedrockBackend.ScoreAsync(client, modelArn, row, api: api).ConfigureAwait(false);
-                return RowResultDto.FromScore(score);
-            }
-
-            var tree = LazyTree.Value;
-            var result = await Triage.RunAsync(client, modelArn, row, tree).ConfigureAwait(false);
-
-            // A verdict built from some of the signals is still usable, but the
-            // gaps change what it means, so they belong in the log rather than
-            // only in the response.
-            foreach (var failed in result.Answers.Where(answer => answer.Error is not null))
-            {
-                context.Logger.LogWarning($"Row {rowId} signal {failed.Key} failed: {failed.Error}");
-            }
-            return RowResultDto.FromTriage(rowId, result, tree);
-        }
-        catch (Exception error) when (error is RowValidationException or AmazonServiceException or AmazonClientException)
-        {
-            context.Logger.LogWarning($"Row {rowId} rejected: {error.GetType().Name}: {error.Message}");
-            return RowResultDto.FromError(rowId, $"{error.GetType().Name}: {error.Message}");
-        }
+        var request = ParseEscalateRequest(lambdaEvent);
+        var result = await Pipeline.EscalateAsync(client, modelArn, request).ConfigureAwait(false);
+        var matched = result.FrameVerdicts.Count(v => v.Matched);
+        context.Logger.LogInformation($"Escalated {request.Repo}@{request.Commitish}: {matched}/{result.FrameVerdicts.Count} frames matched");
+        return new LambdaResponse { Escalate = EscalateResultDto.From(result) };
     }
 
-    private static string DescribeKind(JsonElement element) => element.ValueKind switch
+    /// <summary>trace.frames[i].source is the fetched span for that frame, or absent when nothing has been checked out for it yet.</summary>
+    private static EscalateRequest ParseEscalateRequest(JsonElement e)
     {
-        JsonValueKind.String => "str",
-        JsonValueKind.Number => "number",
-        JsonValueKind.True or JsonValueKind.False => "bool",
-        JsonValueKind.Array => "list",
-        JsonValueKind.Null or JsonValueKind.Undefined => "NoneType",
-        _ => element.ValueKind.ToString(),
-    };
+        var traceEl = e.GetProperty("trace");
+        var frames = new List<Frame>();
+        var sources = new List<string?>();
+        foreach (var frame in traceEl.GetProperty("frames").EnumerateArray())
+        {
+            frames.Add(new Frame(frame.GetProperty("method").GetString()!, frame.GetProperty("inApp").GetBoolean()));
+            sources.Add(frame.TryGetProperty("source", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null);
+        }
+        var trace = new ParsedTrace(traceEl.GetProperty("runtime").GetString()!, traceEl.GetProperty("exceptionType").GetString()!, frames);
+        var v = e.GetProperty("verdict");
+        var verdict = new CombineResult(
+            v.GetProperty("bug").GetDouble(), v.GetProperty("downstream").GetDouble(), v.TryGetProperty("fallback", out var fb) && fb.GetBoolean());
+
+        return new EscalateRequest(
+            RequireString(e, "repo"), RequireString(e, "commitish"), trace, RequireString(e, "rawTrace"), sources, verdict,
+            e.TryGetProperty("occurrences", out var occ) ? occ.GetInt64() : 1,
+            e.TryGetProperty("firstSeen", out var firstSeen) ? firstSeen.GetDateTimeOffset() : DateTimeOffset.UtcNow,
+            e.TryGetProperty("rootCause", out var rootCause) ? rootCause.GetString() ?? "" : "");
+    }
+
+    private static string RequireString(JsonElement element, string field) =>
+        element.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 } text
+            ? text
+            : throw new InvalidOperationException($"Missing required field: '{field}'");
+
+    private static string RequireEnv(string name) =>
+        Environment.GetEnvironmentVariable(name) ?? throw new InvalidOperationException($"{name} environment variable is not set");
 
     private static IBedrockInvoker CreateClient()
     {
-        var region = Environment.GetEnvironmentVariable("BEDROCK_REGION")
-            ?? throw new InvalidOperationException("BEDROCK_REGION environment variable is not set");
+        var region = RequireEnv("BEDROCK_REGION");
         var config = new AmazonBedrockRuntimeConfig
         {
             RegionEndpoint = RegionEndpoint.GetBySystemName(region),

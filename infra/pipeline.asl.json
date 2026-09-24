@@ -1,0 +1,223 @@
+{
+  "Comment": "One log event from ingest to an issue, or to a stop with a reason. Every branch ends in a terminal state so the execution history answers why a log did or did not become an issue.",
+  "StartAt": "Identify",
+  "States": {
+    "Identify": {
+      "Type": "Task",
+      "Resource": "${TriageFunctionArn}",
+      "Parameters": {
+        "action": "identify",
+        "logGroup.$": "$.logGroup",
+        "message.$": "$.message"
+      },
+      "ResultPath": "$.identity",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.TooManyRequestsException",
+            "Lambda.ServiceException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Parsed?",
+      "Comment": "ResultPath binds the whole response, so the stage's own fields sit one level down under identify."
+    },
+    "Parsed?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.identity.identify.parsed",
+          "BooleanEquals": false,
+          "Next": "Unparseable"
+        }
+      ],
+      "Default": "ResolveRepo"
+    },
+    "Unparseable": {
+      "Type": "Succeed",
+      "Comment": "A line with no recognisable trace is ordinary, not a failure. The model fallback for unknown formats belongs here when it exists."
+    },
+    "ResolveRepo": {
+      "Type": "Task",
+      "Resource": "${TriageFunctionArn}",
+      "Parameters": {
+        "action": "resolve-repo",
+        "logGroup.$": "$.logGroup",
+        "namespacePrefix.$": "$.identity.identify.namespacePrefix"
+      },
+      "ResultPath": "$.repo",
+      "Next": "Repo known?"
+    },
+    "Repo known?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.repo.repo",
+          "IsPresent": false,
+          "Next": "UnknownRepo"
+        }
+      ],
+      "Default": "CountOccurrence"
+    },
+    "UnknownRepo": {
+      "Type": "Succeed",
+      "Comment": "Nothing to file against. Tagging the resource is the fix, so this is a stop rather than an error."
+    },
+    "CountOccurrence": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${SeenTable}",
+        "Key": {
+          "repo": {
+            "S.$": "$.repo.repo"
+          },
+          "fingerprint": {
+            "S.$": "$.identity.identify.fingerprint"
+          }
+        },
+        "UpdateExpression": "ADD occurrences :one SET last_seen = :now",
+        "ExpressionAttributeValues": {
+          ":one": {
+            "N": "1"
+          },
+          ":now": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        },
+        "ReturnValues": "ALL_NEW"
+      },
+      "ResultSelector": {
+        "occurrences.$": "States.StringToJson($.Attributes.occurrences.N)"
+      },
+      "ResultPath": "$.seen",
+      "Comment": "Counting is a direct SDK call rather than a Lambda, so the cheap path that almost every log takes costs no invocation at all.",
+      "Next": "First sighting?"
+    },
+    "First sighting?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.seen.occurrences",
+          "NumericGreaterThan": 1,
+          "Next": "AlreadyKnown"
+        }
+      ],
+      "Default": "Triage"
+    },
+    "AlreadyKnown": {
+      "Type": "Succeed",
+      "Comment": "The common case by a wide margin, and the reason nine model calls per distinct failure is affordable."
+    },
+    "Triage": {
+      "Type": "Task",
+      "Resource": "${TriageFunctionArn}",
+      "Parameters": {
+        "action": "triage",
+        "id.$": "$.identity.identify.fingerprint",
+        "state.$": "$.state"
+      },
+      "ResultPath": "$.verdict",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Confident it is ours?"
+    },
+    "Confident it is ours?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.verdict.results[0].probabilities[0]",
+          "NumericLessThan": 0.3,
+          "Next": "LikelyDownstream"
+        },
+        {
+          "Variable": "$.verdict.results[0].probabilities[0]",
+          "NumericLessThan": 0.7,
+          "Next": "Uncertain"
+        }
+      ],
+      "Default": "CheckRateLimit",
+      "Comment": "Thresholds are only meaningful because the tree produces a gradient. The flat readout answered 0 or 1 and left nothing to route on."
+    },
+    "LikelyDownstream": {
+      "Type": "Succeed",
+      "Comment": "Dropped deliberately. The counter still rose, so a dependency failing constantly stays visible without filing anything."
+    },
+    "Uncertain": {
+      "Type": "Succeed",
+      "Comment": "Held rather than guessed. A second pass with more evidence, or a human, belongs here."
+    },
+    "CheckRateLimit": {
+      "Type": "Task",
+      "Resource": "${TriageFunctionArn}",
+      "Parameters": {
+        "action": "check-rate",
+        "repo.$": "$.repo.repo"
+      },
+      "ResultPath": "$.rate",
+      "Next": "Under the cap?"
+    },
+    "Under the cap?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.rate.tripped",
+          "BooleanEquals": true,
+          "Next": "BreakerTripped"
+        },
+        {
+          "Variable": "$.rate.allowed",
+          "BooleanEquals": false,
+          "Next": "RollUp"
+        }
+      ],
+      "Default": "Escalate"
+    },
+    "BreakerTripped": {
+      "Type": "Succeed",
+      "Comment": "A bad deploy breaking many services at once should page, not file fifty issues at three in the morning."
+    },
+    "RollUp": {
+      "Type": "Succeed",
+      "Comment": "Over this repository's hourly budget. The overflow belongs in one incident issue rather than being discarded."
+    },
+    "Escalate": {
+      "Type": "Task",
+      "Resource": "${TriageFunctionArn}",
+      "Parameters": {
+        "action": "escalate",
+        "repo.$": "$.repo.repo",
+        "identity.$": "$.identity",
+        "verdict.$": "$.verdict",
+        "occurrences.$": "$.seen.occurrences"
+      },
+      "ResultPath": "$.draft",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "EscalationFailed"
+        }
+      ],
+      "End": true
+    },
+    "EscalationFailed": {
+      "Type": "Fail",
+      "Error": "EscalationFailed",
+      "Cause": "Reading source or drafting the issue failed. The occurrence is already counted, so the next sighting will not retry it automatically."
+    }
+  }
+}

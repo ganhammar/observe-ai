@@ -5,7 +5,7 @@ namespace ObserveAi.Tests;
 /// <summary>Loads eval/logs.jsonl and eval/labels.json so trace-parsing tests run against the real fixture instead of hand-typed traces.</summary>
 public static class EvalFixture
 {
-    public sealed record Row(string Id, string Runtime, string StackTrace)
+    public sealed record Row(string Id, string Runtime, string StackTrace, string Message)
     {
         public override string ToString() => Id;
     }
@@ -28,9 +28,11 @@ public static class EvalFixture
             using var doc = JsonDocument.Parse(line);
             var root = doc.RootElement;
             var id = root.GetProperty("id").GetString()!;
-            var stackTrace = root.GetProperty("state").GetProperty("stack_trace").GetString()!;
+            var state = root.GetProperty("state");
+            var stackTrace = state.GetProperty("stack_trace").GetString()!;
+            var message = state.GetProperty("message").GetString()!;
             var runtime = labels.GetProperty(id).GetProperty("runtime").GetString()!;
-            rows.Add(new Row(id, runtime, stackTrace));
+            rows.Add(new Row(id, runtime, stackTrace, message));
         }
         return rows;
     }

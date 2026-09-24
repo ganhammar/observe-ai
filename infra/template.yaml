@@ -47,6 +47,20 @@ Parameters:
       at the first sampled position. chat lets Bedrock apply the model's
       packaged template, whose default leaves the model free to open a
       reasoning block instead.
+  IssuesPerRepoPerHour:
+    Type: Number
+    Default: 5
+    Description: >
+      Caps.TryConsumeAsync's per-repository hourly limit on filed issues.
+      Occurrences past this roll into one incident issue instead of each
+      opening their own.
+  IssuesPerHour:
+    Type: Number
+    Default: 20
+    Description: >
+      Caps.TryConsumeAsync's hourly limit across every repository combined.
+      Crossing it trips the breaker: nothing files and the caller notifies
+      instead.
 
 Resources:
   TriageFunction:
@@ -85,6 +99,9 @@ Resources:
           SEMIF_MODE: !Ref SemifMode
           SEEN_TABLE: !Ref SeenTable
           NAMESPACE_CACHE_TABLE: !Ref NamespaceCacheTable
+          RATE_TABLE: !Ref RateTable
+          ISSUES_PER_REPO_PER_HOUR: !Ref IssuesPerRepoPerHour
+          ISSUES_PER_HOUR: !Ref IssuesPerHour
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -104,6 +121,11 @@ Resources:
                 - dynamodb:GetItem
                 - dynamodb:PutItem
               Resource: !GetAtt NamespaceCacheTable.Arn
+            - Sid: IncrementRateCountersOnly
+              Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt RateTable.Arn
             # RepoResolver's tag step reads the observe-ai:repo tag off whatever
             # resource the log group names (a Lambda function, an ECS service, an
             # EKS workload); GetResources is how the Resource Groups Tagging API
@@ -175,10 +197,87 @@ Resources:
         AttributeName: expires_at
         Enabled: true
 
+  # Two hourly rate counters share this table under one partition key: a
+  # per-repository budget and, across the same hour, a global one covering
+  # every repository. An hour bucket has no value the next day, so it expires
+  # by then rather than accumulating forever.
+  RateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: bucket
+          AttributeType: S
+      KeySchema:
+        - AttributeName: bucket
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
   TriageFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/${TriageFunction}
+      RetentionInDays: 30
+
+  # Drives one log event from ingest to an issue, or to a stop with a reason
+  # (infra/pipeline.asl.json). STANDARD, not EXPRESS, because the execution
+  # history is the audit trail for why a log did or did not become an issue,
+  # and that history is only kept for standard executions. ALL-level logging
+  # to CloudWatch Logs is the same audit trail for the states a completed
+  # execution passed through, without having to open the execution in the
+  # console. The machine calls DynamoDB directly for CountOccurrence, so its
+  # role needs dynamodb:UpdateItem on SeenTable in addition to permission to
+  # invoke TriageFunction for every other step.
+  TriagePipeline:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Type: STANDARD
+      DefinitionUri: pipeline.asl.json
+      DefinitionSubstitutions:
+        TriageFunctionArn: !GetAtt TriageFunction.Arn
+        SeenTable: !Ref SeenTable
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt TriagePipelineLogGroup.Arn
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: InvokeTriageFunctionOnly
+              Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt TriageFunction.Arn
+            - Sid: CountOccurrencesOnly
+              Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt SeenTable.Arn
+            # Step Functions delivers execution history to CloudWatch Logs through
+            # the account's log delivery configuration rather than a plain
+            # logs:PutLogEvents call, and that delivery API only accepts '*' as a
+            # resource; this is the AWS-documented policy shape for it.
+            - Sid: DeliverExecutionHistoryToCloudWatchLogs
+              Effect: Allow
+              Action:
+                - logs:CreateLogDelivery
+                - logs:GetLogDelivery
+                - logs:UpdateLogDelivery
+                - logs:DeleteLogDelivery
+                - logs:ListLogDeliveries
+                - logs:PutResourcePolicy
+                - logs:DescribeResourcePolicies
+                - logs:DescribeLogGroups
+              Resource: '*'
+
+  TriagePipelineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/vendedlogs/states/${AWS::StackName}-TriagePipeline
       RetentionInDays: 30
 
 Outputs:
@@ -188,3 +287,6 @@ Outputs:
   TriageFunctionName:
     Description: Name of the triage Lambda function.
     Value: !Ref TriageFunction
+  TriagePipelineArn:
+    Description: ARN of the triage pipeline state machine.
+    Value: !Ref TriagePipeline
