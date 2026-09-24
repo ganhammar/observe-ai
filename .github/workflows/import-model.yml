@@ -1,0 +1,101 @@
+name: Import Model
+
+# One-time bootstrap. Bedrock Custom Model Import is not supported by
+# CloudFormation, so the imported model cannot be a stack resource and is
+# created here instead. Deploy resolves the resulting ARN at deploy time
+# rather than receiving it through a variable, so the two stay in step.
+#
+# Manual trigger only: the job downloads several GB of weights, and the
+# imported model it produces carries a monthly per-CMU storage charge until
+# it is deleted. Re-running is safe and cheap, since the script exits early
+# when a model of the target name already exists.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bucket:
+        description: S3 bucket in the deploy account used to stage the weights
+        required: true
+        type: string
+      import_role_arn:
+        description: IAM role ARN Bedrock assumes to read the staged weights
+        required: true
+        type: string
+      model_id:
+        description: HuggingFace model id to import
+        required: false
+        default: Qwen/Qwen3-4B
+        type: string
+      model_name:
+        description: Imported model name, and the key Deploy looks it up by
+        required: false
+        default: observe-ai
+        type: string
+
+concurrency:
+  # Two imports of the same model racing would create duplicate billable copies.
+  group: import-model-${{ inputs.model_name }}
+  cancel-in-progress: false
+
+jobs:
+  import:
+    name: Import
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install huggingface-cli
+        run: pip install --upgrade "huggingface_hub[cli]"
+
+      - name: Report free disk space
+        # Weights are staged to the runner before the S3 sync, so a full disk
+        # is the most likely way this job fails.
+        run: df -h /
+
+      - name: Run import
+        # Inputs are passed through the environment rather than interpolated
+        # into the script body, so a value containing shell metacharacters is
+        # data to the script instead of syntax to the runner shell.
+        env:
+          MODEL_ID: ${{ inputs.model_id }}
+          BUCKET: ${{ inputs.bucket }}
+          IMPORT_ROLE: ${{ inputs.import_role_arn }}
+          MODEL_NAME: ${{ inputs.model_name }}
+        run: |
+          ./infra/import-model.sh \
+            --model-id "$MODEL_ID" \
+            --bucket "$BUCKET" \
+            --role-arn "$IMPORT_ROLE" \
+            --job-name "$MODEL_NAME" \
+            --region eu-central-1
+
+      - name: Report imported model
+        env:
+          MODEL_NAME: ${{ inputs.model_name }}
+        run: |
+          MODEL_ARN="$(aws bedrock list-imported-models \
+            --region eu-central-1 \
+            --name-contains "$MODEL_NAME" \
+            --query "modelSummaries[?modelName=='$MODEL_NAME'].modelArn | [0]" \
+            --output text)"
+          echo "### Imported model" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "$MODEL_ARN" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "Deploy resolves this by name, so no variable needs updating." >> "$GITHUB_STEP_SUMMARY"

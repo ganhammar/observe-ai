@@ -56,9 +56,31 @@ jobs:
       - name: sam build
         run: sam build
 
+      - name: Resolve imported model
+        # Bedrock Custom Model Import is not a CloudFormation resource, so the
+        # model is created out of band by the Import Model workflow and looked
+        # up here by name. Resolving it at deploy time rather than reading a
+        # stored variable means the stack cannot point at a model that no
+        # longer exists, and a missing model fails here with a clear message
+        # instead of further down inside the CLI.
+        env:
+          MODEL_NAME: ${{ vars.MODEL_NAME || 'observe-ai' }}
+        run: |
+          MODEL_ARN="$(aws bedrock list-imported-models \
+            --region eu-central-1 \
+            --name-contains "$MODEL_NAME" \
+            --query "modelSummaries[?modelName=='$MODEL_NAME'].modelArn | [0]" \
+            --output text)"
+          if [ -z "$MODEL_ARN" ] || [ "$MODEL_ARN" = "None" ]; then
+            echo "::error::No imported Bedrock model named '$MODEL_NAME' in eu-central-1. Run the Import Model workflow first."
+            exit 1
+          fi
+          echo "Resolved $MODEL_NAME to $MODEL_ARN"
+          echo "MODEL_ARN=$MODEL_ARN" >> "$GITHUB_ENV"
+
       - name: sam deploy
         run: |
           sam deploy \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
-            --parameter-overrides ModelArn=${{ vars.MODEL_ARN }}
+            --parameter-overrides "ModelArn=$MODEL_ARN"

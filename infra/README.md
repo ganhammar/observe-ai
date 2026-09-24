@@ -39,7 +39,7 @@ Deploys the observe-ai triage Lambda with AWS SAM. The function calls a Bedrock 
    ```
 
 3. Run `infra/import-model.sh --bucket your-observe-ai-models --role-arn <role ARN from step 2>`. It downloads the model, uploads it to S3, starts the Bedrock import job, waits for it to finish, and prints the resulting model ARN. Read the cost warning it prints before confirming; see [Cost](#cost) below.
-4. Note the model ARN from step 3. It becomes the `ModelArn` stack parameter and the `MODEL_ARN` repository variable.
+4. Note the model ARN from step 3. It becomes the `ModelArn` stack parameter and the the imported model repository variable.
 5. Create an IAM role for GitHub Actions to assume over OIDC, no long-lived access keys. If the account does not already have a `token.actions.githubusercontent.com` OIDC identity provider, create that first. Trust policy for the role:
 
    ```json
@@ -76,7 +76,6 @@ Set these under Settings > Secrets and variables > Actions > Variables. No secre
 | Variable | Used by | Value |
 |---|---|---|
 | `AWS_DEPLOY_ROLE_ARN` | `.github/workflows/deploy.yml` | ARN of the OIDC role from setup step 5 |
-| `MODEL_ARN` | `.github/workflows/deploy.yml` | Bedrock imported-model ARN from setup step 3, passed to `sam deploy` as the `ModelArn` parameter |
 
 ## Cost
 
