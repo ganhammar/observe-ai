@@ -93,3 +93,23 @@ def render_qwen3_prompt(messages: list[dict]) -> str:
              for message in messages]
     parts.append(QWEN3_THINK_SUPPRESSED_SUFFIX)
     return "".join(parts)
+
+
+# Mistral has no system role: its template merges the system text into the first
+# user turn. It is not a reasoning model, so nothing needs suppressing, and the
+# leading <s> is left out because the serving tokenizer adds BOS itself and
+# including it here would double it.
+def render_mistral_prompt(messages: list[dict]) -> str:
+    """Render chat messages into Mistral's instruction format."""
+    system = "".join(m["content"] for m in messages if m["role"] == "system")
+    user = "".join(m["content"] for m in messages if m["role"] == "user")
+    body = f"{system}\n\n{user}" if system else user
+    # The bare template leaves no probability on the option letters at all: the
+    # model opens a formatted answer instead, with "**" as its top token. A
+    # trailing lead-in puts a letter at the first sampled position. Measured
+    # declared mass over three rows: 0.000 bare, 0.12 with a space, 0.24 with
+    # this, against 1.000 for Qwen3 with no lead-in at all.
+    return f"[INST] {body}[/INST] The answer is "
+
+
+RENDERERS = {"qwen3": render_qwen3_prompt, "mistral": render_mistral_prompt}

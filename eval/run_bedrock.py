@@ -35,6 +35,8 @@ def main() -> None:
                              "reasoning suppressed; chat lets Bedrock apply the packaged template")
     parser.add_argument("--unconstrained", action="store_true",
                         help="Drop the choice constraint so declared_mass reflects the true distribution")
+    parser.add_argument("--family", choices=tuple(sorted(__import__("observe_ai.semif", fromlist=["RENDERERS"]).RENDERERS)),
+                        default="qwen3", help="Prompt format for the target model")
     parser.add_argument("--limit", type=int, help="Score only the first N rows")
     args = parser.parse_args()
 
@@ -59,7 +61,7 @@ def main() -> None:
                 result = score(client, args.model_arn, row,
                                top_logprobs=args.top_logprobs,
                                constrain=not args.unconstrained,
-                               api=args.api)
+                               api=args.api, family=args.family)
             except Exception as error:
                 result = {"id": row.get("id"), "error": f"{type(error).__name__}: {error}"}
                 failed += 1

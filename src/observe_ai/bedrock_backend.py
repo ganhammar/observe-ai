@@ -16,6 +16,7 @@ from .semif import (
     LETTERS,
     digest,
     direct_messages,
+    RENDERERS,
     render_qwen3_prompt,
     softmax,
     validate_row,
@@ -25,7 +26,7 @@ PROMPT_VERSION = "bedrock-direct-v1"
 
 
 def score(client, model_arn: str, row: dict, *, top_logprobs: int = 20, constrain: bool = True,
-          api: str = "completion") -> dict:
+          api: str = "completion", family: str = "qwen3") -> dict:
     """Score one SemIf row against a Bedrock Custom Model Import target.
 
     Sends an invoke_model request with max_tokens=1 and logprobs enabled, reads
@@ -91,7 +92,7 @@ def score(client, model_arn: str, row: dict, *, top_logprobs: int = 20, constrai
 
     body = {"max_tokens": 1, "temperature": 0}
     if api == "completion":
-        prompt = render_qwen3_prompt(messages)
+        prompt = RENDERERS[family](messages)
         prompt_hash = digest(prompt)
         body["prompt"] = prompt
         # The Completions schema carries the candidate count in logprobs
