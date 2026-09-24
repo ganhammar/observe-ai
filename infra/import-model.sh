@@ -223,7 +223,12 @@ for sibling in data.get("siblings", []):
     name = sibling.get("rfilename", "")
     if name.startswith("original/"):
         continue
-    if not (name.endswith(".safetensors") or name in allowed):
+    # A sharded checkpoint is unusable without its index: the index names
+    # which tensor lives in which shard, and Bedrock reports the weights as
+    # missing entirely when it is absent. The name ends in .json, so it
+    # matches neither the safetensors suffix nor the exact-name set.
+    if not (name.endswith(".safetensors") or name.endswith(".index.json")
+            or name in allowed):
         continue
     size = sibling.get("size", 0)
     print(f"{size}\t{name}")
