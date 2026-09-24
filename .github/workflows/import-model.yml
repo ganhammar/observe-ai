@@ -91,10 +91,19 @@ jobs:
         # The hf entrypoint ships in the base package; the old cli extra is gone.
         run: pip install --upgrade huggingface_hub
 
-      - name: Report free disk space
-        # Weights are staged to the runner before the S3 sync, so a full disk
-        # is the most likely way this job fails.
-        run: df -h /
+      - name: Free disk space
+        # Even one safetensors shard plus overhead is tight against the
+        # runner's free disk, so preinstalled toolchains this job never uses
+        # are removed to make room. Each path is optional: a runner image
+        # that already lacks one is not a failure.
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/share/boost || true
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
 
       - name: Run import
         # Inputs are passed through the environment rather than interpolated

@@ -14,18 +14,30 @@
 # default below.
 #
 # What this does, in order:
-#   1. Downloads the model weights from HuggingFace with the hf CLI.
-#   2. Syncs the weights to an S3 bucket/prefix that Bedrock reads from.
+#   1. Lists the model's files from the HuggingFace API and selects the
+#      safetensors shards plus the small config/tokenizer files Bedrock
+#      needs.
+#   2. Stages and uploads those files one at a time: download a single
+#      file with the hf CLI, copy it to S3 with `aws s3 cp`, delete the
+#      local copy, then move on to the next.
 #   3. Calls `aws bedrock create-model-import-job` to start the import.
 #   4. Polls `aws bedrock get-model-import-job` until the job reaches a
 #      terminal state, then prints the resulting model ARN.
 #
-# Idempotency: the HuggingFace download resumes/skips files it already
-# has, `aws s3 sync` only uploads changed objects, and if an import job
-# with the target name is already in progress or already completed, this
-# script reuses it instead of starting a duplicate. A previously failed
-# job is not reused; this script starts a new one with a timestamp suffix
-# and leaves the failed job in place for inspection.
+# Why per-file staging: these checkpoints split their weights into
+# roughly 4 GB safetensors shards, but a GitHub-hosted runner has only
+# about 14 GB free on /. Qwen3-32B alone is 17 shards totalling 65.5 GB,
+# far more than fits at once. Downloading, uploading and deleting one
+# file at a time keeps peak local disk use around a single shard,
+# regardless of total model size.
+#
+# Idempotency: the destination S3 prefix is cleared before staging
+# begins, so a retry cannot leave a previous attempt's files mixed in
+# with a new one; if an import job with the target name is already in
+# progress or already completed, this script reuses it instead of
+# starting a duplicate. A previously failed job is not reused; this
+# script starts a new one with a timestamp suffix and leaves the failed
+# job in place for inspection.
 #
 # Prerequisites: an S3 bucket to stage weights in, and an IAM role Bedrock
 # assumes to read them (trust policy for the bedrock.amazonaws.com service
@@ -81,7 +93,7 @@ log() {
 }
 
 usage() {
-  sed -n '2,66p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,78p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 sanitize() {
@@ -130,7 +142,7 @@ SANITIZED_MODEL_ID="$(sanitize "$MODEL_ID")"
 S3_PREFIX="${S3_PREFIX:-models/${SANITIZED_MODEL_ID}}"
 IMPORT_JOB_NAME="${IMPORT_JOB_NAME:-${SANITIZED_MODEL_ID}-import}"
 
-for cmd in hf aws; do
+for cmd in hf aws curl python3; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "Error: required command '$cmd' was not found on PATH." >&2
     exit 1
@@ -183,18 +195,82 @@ fi
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
-LOCAL_MODEL_DIR="${WORKDIR}/${SANITIZED_MODEL_ID}"
-
-log "Downloading $MODEL_ID to $LOCAL_MODEL_DIR ..."
-hf download "$MODEL_ID" --local-dir "$LOCAL_MODEL_DIR"
 
 S3_URI="s3://${S3_BUCKET}/${S3_PREFIX}/"
-log "Syncing weights to $S3_URI ..."
-# Bedrock expects config.json and the weights at the prefix root. The hf
-# metadata cache is not part of the checkpoint, and --delete keeps a
-# retry from leaving files behind from an earlier attempt.
-aws s3 sync "$LOCAL_MODEL_DIR" "$S3_URI" --region "$REGION" \
-  --exclude ".cache/*" --delete
+
+log "Fetching file list for $MODEL_ID ..."
+API_URL="https://huggingface.co/api/models/${MODEL_ID}?blobs=true"
+if ! MODEL_INFO="$(curl -sfL "$API_URL")"; then
+  echo "Error: could not fetch file list from $API_URL" >&2
+  exit 1
+fi
+
+# Bedrock needs the safetensors shards plus the small files that describe
+# them. Everything else (README, .gitattributes, images, other checkpoint
+# formats such as .bin/.pth/.gguf, and anything under original/) is
+# skipped. Not every repo has every file in the allowlist below; a missing
+# one is not an error. Output is tab-separated "size<TAB>rfilename" lines.
+SELECTED="$(python3 -c '
+import json, sys
+
+data = json.loads(sys.stdin.read())
+allowed = {
+    "config.json", "generation_config.json", "tokenizer.json",
+    "tokenizer_config.json", "tokenizer.model", "special_tokens_map.json",
+    "vocab.json", "merges.txt",
+}
+for sibling in data.get("siblings", []):
+    name = sibling.get("rfilename", "")
+    if name.startswith("original/"):
+        continue
+    if not (name.endswith(".safetensors") or name in allowed):
+        continue
+    size = sibling.get("size", 0)
+    print(f"{size}\t{name}")
+' <<<"$MODEL_INFO")"
+
+if [[ -z "$SELECTED" ]]; then
+  echo "Error: no matching files found for $MODEL_ID." >&2
+  exit 1
+fi
+
+human() {
+  numfmt --to=iec --suffix=B "$1" 2>/dev/null || echo "$1 bytes"
+}
+
+TOTAL_SIZE=0
+MAX_SIZE=0
+FILE_COUNT=0
+while IFS=$'\t' read -r size name; do
+  TOTAL_SIZE=$((TOTAL_SIZE + size))
+  if (( size > MAX_SIZE )); then
+    MAX_SIZE=$size
+  fi
+  FILE_COUNT=$((FILE_COUNT + 1))
+done <<<"$SELECTED"
+
+AVAILABLE_BYTES="$(df -B1 --output=avail "$WORKDIR" | tail -n1 | tr -d ' ')"
+
+log "Selected $FILE_COUNT files, $(human "$TOTAL_SIZE") total."
+log "Available disk at $WORKDIR: $(human "$AVAILABLE_BYTES")."
+
+if (( MAX_SIZE > AVAILABLE_BYTES )); then
+  echo "Error: the largest selected file ($(human "$MAX_SIZE")) does not fit" >&2
+  echo "in the $(human "$AVAILABLE_BYTES") available at $WORKDIR." >&2
+  exit 1
+fi
+
+log "Clearing $S3_URI before staging so a retry cannot mix in old files ..."
+aws s3 rm "$S3_URI" --recursive --region "$REGION"
+
+INDEX=0
+while IFS=$'\t' read -r size name; do
+  INDEX=$((INDEX + 1))
+  log "[$INDEX/$FILE_COUNT] $name ($(human "$size"))"
+  hf download "$MODEL_ID" "$name" --local-dir "$WORKDIR"
+  aws s3 cp "${WORKDIR}/${name}" "${S3_URI}${name}" --region "$REGION"
+  rm -f "${WORKDIR}/${name}"
+done <<<"$SELECTED"
 
 get_status() {
   aws bedrock get-model-import-job \
