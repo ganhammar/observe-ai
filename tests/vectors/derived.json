@@ -1,0 +1,575 @@
+[
+  {
+    "name": "no_evidence_state_yields_no_facts",
+    "id": "dn-01",
+    "producer": null,
+    "state": {
+      "service": "checkout-api",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "System.Net.Http.HttpRequestException: Connection refused (payments.internal:8443)",
+      "stack_trace": "System.Net.Http.HttpRequestException: Connection refused (payments.internal:8443)\n ---> System.Net.Sockets.SocketException (111): Connection refused\n   at System.Net.Http.ConnectHelper.ConnectAsync(Func`3 callback, DnsEndPoint endPoint, HttpRequestMessage requestMessage, CancellationToken cancellationToken)\n   at System.Net.Http.HttpConnectionPool.ConnectToTcpHostAsync(String host, Int32 port, HttpRequestMessage initialRequest, Boolean async, CancellationToken cancellationToken)\n   at Checkout.Clients.PaymentsClient.ChargeAsync(ChargeRequest request, CancellationToken ct)\n   at Checkout.Handlers.CheckoutHandler.HandleAsync(CheckoutCommand cmd, CancellationToken ct)\n   at Checkout.Api.CheckoutController.Post(CheckoutRequest body, CancellationToken ct)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_dn-02",
+    "id": "dn-02",
+    "producer": "none",
+    "state": {
+      "service": "order-worker",
+      "runtime": "java",
+      "level": "ERROR",
+      "message": "java.net.SocketTimeoutException: Read timed out",
+      "stack_trace": "java.net.SocketTimeoutException: Read timed out\n\tat java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:288)\n\tat okhttp3.internal.http2.Http2Stream.waitForIo(Http2Stream.java:673)\n\tat com.acme.orders.client.InventoryClient.reserve(InventoryClient.java:94)\n\tat com.acme.orders.OrderWorker.process(OrderWorker.java:141)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_dn-03",
+    "id": "dn-03",
+    "producer": "none",
+    "state": {
+      "service": "search-api",
+      "runtime": "python",
+      "level": "ERROR",
+      "message": "elasticsearch.exceptions.ConnectionError: ConnectionTimeout caused by ReadTimeoutError",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/search/handlers.py\", line 62, in query\n    resp = self.es.search(index=index, body=body)\n  File \"/usr/local/lib/python3.12/site-packages/elasticsearch/_sync/client/utils.py\", line 446, in wrapped\n    return api(*args, **kwargs)\nelasticsearch.exceptions.ConnectionError: ConnectionTimeout caused by - ReadTimeoutError(HTTPSConnectionPool(host='es.internal', port=9243): Read timed out. (read timeout=10))"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_dn-04",
+    "id": "dn-04",
+    "producer": "none",
+    "state": {
+      "service": "billing-sync",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "Npgsql.NpgsqlException: The connection pool has been exhausted",
+      "stack_trace": "Npgsql.NpgsqlException (0x80004005): The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)\n   at Npgsql.ConnectorPool.RentAsync(NpgsqlConnection conn, NpgsqlTimeout timeout, Boolean async, CancellationToken cancellationToken)\n   at Billing.Data.LedgerRepository.GetOpenEntriesAsync(Guid accountId, CancellationToken ct)\n   at Billing.Sync.LedgerSyncJob.RunAsync(CancellationToken ct)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_dn-05",
+    "id": "dn-05",
+    "producer": "none",
+    "state": {
+      "service": "notify-fn",
+      "runtime": "node",
+      "level": "ERROR",
+      "message": "Error: getaddrinfo EAI_AGAIN smtp.provider.example",
+      "stack_trace": "Error: getaddrinfo EAI_AGAIN smtp.provider.example\n    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:120:26)\n    at SMTPConnection._onError (/app/node_modules/nodemailer/lib/smtp-connection/index.js:772:20)\n    at sendDigest (/app/src/notify/digest.js:58:11)\n    at async handler (/app/src/index.js:22:5)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_dn-06",
+    "id": "dn-06",
+    "producer": "none",
+    "state": {
+      "service": "checkout-api",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "Polly.CircuitBreaker.BrokenCircuitException: The circuit is now open",
+      "stack_trace": "Polly.CircuitBreaker.BrokenCircuitException: The circuit is now open and is not allowing calls.\n   at Polly.CircuitBreaker.CircuitStateController`1.OnActionPreExecute()\n   at Checkout.Clients.ShippingClient.QuoteAsync(QuoteRequest request, CancellationToken ct)\n   at Checkout.Handlers.QuoteHandler.HandleAsync(QuoteCommand cmd, CancellationToken ct)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_dn-07",
+    "id": "dn-07",
+    "producer": "none",
+    "state": {
+      "service": "ingest-worker",
+      "runtime": "go",
+      "level": "ERROR",
+      "message": "rpc error: code = Unavailable desc = connection error",
+      "stack_trace": "rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing dial tcp 10.4.2.19:50051: i/o timeout\"\ngoroutine 412 [running]:\nmain.(*Ingestor).push(0xc0000b4000, 0xc0001a2100)\n\t/app/ingest/push.go:77 +0x1d4\nmain.(*Ingestor).Run(0xc0000b4000)\n\t/app/ingest/run.go:38 +0x9c"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_dn-08",
+    "id": "dn-08",
+    "producer": "none",
+    "state": {
+      "service": "auth-api",
+      "runtime": "java",
+      "level": "ERROR",
+      "message": "org.springframework.web.client.HttpServerErrorException$ServiceUnavailable: 503",
+      "stack_trace": "org.springframework.web.client.HttpServerErrorException$ServiceUnavailable: 503 Service Unavailable: \"upstream connect error or disconnect/reset before headers\"\n\tat org.springframework.web.client.DefaultResponseErrorHandler.handleError(DefaultResponseErrorHandler.java:187)\n\tat com.acme.auth.client.DirectoryClient.lookup(DirectoryClient.java:71)\n\tat com.acme.auth.LoginService.authenticate(LoginService.java:118)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_dn-09",
+    "id": "dn-09",
+    "producer": "none",
+    "state": {
+      "service": "report-fn",
+      "runtime": "python",
+      "level": "ERROR",
+      "message": "botocore.exceptions.ClientError: ThrottlingException: Rate exceeded",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/var/task/report/export.py\", line 91, in write_batch\n    self.ddb.batch_write_item(RequestItems=payload)\nbotocore.exceptions.ClientError: An error occurred (ThrottlingException) when calling the BatchWriteItem operation (reached max retries: 4): Rate exceeded"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_dn-10",
+    "id": "dn-10",
+    "producer": "none",
+    "state": {
+      "service": "order-worker",
+      "runtime": "java",
+      "level": "ERROR",
+      "message": "org.apache.kafka.common.errors.TimeoutException: Topic not present in metadata after 60000 ms",
+      "stack_trace": "org.apache.kafka.common.errors.TimeoutException: Topic orders.v2 not present in metadata after 60000 ms.\n\tat org.apache.kafka.clients.producer.KafkaProducer.waitOnMetadata(KafkaProducer.java:1088)\n\tat com.acme.orders.OrderPublisher.publish(OrderPublisher.java:52)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_bg-01",
+    "id": "bg-01",
+    "producer": "none",
+    "state": {
+      "service": "pricing-api",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "System.IndexOutOfRangeException: Index was outside the bounds of the array.",
+      "stack_trace": "System.IndexOutOfRangeException: Index was outside the bounds of the array.\n   at Pricing.Tiers.TierResolver.Resolve(Decimal amount, Tier[] tiers)\n   at Pricing.Quote.QuoteBuilder.Build(QuoteRequest request)\n   at Pricing.Api.QuoteController.Post(QuoteRequest body)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_bg-02",
+    "id": "bg-02",
+    "producer": "none",
+    "state": {
+      "service": "catalog-api",
+      "runtime": "java",
+      "level": "ERROR",
+      "message": "java.lang.ArithmeticException: / by zero",
+      "stack_trace": "java.lang.ArithmeticException: / by zero\n\tat com.acme.catalog.pricing.Discount.percentOff(Discount.java:44)\n\tat com.acme.catalog.pricing.PriceCalculator.apply(PriceCalculator.java:88)\n\tat com.acme.catalog.ProductService.enrich(ProductService.java:203)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_bg-03",
+    "id": "bg-03",
+    "producer": "none",
+    "state": {
+      "service": "report-fn",
+      "runtime": "python",
+      "level": "ERROR",
+      "message": "KeyError: 'total_amount'",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/var/task/report/summarise.py\", line 47, in build_row\n    total = record[\"total_amount\"]\nKeyError: 'total_amount'"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_bg-04",
+    "id": "bg-04",
+    "producer": "none",
+    "state": {
+      "service": "web-bff",
+      "runtime": "node",
+      "level": "ERROR",
+      "message": "TypeError: Cannot read properties of undefined (reading 'map')",
+      "stack_trace": "TypeError: Cannot read properties of undefined (reading 'map')\n    at buildFacets (/app/src/bff/facets.js:31:28)\n    at renderSearch (/app/src/bff/search.js:112:19)\n    at async /app/src/bff/routes.js:64:20"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_bg-05",
+    "id": "bg-05",
+    "producer": "none",
+    "state": {
+      "service": "ledger-api",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "System.InvalidOperationException: Sequence contains no elements",
+      "stack_trace": "System.InvalidOperationException: Sequence contains no elements\n   at System.Linq.Enumerable.First[TSource](IEnumerable`1 source)\n   at Ledger.Posting.PostingRules.SelectRule(PostingContext context)\n   at Ledger.Posting.PostingService.Post(PostingRequest request)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_bg-06",
+    "id": "bg-06",
+    "producer": "none",
+    "state": {
+      "service": "ingest-worker",
+      "runtime": "go",
+      "level": "ERROR",
+      "message": "panic: runtime error: index out of range [5] with length 3",
+      "stack_trace": "panic: runtime error: index out of range [5] with length 3\ngoroutine 88 [running]:\nmain.parseColumns(0xc000124060, 0x3)\n\t/app/ingest/parse.go:118 +0x2a4\nmain.(*Ingestor).handleLine(0xc0000b4000, 0xc000130040)\n\t/app/ingest/run.go:64 +0x110"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_bg-07",
+    "id": "bg-07",
+    "producer": "none",
+    "state": {
+      "service": "auth-api",
+      "runtime": "java",
+      "level": "ERROR",
+      "message": "java.lang.StackOverflowError",
+      "stack_trace": "java.lang.StackOverflowError\n\tat com.acme.auth.policy.PolicyResolver.expand(PolicyResolver.java:77)\n\tat com.acme.auth.policy.PolicyResolver.expand(PolicyResolver.java:81)\n\tat com.acme.auth.policy.PolicyResolver.expand(PolicyResolver.java:81)\n\tat com.acme.auth.policy.PolicyResolver.expand(PolicyResolver.java:81)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_bg-08",
+    "id": "bg-08",
+    "producer": "none",
+    "state": {
+      "service": "checkout-api",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "System.FormatException: The input string '' was not in a correct format.",
+      "stack_trace": "System.FormatException: The input string '' was not in a correct format.\n   at System.Number.ThrowOverflowOrFormatException(ParsingStatus status, TypeCode type)\n   at Checkout.Coupons.CouponParser.ParsePercentage(String raw)\n   at Checkout.Coupons.CouponService.Apply(Cart cart, String code)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_bg-09",
+    "id": "bg-09",
+    "producer": "none",
+    "state": {
+      "service": "search-api",
+      "runtime": "python",
+      "level": "ERROR",
+      "message": "AttributeError: 'NoneType' object has no attribute 'lower'",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/app/search/normalise.py\", line 28, in normalise_term\n    return term.lower().strip()\nAttributeError: 'NoneType' object has no attribute 'lower'"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_bg-10",
+    "id": "bg-10",
+    "producer": "none",
+    "state": {
+      "service": "web-bff",
+      "runtime": "node",
+      "level": "ERROR",
+      "message": "RangeError: Maximum call stack size exceeded",
+      "stack_trace": "RangeError: Maximum call stack size exceeded\n    at deepMerge (/app/src/bff/config.js:19:22)\n    at deepMerge (/app/src/bff/config.js:24:14)\n    at deepMerge (/app/src/bff/config.js:24:14)"
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_am-01",
+    "id": "am-01",
+    "producer": "none",
+    "state": {
+      "service": "checkout-api",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "System.NullReferenceException in ChargeAsync",
+      "stack_trace": "System.NullReferenceException: Object reference not set to an instance of an object.\n   at Checkout.Clients.PaymentsClient.<ChargeAsync>d__12.MoveNext()\n--- End of stack trace from previous location ---\n   at Checkout.Handlers.CheckoutHandler.HandleAsync(CheckoutCommand cmd, CancellationToken ct)\n   at Checkout.Api.CheckoutController.Post(CheckoutRequest body, CancellationToken ct)",
+      "evidence": {
+        "upstream_response": {
+          "host": "payments.internal",
+          "status": 200,
+          "content_length": 0,
+          "content_type": "application/json"
+        },
+        "recent_rate": "first occurrence 08:14Z, 3140 occurrences since",
+        "last_deploy": {
+          "service": "checkout-api",
+          "at": "2026-09-11T10:02Z"
+        }
+      }
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_am-02",
+    "id": "am-02",
+    "producer": "none",
+    "state": {
+      "service": "order-worker",
+      "runtime": "java",
+      "level": "ERROR",
+      "message": "HttpClientErrorException$BadRequest: 400 from inventory",
+      "stack_trace": "org.springframework.web.client.HttpClientErrorException$BadRequest: 400 Bad Request\n\tat com.acme.orders.client.InventoryClient.reserve(InventoryClient.java:94)\n\tat com.acme.orders.OrderWorker.process(OrderWorker.java:141)",
+      "evidence": {
+        "response_body": {
+          "error": "quantity must be a positive integer",
+          "received": -1
+        },
+        "request_body": {
+          "sku": "AC-8812",
+          "quantity": -1,
+          "warehouse": "eu-1"
+        },
+        "upstream_health": "inventory-api reporting healthy, 0.02% error rate overall"
+      }
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "repetition_am-03",
+    "id": "am-03",
+    "producer": "repetition",
+    "state": {
+      "service": "report-fn",
+      "runtime": "python",
+      "level": "ERROR",
+      "message": "psycopg.errors.QueryCanceled: statement timeout",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/var/task/report/summarise.py\", line 88, in load_lines\n    cur.execute(SELECT_LINE, (order_id,))\npsycopg.errors.QueryCanceled: canceling statement due to statement timeout",
+      "evidence": {
+        "query_count_this_invocation": 12400,
+        "distinct_statements": 1,
+        "mean_statement_ms": 2.4,
+        "db_cpu_percent": 31,
+        "other_clients_affected": false
+      }
+    },
+    "expected_facts": [
+      "query_count_this_invocation is 12400 times distinct_statements (12400 against 1). The same work is repeated within one operation."
+    ]
+  },
+  {
+    "name": "fixture_am-04",
+    "id": "am-04",
+    "producer": "none",
+    "state": {
+      "service": "catalog-api",
+      "runtime": "java",
+      "level": "ERROR",
+      "message": "InvalidFormatException deserialising supplier price",
+      "stack_trace": "com.fasterxml.jackson.databind.exc.InvalidFormatException: Cannot deserialize value of type `java.math.BigDecimal` from String \"n/a\": not a valid representation\n\tat com.acme.catalog.client.SupplierClient.fetchPrice(SupplierClient.java:63)\n\tat com.acme.catalog.ProductService.enrich(ProductService.java:203)",
+      "evidence": {
+        "upstream_payload_sample": {
+          "sku": "SP-1190",
+          "price": "n/a",
+          "currency": "EUR"
+        },
+        "field_history": "price parsed as numeric on 1.4M records through 2026-09-20, first non-numeric 2026-09-21T00:11Z",
+        "last_deploy": {
+          "service": "catalog-api",
+          "at": "2026-08-29T14:40Z"
+        }
+      }
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "acquire_release_am-05",
+    "id": "am-05",
+    "producer": "acquire_release",
+    "state": {
+      "service": "billing-sync",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "NpgsqlException: connection pool exhausted",
+      "stack_trace": "Npgsql.NpgsqlException (0x80004005): The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)\n   at Npgsql.ConnectorPool.RentAsync(NpgsqlConnection conn, NpgsqlTimeout timeout, Boolean async, CancellationToken cancellationToken)\n   at Billing.Data.LedgerRepository.GetOpenEntriesAsync(Guid accountId, CancellationToken ct)\n   at Billing.Sync.LedgerSyncJob.RunAsync(CancellationToken ct)",
+      "evidence": {
+        "pool_in_use_over_run": [
+          4,
+          19,
+          47,
+          83,
+          100,
+          100,
+          100
+        ],
+        "connections_opened": 2841,
+        "connections_disposed": 12,
+        "db_max_connections": 400,
+        "other_services_connected": 96
+      }
+    },
+    "expected_facts": [
+      "connections_opened is 237 times connections_disposed (2841 against 12)."
+    ]
+  },
+  {
+    "name": "current_versus_baseline_am-06",
+    "id": "am-06",
+    "producer": "current_versus_baseline",
+    "state": {
+      "service": "ingest-worker",
+      "runtime": "go",
+      "level": "ERROR",
+      "message": "fatal error: runtime: out of memory",
+      "stack_trace": "fatal error: runtime: out of memory\ngoroutine 1 [running]:\nmain.(*Ingestor).readAll(0xc0000b4000)\n\t/app/ingest/read.go:41 +0x88",
+      "evidence": {
+        "response_content_length": 4509715660,
+        "prior_7d_max_content_length": 88211004,
+        "container_memory_limit_bytes": 2147483648,
+        "partner_notice": null,
+        "last_deploy": {
+          "service": "ingest-worker",
+          "at": "2026-07-02T09:15Z"
+        }
+      }
+    },
+    "expected_facts": [
+      "response_content_length is 51 times prior_7d_max_content_length (4.50972e+09 against 8.8211e+07)."
+    ]
+  },
+  {
+    "name": "durations_am-07",
+    "id": "am-07",
+    "producer": "durations",
+    "state": {
+      "service": "auth-api",
+      "runtime": "java",
+      "level": "ERROR",
+      "message": "HttpClientErrorException$Unauthorized: 401 from directory",
+      "stack_trace": "org.springframework.web.client.HttpClientErrorException$Unauthorized: 401 Unauthorized\n\tat com.acme.auth.client.DirectoryClient.lookup(DirectoryClient.java:71)\n\tat com.acme.auth.LoginService.authenticate(LoginService.java:118)",
+      "evidence": {
+        "token_issued_at": "2026-09-24T06:00:00Z",
+        "token_expires_in_s": 900,
+        "token_refresh_interval_s": 3600,
+        "request_at": "2026-09-24T06:41:12Z",
+        "failure_pattern": "succeeds for ~15 min after each refresh, then fails until the next",
+        "upstream_health": "directory-api reporting healthy"
+      }
+    },
+    "expected_facts": [
+      "token_refresh_interval_s (3600) is longer than token_expires_in_s (900), so the value is stale for part of every cycle."
+    ]
+  },
+  {
+    "name": "fixture_am-08",
+    "id": "am-08",
+    "producer": "none",
+    "state": {
+      "service": "pricing-api",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "System.NullReferenceException in TierResolver",
+      "stack_trace": "System.NullReferenceException: Object reference not set to an instance of an object.\n   at Pricing.Tiers.TierResolver.Resolve(Decimal amount, Tier[] tiers)\n   at Pricing.Quote.QuoteBuilder.Build(QuoteRequest request)\n   at Pricing.Api.QuoteController.Post(QuoteRequest body)",
+      "evidence": {
+        "request_body": {
+          "sku": "PR-4401",
+          "amount": 249.0
+        },
+        "affected_skus": "only SKUs with no tier configuration rows",
+        "outbound_calls_this_request": 0
+      }
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_am-09",
+    "id": "am-09",
+    "producer": "none",
+    "state": {
+      "service": "notify-fn",
+      "runtime": "node",
+      "level": "ERROR",
+      "message": "Request failed with status code 429",
+      "stack_trace": "Error: Request failed with status code 429\n    at settle (/app/node_modules/axios/lib/core/settle.js:19:12)\n    at sendDigest (/app/src/notify/digest.js:58:11)",
+      "evidence": {
+        "response_headers": {
+          "retry-after": "60",
+          "x-ratelimit-limit": "100",
+          "x-ratelimit-remaining": "0"
+        },
+        "our_send_rate_per_min": 180,
+        "our_send_rate_per_min_7d_avg": 178,
+        "prior_ratelimit_limit": "500 until 2026-09-24T02:00Z"
+      }
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_am-10",
+    "id": "am-10",
+    "producer": "none",
+    "state": {
+      "service": "ledger-api",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "SqlException: deadlocked on lock resources",
+      "stack_trace": "Microsoft.Data.SqlClient.SqlException (0x80131904): Transaction (Process ID 71) was deadlocked on lock resources with another process and has been chosen as the deadlock victim.\n   at Ledger.Posting.PostingService.Post(PostingRequest request)",
+      "evidence": {
+        "deadlock_pairs": [
+          {
+            "pid": 71,
+            "locks": [
+              "account:A18",
+              "account:B04"
+            ]
+          },
+          {
+            "pid": 84,
+            "locks": [
+              "account:B04",
+              "account:A18"
+            ]
+          }
+        ],
+        "both_processes": "ledger-api",
+        "db_cpu_percent": 22,
+        "occurrences_7d": 417
+      }
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_am-11",
+    "id": "am-11",
+    "producer": "none",
+    "state": {
+      "service": "checkout-api",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "AuthenticationException: remote certificate is invalid",
+      "stack_trace": "System.Security.Authentication.AuthenticationException: The remote certificate is invalid according to the validation procedure: RemoteCertificateNotYetValid, RemoteCertificateChainErrors\n   at System.Net.Security.SslStream.SendAuthResetSignal(ProtocolToken message, ExceptionDispatchInfo exception)\n   at Checkout.Clients.ShippingClient.QuoteAsync(QuoteRequest request, CancellationToken ct)",
+      "evidence": {
+        "peer": "shipping.internal",
+        "peer_certificate": {
+          "not_before": "2026-09-24T12:00:00Z",
+          "not_after": "2027-09-24T12:00:00Z",
+          "issuer": "CN=acme-internal-ca"
+        },
+        "observed_at": "2026-09-24T09:14:02Z",
+        "last_deploy": {
+          "service": "checkout-api",
+          "at": "2026-09-11T10:02Z"
+        }
+      }
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "current_versus_baseline_am-12",
+    "id": "am-12",
+    "producer": "current_versus_baseline",
+    "state": {
+      "service": "order-worker",
+      "runtime": "java",
+      "level": "ERROR",
+      "message": "TimeoutException awaiting inventory reserve",
+      "stack_trace": "java.util.concurrent.TimeoutException: Did not observe any item or terminal signal within 30000ms\n\tat com.acme.orders.client.InventoryClient.reserve(InventoryClient.java:94)\n\tat com.acme.orders.OrderWorker.process(OrderWorker.java:141)",
+      "evidence": {
+        "attempt_timestamps_ms": [
+          0,
+          3,
+          7,
+          11,
+          14,
+          18,
+          22,
+          25,
+          29,
+          33
+        ],
+        "attempts_configured": 10,
+        "inbound_rps_from_this_service": 8400,
+        "inbound_rps_from_this_service_7d_avg": 210,
+        "inventory_error_rate_excluding_this_caller": 0.0003
+      }
+    },
+    "expected_facts": [
+      "inbound_rps_from_this_service is 40 times inbound_rps_from_this_service_7d_avg (8400 against 210)."
+    ]
+  }
+]

@@ -82,6 +82,26 @@ public class LambdaJsonContextTests
     }
 
     [Fact]
+    public void TriageRowSerialisesFallbackAndSignals()
+    {
+        var dto = RowResultDto.FromTriage(
+            "row-4",
+            new TriageResult(
+                new CombineResult(0.7, 0.3, true),
+                [new TriageAnswer("baseline", new Dictionary<string, double> { ["bug"] = 0.7, ["downstream"] = 0.3 }, null)]),
+            QuestionTree.LoadEmbedded());
+
+        var json = JsonSerializer.Serialize(dto, LambdaJsonContext.Default.RowResultDto);
+        var element = JsonDocument.Parse(json).RootElement;
+
+        Assert.Equal("row-4", element.GetProperty("id").GetString());
+        Assert.Equal(["bug", "downstream"], element.GetProperty("option_ids").EnumerateArray().Select(e => e.GetString()));
+        Assert.True(element.GetProperty("fallback").GetBoolean());
+        Assert.Equal(7, element.GetProperty("signals").EnumerateObject().Count());
+        Assert.False(element.TryGetProperty("declared_mass", out _));
+    }
+
+    [Fact]
     public void LambdaResponseWrapsResultsList()
     {
         var response = new LambdaResponse

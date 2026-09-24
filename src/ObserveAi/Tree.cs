@@ -113,6 +113,13 @@ public sealed class QuestionTree
             false);
     }
 
+    /// <summary>True when the row carries evidence the stage 2 questions can actually read.</summary>
+    public static bool HasEvidence(JsonElement state) =>
+        (state.TryGetProperty("evidence", out var evidence)
+            && evidence.ValueKind == JsonValueKind.Object && evidence.EnumerateObject().Any())
+        || (state.TryGetProperty("derived_facts", out var derivedFacts)
+            && derivedFacts.ValueKind == JsonValueKind.Array && derivedFacts.GetArrayLength() > 0);
+
     private static double Yes(IReadOnlyDictionary<string, IReadOnlyDictionary<string, double>> answers, string key) =>
         GetAnswerValue(answers, key, "yes", 0.0);
 

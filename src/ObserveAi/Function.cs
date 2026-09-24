@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Amazon;
 using Amazon.BedrockRuntime;
 using Amazon.Lambda.Core;
@@ -8,91 +7,6 @@ using Amazon.Lambda.Serialization.SystemTextJson;
 using Amazon.Runtime;
 
 namespace ObserveAi;
-
-/// <summary>
-/// One row's result. Nullable throughout because a successful row and a failed
-/// row populate disjoint sets of fields; DefaultIgnoreCondition.WhenWritingNull
-/// on the serializer context drops the unused half, matching the two distinct
-/// dict shapes returned by score() and by handler._score_row's error path.
-/// </summary>
-public sealed class RowResultDto
-{
-    // id is always present in the response, even when null (an unidentifiable
-    // row), unlike every other field here which is entirely absent on the row
-    // shape it does not belong to.
-    [JsonPropertyName("id")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
-    public string? Id { get; init; }
-
-    [JsonPropertyName("option_ids")]
-    public IReadOnlyList<string>? OptionIds { get; init; }
-
-    [JsonPropertyName("probabilities")]
-    public IReadOnlyList<double>? Probabilities { get; init; }
-
-    [JsonPropertyName("option_logprobs")]
-    public IReadOnlyList<double>? OptionLogprobs { get; init; }
-
-    [JsonPropertyName("declared_mass")]
-    public double? DeclaredMass { get; init; }
-
-    [JsonPropertyName("missing_options")]
-    public IReadOnlyList<string>? MissingOptions { get; init; }
-
-    [JsonPropertyName("abstained")]
-    public bool? Abstained { get; init; }
-
-    [JsonPropertyName("top_token")]
-    public TopToken? TopToken { get; init; }
-
-    [JsonPropertyName("input_tokens")]
-    public long? InputTokens { get; init; }
-
-    [JsonPropertyName("total_seconds")]
-    public double? TotalSeconds { get; init; }
-
-    [JsonPropertyName("prompt_sha256")]
-    public string? PromptSha256 { get; init; }
-
-    [JsonPropertyName("prompt_version")]
-    public string? PromptVersion { get; init; }
-
-    [JsonPropertyName("error")]
-    public string? Error { get; init; }
-
-    public static RowResultDto FromScore(ScoreResult score) => new()
-    {
-        Id = score.Id,
-        OptionIds = score.OptionIds,
-        Probabilities = score.Probabilities,
-        OptionLogprobs = score.OptionLogprobs,
-        DeclaredMass = score.DeclaredMass,
-        MissingOptions = score.MissingOptions,
-        Abstained = score.Abstained,
-        TopToken = score.TopToken,
-        InputTokens = score.InputTokens,
-        TotalSeconds = score.TotalSeconds,
-        PromptSha256 = score.PromptSha256,
-        PromptVersion = score.PromptVersion,
-    };
-
-    public static RowResultDto FromError(string? id, string error) => new() { Id = id, Error = error };
-}
-
-public sealed class LambdaResponse
-{
-    [JsonPropertyName("results")]
-    public required IReadOnlyList<RowResultDto> Results { get; init; }
-}
-
-[JsonSourceGenerationOptions(
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals)]
-[JsonSerializable(typeof(JsonElement))]
-[JsonSerializable(typeof(LambdaResponse))]
-[JsonSerializable(typeof(RowResultDto))]
-[JsonSerializable(typeof(TopToken))]
-public partial class LambdaJsonContext : JsonSerializerContext;
 
 /// <summary>
 /// AWS Lambda entrypoint scoring SemIf rows against Bedrock Custom Model Import.
@@ -104,6 +18,7 @@ public partial class LambdaJsonContext : JsonSerializerContext;
 public static class Function
 {
     private static readonly Lazy<IBedrockInvoker> LazyClient = new(CreateClient);
+    private static readonly Lazy<QuestionTree> LazyTree = new(QuestionTree.LoadEmbedded);
 
     public static async Task Main()
     {
@@ -121,20 +36,35 @@ public static class Function
     /// reading rows off a queue such as SQS. No API Gateway / HTTP body parsing
     /// is implemented here.
     /// </summary>
-    public static async Task<LambdaResponse> FunctionHandlerAsync(JsonElement lambdaEvent, ILambdaContext context)
+    public static Task<LambdaResponse> FunctionHandlerAsync(JsonElement lambdaEvent, ILambdaContext context)
     {
         var modelArn = Environment.GetEnvironmentVariable("MODEL_ARN")
             ?? throw new InvalidOperationException("MODEL_ARN environment variable is not set");
+        // SEMIF_MODE picks the triage path: the tree of sub-questions (default), or
+        // the single flat question it replaced, kept so the two can be compared
+        // against a deployed model without shipping code.
+        var mode = Environment.GetEnvironmentVariable("SEMIF_MODE") ?? "tree";
         // SEMIF_API selects the Bedrock request shape. It is an environment
         // switch rather than a constant so the chat path can be tried against a
         // deployed model without shipping code.
         var api = Environment.GetEnvironmentVariable("SEMIF_API") ?? "completion";
 
+        return ScoreRowsAsync(lambdaEvent, LazyClient.Value, modelArn, mode, api, context);
+    }
+
+    /// <summary>
+    /// The handler's body with the Bedrock client passed in, so a test can supply a
+    /// fake invoker instead of one built from real AWS configuration.
+    /// </summary>
+    internal static async Task<LambdaResponse> ScoreRowsAsync(
+        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, string api,
+        ILambdaContext context)
+    {
         var rows = ExtractRows(lambdaEvent);
         var results = new List<RowResultDto>(rows.Count);
         foreach (var row in rows)
         {
-            results.Add(await ScoreRowAsync(row, modelArn, api, context).ConfigureAwait(false));
+            results.Add(await ScoreRowAsync(row, client, modelArn, mode, api, context).ConfigureAwait(false));
         }
 
         var failures = results.Count(result => result.Error is not null);
@@ -155,7 +85,7 @@ public static class Function
     }
 
     private static async Task<RowResultDto> ScoreRowAsync(
-        JsonElement row, string modelArn, string api, ILambdaContext context)
+        JsonElement row, IBedrockInvoker client, string modelArn, string mode, string api, ILambdaContext context)
     {
         if (row.ValueKind != JsonValueKind.Object)
         {
@@ -170,9 +100,15 @@ public static class Function
 
         try
         {
-            var score = await BedrockBackend.ScoreAsync(LazyClient.Value, modelArn, row, api: api)
-                .ConfigureAwait(false);
-            return RowResultDto.FromScore(score);
+            if (mode == "flat")
+            {
+                var score = await BedrockBackend.ScoreAsync(client, modelArn, row, api: api).ConfigureAwait(false);
+                return RowResultDto.FromScore(score);
+            }
+
+            var tree = LazyTree.Value;
+            var result = await Triage.RunAsync(client, modelArn, row, tree).ConfigureAwait(false);
+            return RowResultDto.FromTriage(rowId, result, tree);
         }
         catch (Exception error) when (error is RowValidationException or AmazonServiceException or AmazonClientException)
         {
@@ -200,7 +136,13 @@ public static class Function
             RegionEndpoint = RegionEndpoint.GetBySystemName(region),
         };
         config.RetryMode = RequestRetryMode.Standard;
-        config.MaxErrorRetry = 10;
+        // A Bedrock model that has scaled to zero can sit there until something
+        // times out; with the old MaxErrorRetry of 10 that something was the whole
+        // 60 second Lambda invocation, billed in full for a request that never
+        // returned. A small retry count with a per-attempt timeout well inside the
+        // Lambda timeout fails the row instead, with an error the caller can act on.
+        config.MaxErrorRetry = 3;
+        config.Timeout = TimeSpan.FromSeconds(10);
         return new AmazonBedrockInvoker(new AmazonBedrockRuntimeClient(config));
     }
 }

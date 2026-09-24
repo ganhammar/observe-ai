@@ -24,6 +24,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Lets tests drive FunctionHandlerAsync's body with a fake IBedrockInvoker
+         instead of one built from real AWS configuration. -->
+    <InternalsVisibleTo Include="ObserveAi.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Amazon.Lambda.Core" Version="3.3.0" />
     <PackageReference Include="Amazon.Lambda.RuntimeSupport" Version="2.2.2" />
     <PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" Version="3.0.1" />
