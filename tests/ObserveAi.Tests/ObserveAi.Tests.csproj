@@ -30,4 +30,11 @@
     <None Include="../vectors/derived.json" Link="vectors/derived.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The real fixture used to check TraceParser: 32 traces across all five
+         runtimes, with the expected runtime for each row in labels.json. -->
+    <None Include="../../eval/logs.jsonl" Link="eval/logs.jsonl" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../eval/labels.json" Link="eval/labels.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
