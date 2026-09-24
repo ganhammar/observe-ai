@@ -17,12 +17,20 @@ public sealed record ParsedTrace(string Runtime, string ExceptionType, IReadOnly
 /// </summary>
 public static class TraceParser
 {
-    // Fallback for when the caller has no per-service app-code prefix list. A per-service
-    // config, or a model call for whatever this list misses, is the real answer.
+    // Fallback for when the caller has no per-service app-code prefix list.
+    //
+    // A list like this cannot be complete: there are more libraries than anyone
+    // will enumerate, and a library that is missing from it reads as application
+    // code, which makes the fingerprint group by the library rather than by the
+    // code that called it. Two unrelated defects failing inside the same client
+    // then merge. Resolving application namespaces through a cached model call
+    // is the real answer; these entries only cover what the fixture proved.
     private static readonly string[] VendorPrefixes =
     [
         "System.", "Microsoft.", "java.", "javax.", "jdk.", "sun.",
         "org.springframework.", "com.fasterxml.", "node:", "runtime.",
+        "Npgsql.", "Polly.", "okhttp3.", "elasticsearch", "botocore.",
+        "psycopg", "axios", "nodemailer", "org.apache.kafka.",
     ];
 
     private static readonly string[] GoPanicMarkers = ["panic: ", "fatal error: "];
