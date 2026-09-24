@@ -7,8 +7,8 @@
       "Resource": "${TriageFunctionArn}",
       "Parameters": {
         "action": "identify",
-        "logGroup.$": "$.logGroup",
-        "message.$": "$.message"
+        "message.$": "$.message",
+        "logGroupName.$": "$.logGroup"
       },
       "ResultPath": "$.identity",
       "Retry": [
@@ -45,8 +45,8 @@
       "Resource": "${TriageFunctionArn}",
       "Parameters": {
         "action": "resolve-repo",
-        "logGroup.$": "$.logGroup",
-        "namespacePrefix.$": "$.identity.identify.namespacePrefix"
+        "namespacePrefix.$": "$.identity.identify.namespacePrefix",
+        "logGroupName.$": "$.logGroup"
       },
       "ResultPath": "$.repo",
       "Next": "Repo known?"
@@ -198,8 +198,18 @@
       "Parameters": {
         "action": "escalate",
         "repo.$": "$.repo.repo",
-        "identity.$": "$.identity",
-        "verdict.$": "$.verdict",
+        "commitish": "main",
+        "rawTrace.$": "$.message",
+        "trace": {
+          "runtime.$": "$.identity.identify.runtime",
+          "exceptionType.$": "$.identity.identify.exceptionType",
+          "frames.$": "$.identity.identify.frames"
+        },
+        "verdict": {
+          "bug.$": "$.verdict.results[0].probabilities[0]",
+          "downstream.$": "$.verdict.results[0].probabilities[1]",
+          "fallback.$": "$.verdict.results[0].fallback"
+        },
         "occurrences.$": "$.seen.occurrences"
       },
       "ResultPath": "$.draft",
