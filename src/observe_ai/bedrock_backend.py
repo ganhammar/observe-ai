@@ -89,19 +89,23 @@ def score(client, model_arn: str, row: dict, *, top_logprobs: int = 20, constrai
     messages = direct_messages(row)
     letters = list(LETTERS[: len(options)])
 
-    body = {
-        "max_tokens": 1,
-        "temperature": 0,
-        "logprobs": True,
-        "top_logprobs": top_logprobs,
-    }
+    body = {"max_tokens": 1, "temperature": 0}
     if api == "completion":
         prompt = render_qwen3_prompt(messages)
         prompt_hash = digest(prompt)
         body["prompt"] = prompt
+        # The Completions schema carries the candidate count in logprobs
+        # itself, as an integer. Sending a boolean here is accepted and
+        # coerces to 1, which returns only the sampled token and no
+        # distribution to read the option letters from.
+        body["logprobs"] = top_logprobs
     else:
         prompt_hash = digest(json.dumps(messages, ensure_ascii=False))
         body["messages"] = messages
+        # The Chat Completions schema splits the same request across a
+        # boolean switch and a separate count.
+        body["logprobs"] = True
+        body["top_logprobs"] = top_logprobs
     if constrain:
         body["structured_outputs"] = {"choice": letters}
 

@@ -1,0 +1,104 @@
+
+============================================================
+OVERALL
+============================================================
+Row count:          32
+Skipped 0 row(s) that failed scoring
+Abstained (no option letter recovered): 0
+Scored rows:        32
+Rows with missing option letters: 7
+Accuracy:           78.1%
+Balanced accuracy:  78.6%
+Macro precision:    79.0%
+Macro recall:       78.6%
+Macro F1:           78.8%
+
+WARNING: fewer than 100 rows scored; the 10-bin ECE and the 19-step threshold sweep below are not meaningful at this sample size.
+
+============================================================
+PER BAND
+============================================================
+
+clear_bug (n=10)
+  Accuracy:          100.0%
+  Balanced accuracy: 100.0%
+
+clear_downstream (n=10)
+  Accuracy:          100.0%
+  Balanced accuracy: 100.0%
+
+ambiguous (n=12)
+  Accuracy:          41.7%
+  Balanced accuracy: 44.3%
+
+============================================================
+PER RUNTIME
+============================================================
+Runtime   Count   Accuracy  
+----------------------------
+dotnet    11      90.9%     
+go        3       66.7%     
+java      9       55.6%     
+node      4       100.0%    
+python    5       80.0%     
+
+============================================================
+CONFUSION MATRIX
+============================================================
+                Predicted: bug  Predicted: downstream
+Actual: bug                12                 5
+Actual: downstream          2                13
+
+============================================================
+CALIBRATION
+============================================================
+Expected calibration error (ECE): 0.2103
+
+Bins hold rows by predicted P(bug). A calibrated model matches mean
+confidence to the observed bug rate within each bin.
+P(bug) bin   Count   Mean P(bug)   Observed bug rate  
+------------------------------------------------------
+0.00-0.10    18      0.0000        27.8%              
+0.70-0.80    1       0.7773        0.0%               
+0.90-1.00    13      0.9963        92.3%              
+
+============================================================
+DECLARED MASS
+============================================================
+Min:           0.9996
+Median:        1.0000
+Mean:          1.0000
+10th pctl:     1.0000
+
+============================================================
+THRESHOLD SWEEP (positive class: bug)
+============================================================
+Threshold   Precision   Recall   Forwarded  
+--------------------------------------------
+0.05        85.7%       70.6%    14         
+0.10        85.7%       70.6%    14         
+0.15        85.7%       70.6%    14         
+0.20        85.7%       70.6%    14         
+0.25        85.7%       70.6%    14         
+0.30        85.7%       70.6%    14         
+0.35        85.7%       70.6%    14         
+0.40        85.7%       70.6%    14         
+0.45        85.7%       70.6%    14         
+0.50        85.7%       70.6%    14         
+0.55        85.7%       70.6%    14         
+0.60        85.7%       70.6%    14         
+0.65        85.7%       70.6%    14         
+0.70        85.7%       70.6%    14         
+0.75        85.7%       70.6%    14         
+0.80        92.3%       70.6%    13         
+0.85        92.3%       70.6%    13         
+0.90        92.3%       70.6%    13         
+0.95        92.3%       70.6%    13         
+
+No threshold achieves recall >= 0.95
+
+============================================================
+TIMING
+============================================================
+Mean:  0.21 seconds
+P95:   0.30 seconds

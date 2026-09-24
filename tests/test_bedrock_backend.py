@@ -408,3 +408,25 @@ def test_declared_mass_is_low_when_other_tokens_dominate():
     assert result["top_token"]["token"] == "<think>"
     # Renormalisation still reports a confident-looking split off that thin tail.
     assert result["probabilities"][0] == pytest.approx(2 / 3, abs=1e-6)
+
+
+def test_completion_sends_logprobs_as_an_integer_count():
+    """A boolean here coerces to 1 and returns no distribution to read."""
+    client = _CapturingClient(_completion_payload({"A": -0.2, "B": -1.7}))
+    score(client, "arn:model", _row(), top_logprobs=20)
+    assert client.body["logprobs"] == 20
+    assert "top_logprobs" not in client.body
+
+
+def test_chat_sends_the_boolean_and_count_pair():
+    payload = {
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": "A"},
+                     "logprobs": {"content": [{"token": "A", "logprob": -0.2, "top_logprobs": [
+                         {"token": "A", "logprob": -0.2}, {"token": "B", "logprob": -1.7}]}]},
+                     "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 51, "completion_tokens": 1, "total_tokens": 52},
+    }
+    client = _CapturingClient(payload)
+    score(client, "arn:model", _row(), top_logprobs=20, api="chat")
+    assert client.body["logprobs"] is True
+    assert client.body["top_logprobs"] == 20

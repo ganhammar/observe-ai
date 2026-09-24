@@ -12,14 +12,25 @@ log event ──> Lambda ──> Bedrock (imported Qwen3) ──> logprobs over 
 
 ## Status
 
-The mechanism is verified against the Bedrock API. The **quality is not yet measured**, and that is the open question the eval harness exists to answer.
+Measured against Qwen3-4B imported into Bedrock, on the 32 row fixture. Raw outputs and metrics are in [results/raw](results/raw).
 
-Two things have to hold for the probabilities to be worth anything, and neither is guaranteed by the plumbing:
+**The readout mechanism works.** Declared mass is 1.0000 at the median and 0.9996 at the minimum, so the model puts essentially all of its next-token probability on the declared option letters. Reading a decision off the logits is sound.
 
-1. The model must put most of its probability mass on the declared option letters. If it does not, renormalising over them is a ratio of two small numbers and the result is close to noise. `bedrock_backend.score` reports this as `declared_mass` for exactly this reason.
-2. The probabilities must be calibrated before a threshold means anything.
+**The model does not do the task.**
 
-The upstream work this borrows from reproduces an interface pattern using off-the-shelf open models, explicitly not a model trained for typed decisions. Treat published accuracy figures from that project as a starting point, not a prediction for this workload.
+| Band | Rows | Accuracy | Balanced accuracy |
+|---|---:|---:|---:|
+| clear_downstream | 10 | 100% | 100% |
+| clear_bug | 10 | 100% | 100% |
+| ambiguous | 12 | 41.7% | 44.3% |
+
+Perfect where an exception-type lookup table would also be perfect, and below chance where the answer requires relating the frames to the surrounding evidence. It classifies by which side of the network boundary an exception surfaced on, which is the correct answer only when surface and cause agree.
+
+**The probabilities do not support a threshold.** 31 of 32 rows fall in the 0.00 to 0.10 or 0.90 to 1.00 bins, with exactly one in between. The 0.00 to 0.10 bin carries an observed bug rate of 27.8% against a mean predicted probability of 0.0000, and ECE is 0.21. Five of the six missed bugs sit at exactly 0.0000, so no threshold recovers them. Calibrated confidence was the main argument for this approach over a chat model, and this model does not provide it.
+
+**Extra context does not help.** Running the same rows with the evidence field withheld gives identical band accuracy. Two rows flip and cancel each other out; the five confident misses read 0.0000 both ways.
+
+The upstream project reproduces an interface pattern using off-the-shelf open models, explicitly not a model trained for typed decisions. These numbers are the size of that gap on this workload.
 
 ### Why the prompt is rendered locally
 
