@@ -84,6 +84,7 @@ Resources:
           SEMIF_API: !Ref SemifApi
           SEMIF_MODE: !Ref SemifMode
           SEEN_TABLE: !Ref SeenTable
+          NAMESPACE_CACHE_TABLE: !Ref NamespaceCacheTable
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -97,6 +98,22 @@ Resources:
               Action:
                 - dynamodb:UpdateItem
               Resource: !GetAtt SeenTable.Arn
+            - Sid: ReadAndWriteNamespaceCacheOnly
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource: !GetAtt NamespaceCacheTable.Arn
+            # RepoResolver's tag step reads the observe-ai:repo tag off whatever
+            # resource the log group names (a Lambda function, an ECS service, an
+            # EKS workload); GetResources is how the Resource Groups Tagging API
+            # answers "what tags does this ARN have", and it has no resource-level
+            # ARN to scope this policy to.
+            - Sid: ReadResourceTagsForRepoResolution
+              Effect: Allow
+              Action:
+                - tag:GetResources
+              Resource: '*'
       # The intended caller is an internal service (another Lambda, a queue
       # consumer, a batch job) invoking this function directly through the
       # Invoke API, not a public HTTP endpoint. Uncomment one of the blocks
@@ -136,6 +153,24 @@ Resources:
           KeyType: HASH
         - AttributeName: fingerprint
           KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+
+  # Caches the model's namespace-to-repo answers so RepoResolver's model step
+  # runs once per novel namespace rather than once per log. Keyed by namespace
+  # alone, unlike SeenTable: the same namespace always belongs to the same
+  # repo, so there is nothing repo-specific to add to the key.
+  NamespaceCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: namespace
+          AttributeType: S
+      KeySchema:
+        - AttributeName: namespace
+          KeyType: HASH
       TimeToLiveSpecification:
         AttributeName: expires_at
         Enabled: true
