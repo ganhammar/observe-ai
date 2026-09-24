@@ -7,8 +7,8 @@ public enum LogGroupKind { Lambda, Ecs, Eks }
 public sealed record ParsedLogGroup(LogGroupKind Kind, string ResourceName);
 
 /// <summary>
-/// Turns AWS-owned identifiers, a log group name and a parsed stack trace, into the
-/// two pieces RepoResolver needs to find a repository, without making an AWS call
+/// Turns AWS-owned identifiers, a log group name and a parsed stack trace, into
+/// what the pipeline needs to find a repository, without making an AWS call
 /// itself. One deployment watches every log group in the account, so nothing here
 /// can be a lookup table of known services; it only recognises shapes that AWS
 /// itself imposes on log group names and stack frames.
@@ -18,7 +18,7 @@ public static class ServiceIdentity
     /// <summary>
     /// Recognises the log group naming conventions of Lambda, ECS and EKS. Returns
     /// null for anything else, including a recognised prefix with no name after it,
-    /// since RepoResolver's tag step has nothing to build an ARN from either way.
+    /// since ConventionalRepo has no resource name to build a repository from either way.
     /// </summary>
     public static ParsedLogGroup? ParseLogGroup(string logGroupName)
     {
@@ -35,6 +35,27 @@ public static class ServiceIdentity
             return new ParsedLogGroup(LogGroupKind.Eks, eksName);
         }
         return null;
+    }
+
+    /// <summary>
+    /// The repository owning a log event, by convention: the GitHub
+    /// organisation plus the resource name the log group already names
+    /// (/aws/lambda/billing-sync -> {org}/billing-sync). Returns null when
+    /// the log group does not match a known shape, so the caller falls
+    /// through to the state machine's UnknownRepo stop instead of guessing.
+    ///
+    /// This breaks the moment a service's name and its repository name
+    /// diverge. The improvement path, cheapest to most capable: a resource
+    /// tag (observe-ai:repo) is exact but has to be applied to every
+    /// resource; a cache keyed on NamespacePrefix's result learns a
+    /// namespace's repository once, after one correction, rather than
+    /// guessing it forever; and a model call on a cache miss covers
+    /// whatever neither of those has seen yet.
+    /// </summary>
+    public static string? ConventionalRepo(string logGroupName, string githubOrg)
+    {
+        var logGroup = ParseLogGroup(logGroupName);
+        return logGroup is null ? null : $"{githubOrg}/{logGroup.ResourceName}";
     }
 
     private static bool TryStrip(string logGroupName, string prefix, out string rest)

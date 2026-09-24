@@ -45,7 +45,6 @@
       "Resource": "${TriageFunctionArn}",
       "Parameters": {
         "action": "resolve-repo",
-        "namespacePrefix.$": "$.identity.identify.namespacePrefix",
         "logGroupName.$": "$.logGroup"
       },
       "ResultPath": "$.repo",
@@ -118,7 +117,10 @@
       "Parameters": {
         "action": "triage",
         "id.$": "$.identity.identify.fingerprint",
-        "state.$": "$.state"
+        "state": {
+          "service.$": "$.logGroup",
+          "stack_trace.$": "$.message"
+        }
       },
       "ResultPath": "$.verdict",
       "Retry": [
@@ -222,12 +224,38 @@
           "Next": "EscalationFailed"
         }
       ],
-      "End": true
+      "Next": "FileIssue"
     },
     "EscalationFailed": {
       "Type": "Fail",
       "Error": "EscalationFailed",
       "Cause": "Reading source or drafting the issue failed. The occurrence is already counted, so the next sighting will not retry it automatically."
+    },
+    "FileIssue": {
+      "Type": "Task",
+      "Resource": "${TriageFunctionArn}",
+      "Parameters": {
+        "action": "file-issue",
+        "repo.$": "$.repo.repo",
+        "title.$": "$.draft.escalate.draft.title",
+        "body.$": "$.draft.escalate.draft.body"
+      },
+      "ResultPath": "$.filing",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "FilingFailed"
+        }
+      ],
+      "End": true
+    },
+    "FilingFailed": {
+      "Type": "Fail",
+      "Error": "FilingFailed",
+      "Cause": "The issue was drafted but could not be filed. The occurrence is already counted, so the next sighting will not retry it automatically."
     }
   }
 }

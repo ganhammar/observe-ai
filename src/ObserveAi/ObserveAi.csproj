@@ -35,6 +35,8 @@
     <PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" Version="3.0.1" />
     <PackageReference Include="AWSSDK.BedrockRuntime" Version="4.0.101.7" />
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.8" />
+    <PackageReference Include="AWSSDK.SecretsManager" Version="4.0.100.14" />
+    <PackageReference Include="AWSSDK.StepFunctions" Version="4.0.100.15" />
   </ItemGroup>
 
   <ItemGroup>

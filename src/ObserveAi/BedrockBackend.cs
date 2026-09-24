@@ -78,7 +78,6 @@ public static class BedrockBackend
         JsonElement row,
         int topLogprobs = 20,
         bool constrain = true,
-        string api = "completion",
         CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -92,10 +91,6 @@ public static class BedrockBackend
             throw new RowValidationException(
                 $"Row {rowId}: {optionCount} options exceed top_logprobs={topLogprobs}; " +
                 "not enough candidates could possibly be returned to cover every option letter");
-        }
-        if (api is not ("completion" or "chat"))
-        {
-            throw new RowValidationException("api must be 'completion' or 'chat'");
         }
 
         var messages = Semif.DirectMessages(row);
@@ -111,35 +106,14 @@ public static class BedrockBackend
                 writer.WriteNumber("max_tokens", 1);
                 writer.WriteNumber("temperature", 0);
 
-                if (api == "completion")
-                {
-                    var prompt = Semif.RenderQwen3Prompt(messages);
-                    promptHash = Semif.Digest(prompt);
-                    writer.WriteString("prompt", prompt);
-                    // The Completions schema carries the candidate count in
-                    // logprobs itself, as an integer. Sending a boolean here is
-                    // accepted and coerces to 1, which returns only the sampled
-                    // token and no distribution to read the option letters from.
-                    writer.WriteNumber("logprobs", topLogprobs);
-                }
-                else
-                {
-                    promptHash = Semif.Digest(SerializeMessagesForHash(messages));
-                    writer.WritePropertyName("messages");
-                    writer.WriteStartArray();
-                    foreach (var message in messages)
-                    {
-                        writer.WriteStartObject();
-                        writer.WriteString("role", message.Role);
-                        writer.WriteString("content", message.Content);
-                        writer.WriteEndObject();
-                    }
-                    writer.WriteEndArray();
-                    // The Chat Completions schema splits the same request across
-                    // a boolean switch and a separate count.
-                    writer.WriteBoolean("logprobs", true);
-                    writer.WriteNumber("top_logprobs", topLogprobs);
-                }
+                var prompt = Semif.RenderQwen3Prompt(messages);
+                promptHash = Semif.Digest(prompt);
+                writer.WriteString("prompt", prompt);
+                // The Completions schema carries the candidate count in
+                // logprobs itself, as an integer. Sending a boolean here is
+                // accepted and coerces to 1, which returns only the sampled
+                // token and no distribution to read the option letters from.
+                writer.WriteNumber("logprobs", topLogprobs);
 
                 if (constrain)
                 {
@@ -312,26 +286,6 @@ public static class BedrockBackend
         JsonValueKind.Number => element.GetDouble() == 0,
         _ => false,
     };
-
-    private static string SerializeMessagesForHash(IReadOnlyList<ChatMessage> messages)
-    {
-        var builder = new StringBuilder();
-        builder.Append('[');
-        for (var i = 0; i < messages.Count; i++)
-        {
-            if (i > 0)
-            {
-                builder.Append(", ");
-            }
-            builder.Append("{\"role\": ");
-            PythonJson.WriteString(builder, messages[i].Role);
-            builder.Append(", \"content\": ");
-            PythonJson.WriteString(builder, messages[i].Content);
-            builder.Append('}');
-        }
-        builder.Append(']');
-        return builder.ToString();
-    }
 
     /// <summary>
     /// A token to log-probability map that preserves first-occurrence order,

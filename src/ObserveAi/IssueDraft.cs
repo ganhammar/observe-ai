@@ -1,9 +1,12 @@
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace ObserveAi;
 
 /// <summary>A drafted GitHub issue, not yet sent anywhere.</summary>
-public sealed record Draft(string Title, string Body);
+public sealed record Draft(
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("body")] string Body);
 
 /// <summary>
 /// Builds the title and body of a triage issue from what the pipeline already

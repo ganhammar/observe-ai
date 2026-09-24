@@ -8,7 +8,9 @@ namespace ObserveAi.Tests;
 /// to a repository-relative guess), plus hand-written traces for shapes the
 /// fixture does not contain on its own: an already repo-relative path per
 /// runtime, an absolute path under no known mount, and a .NET frame with
-/// "in X:line N" mixed with one that has no line info at all.
+/// "in X:line N" mixed with one that has no line info at all. The remaining
+/// tests cover the GitHub Contents/Trees API requests built from those paths,
+/// the monorepo basename fallback, and FetchAsync's use of both.
 /// </summary>
 public class SourceFetchTests
 {
@@ -183,69 +185,102 @@ public class SourceFetchTests
     }
 
     [Fact]
-    public void CloneCommandsAreBloblessAndSparseAndNameOnlyTheFramePaths()
+    public void RequestsForBuildsOneContentsRequestPerPathAtTheGivenRef()
     {
-        string[] paths = ["Discount.java", "PriceCalculator.java"];
+        var requests = SourceFetch.RequestsFor("acme/catalog", "abc1234", ["Discount.java", "PriceCalculator.java"]);
 
-        var commands = SourceFetch.CloneCommands("acme/catalog", "abc1234", paths);
+        Assert.Equal(2, requests.Count);
+        Assert.Equal("Discount.java", requests[0].Path);
+        Assert.Equal("https://api.github.com/repos/acme/catalog/contents/Discount.java?ref=abc1234", requests[0].Url);
+        Assert.Equal("PriceCalculator.java", requests[1].Path);
+        Assert.Equal("https://api.github.com/repos/acme/catalog/contents/PriceCalculator.java?ref=abc1234", requests[1].Url);
+    }
 
-        Assert.Equal(3, commands.Count);
+    [Fact]
+    public void RequestsForPercentEncodesASpaceAndAPlusInAPathSegment()
+    {
+        var request = Assert.Single(SourceFetch.RequestsFor("acme/catalog", "main", ["src/My File+Name.cs"]));
+
         Assert.Equal(
-            ["clone", "--depth", "1", "--filter=blob:none", "--sparse", "--", "https://github.com/acme/catalog.git"],
-            commands[0]);
-        Assert.Equal(["sparse-checkout", "set", "--", "Discount.java", "PriceCalculator.java"], commands[1]);
-        Assert.Equal(["checkout", "--", "abc1234"], commands[2]);
+            "https://api.github.com/repos/acme/catalog/contents/src/My%20File%2BName.cs?ref=main",
+            request.Url);
     }
 
     [Fact]
-    public void CloneCommandsAllCarryAnEndOfOptionsMarkerBeforePositionalArguments()
+    public void RequestsForRejectsARepoThatIsAUrlRatherThanOwnerSlashName()
     {
-        var commands = SourceFetch.CloneCommands("acme/catalog", "main", ["a.cs", "-x"]);
-
-        Assert.All(commands, command => Assert.Contains("--", command));
+        Assert.Throws<ArgumentException>(() => SourceFetch.RequestsFor("https://evil.example/x", "main", []));
     }
 
     [Fact]
-    public void CloneCommandsRejectsARepoThatIsAUrlRatherThanOwnerSlashName()
+    public void TreeRequestBuildsTheRecursiveGitTreesUrl()
     {
-        Assert.Throws<ArgumentException>(() => SourceFetch.CloneCommands("https://evil.example/x", "main", []));
+        var url = SourceFetch.TreeRequest("acme/catalog", "main");
+
+        Assert.Equal("https://api.github.com/repos/acme/catalog/git/trees/main?recursive=1", url);
     }
 
     [Fact]
-    public void CloneCommandsRejectsARepoThatStartsWithADash()
+    public void MatchByBasenameFindsAMonorepoPrefixedPath()
     {
-        Assert.Throws<ArgumentException>(() => SourceFetch.CloneCommands("-x/evil", "main", []));
+        string[] treePaths = ["services/orders/payment.py", "services/billing/payment.py"];
+
+        var match = SourceFetch.MatchByBasename(treePaths, "orders/payment.py");
+
+        Assert.Equal("services/orders/payment.py", match);
     }
 
     [Fact]
-    public void CloneCommandsRejectsACommitishThatIsNotAShaOrASafeRef()
+    public void MatchByBasenameReturnsNullWhenTwoCandidatesTieOnTheSameSuffixLength()
     {
-        Assert.Throws<ArgumentException>(() => SourceFetch.CloneCommands("acme/catalog", "--upload-pack=/bin/sh", []));
+        string[] treePaths = ["services/orders/payment.py", "services/billing/payment.py"];
+
+        var match = SourceFetch.MatchByBasename(treePaths, "payment.py");
+
+        Assert.Null(match);
     }
 
     [Fact]
-    public void CloneCommandsAcceptsAShaAndABranchName()
+    public void MatchByBasenameReturnsNullWhenNothingSharesTheFilename()
     {
-        var byShaCommands = SourceFetch.CloneCommands("acme/catalog", "abc1234", []);
-        var byBranchCommands = SourceFetch.CloneCommands("acme/catalog", "release/2026-09", []);
+        string[] treePaths = ["services/orders/invoice.py"];
 
-        Assert.Equal(["checkout", "--", "abc1234"], byShaCommands[2]);
-        Assert.Equal(["checkout", "--", "release/2026-09"], byBranchCommands[2]);
+        var match = SourceFetch.MatchByBasename(treePaths, "orders/payment.py");
+
+        Assert.Null(match);
     }
 
     [Fact]
-    public void APathBeginningWithADashIsDropped()
+    public async Task FetchAsyncFallsBackToTheTreeWhenTheDirectRequestMisses()
     {
-        const string trace = """
-            Traceback (most recent call last):
-              File "-rf ~", line 1, in evil_func
-            RuntimeError: boom
-            """;
-        var parsed = TraceParser.Parse(trace, []);
+        var directUrl = SourceFetch.RequestsFor("acme/mono", "main", ["orders/payment.py"]).Single().Url;
+        var treeUrl = SourceFetch.TreeRequest("acme/mono", "main");
+        var retryUrl = SourceFetch.RequestsFor("acme/mono", "main", ["services/orders/payment.py"]).Single().Url;
+        const string treeJson = """{"tree":[{"path":"services/orders/payment.py","type":"blob"},{"path":"services/orders/README.md","type":"blob"}]}""";
 
-        var paths = SourceFetch.PathsFor(parsed!, trace);
+        Task<string?> Get(string url, CancellationToken _) => Task.FromResult<string?>(url switch
+        {
+            _ when url == directUrl => null,
+            _ when url == treeUrl => treeJson,
+            _ when url == retryUrl => "def pay(): ...",
+            _ => throw new InvalidOperationException($"unexpected request: {url}"),
+        });
 
-        Assert.Empty(paths);
+        var result = await SourceFetch.FetchAsync(Get, "acme/mono", "main", ["orders/payment.py"]);
+
+        Assert.Equal("def pay(): ...", result.Sources["orders/payment.py"]);
+        Assert.Empty(result.NotFound);
+    }
+
+    [Fact]
+    public async Task FetchAsyncReportsAMissingFileAsNotFoundInsteadOfThrowing()
+    {
+        Task<string?> Get(string url, CancellationToken _) => Task.FromResult<string?>(null);
+
+        var result = await SourceFetch.FetchAsync(Get, "acme/catalog", "main", ["missing.py"]);
+
+        Assert.Empty(result.Sources);
+        Assert.Equal(["missing.py"], result.NotFound);
     }
 
     [Fact]

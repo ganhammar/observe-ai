@@ -139,11 +139,11 @@ public sealed class IdentifyResultDto
     };
 }
 
-/// <summary>escalate's result: what to run, what it would have verified, and the issue drafted from both.</summary>
+/// <summary>escalate's result: what to fetch, what it would have verified, and the issue drafted from both.</summary>
 public sealed class EscalateResultDto
 {
-    [JsonPropertyName("fetchCommands")]
-    public required IReadOnlyList<string[]> FetchCommands { get; init; }
+    [JsonPropertyName("fetchRequests")]
+    public required IReadOnlyList<SourceFetchRequest> FetchRequests { get; init; }
 
     [JsonPropertyName("frameVerdicts")]
     public required IReadOnlyList<FrameVerdict> FrameVerdicts { get; init; }
@@ -153,7 +153,7 @@ public sealed class EscalateResultDto
 
     public static EscalateResultDto From(EscalateResult result) => new()
     {
-        FetchCommands = result.FetchCommands,
+        FetchRequests = result.FetchRequests,
         FrameVerdicts = result.FrameVerdicts,
         Draft = result.Draft,
     };
@@ -163,7 +163,8 @@ public sealed class EscalateResultDto
 /// The Lambda response shape. Only Results is set for triage, keeping that
 /// action's wire format exactly as it was before identify and escalate existed;
 /// Identify and Escalate are each set only by their own action. Repo/ResolvedBy
-/// (resolve-repo) and Allowed/Tripped/Count/Limit (check-rate) stay flat here
+/// (resolve-repo), Allowed/Tripped/Count/Limit (check-rate), Started
+/// (start-executions), and Outcome/IssueNumber (file-issue) stay flat here
 /// rather than nested under their own key, because the state machine reads
 /// them straight off the ResultPath it assigns their task to (for example
 /// $.repo.repo, $.rate.tripped), the same way $.verdict.results[0] reads
@@ -197,6 +198,15 @@ public sealed class LambdaResponse
 
     [JsonPropertyName("limit")]
     public long? Limit { get; init; }
+
+    [JsonPropertyName("started")]
+    public long? Started { get; init; }
+
+    [JsonPropertyName("outcome")]
+    public string? Outcome { get; init; }
+
+    [JsonPropertyName("issueNumber")]
+    public long? IssueNumber { get; init; }
 }
 
 [JsonSourceGenerationOptions(
@@ -208,4 +218,5 @@ public sealed class LambdaResponse
 [JsonSerializable(typeof(TopToken))]
 [JsonSerializable(typeof(IdentifyResultDto))]
 [JsonSerializable(typeof(EscalateResultDto))]
+[JsonSerializable(typeof(ExecutionInput))]
 public partial class LambdaJsonContext : JsonSerializerContext;

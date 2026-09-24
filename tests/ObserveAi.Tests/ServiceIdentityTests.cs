@@ -2,9 +2,23 @@ using ObserveAi;
 
 namespace ObserveAi.Tests;
 
-/// <summary>Checks log group parsing and namespace extraction, the two pure inputs RepoResolver builds on.</summary>
+/// <summary>Checks log group parsing, namespace extraction, and the repository naming convention built on top of parsing.</summary>
 public class ServiceIdentityTests
 {
+    [Theory]
+    [InlineData("/aws/lambda/billing-sync", "acme/billing-sync")]
+    [InlineData("/ecs/orders", "acme/orders")]
+    public void ConventionalRepoCombinesTheOrgWithTheResourceName(string logGroupName, string expectedRepo)
+    {
+        Assert.Equal(expectedRepo, ServiceIdentity.ConventionalRepo(logGroupName, "acme"));
+    }
+
+    [Fact]
+    public void ConventionalRepoIsNullWhenTheLogGroupDoesNotMatchAKnownShape()
+    {
+        Assert.Null(ServiceIdentity.ConventionalRepo("some-custom-log-group", "acme"));
+    }
+
     [Theory]
     [InlineData("/aws/lambda/checkout-api", LogGroupKind.Lambda, "checkout-api")]
     [InlineData("/aws/ecs/orders", LogGroupKind.Ecs, "orders")]

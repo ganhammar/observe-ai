@@ -1,9 +1,12 @@
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace ObserveAi;
 
 /// <summary>A single stack frame: the method it names, and whether that method is this service's own code.</summary>
-public sealed record Frame(string Method, bool InApp);
+public sealed record Frame(
+    [property: JsonPropertyName("method")] string Method,
+    [property: JsonPropertyName("inApp")] bool InApp);
 
 /// <summary>A trace reduced to what fingerprinting needs: the runtime, the exception type, and the call stack.</summary>
 public sealed record ParsedTrace(string Runtime, string ExceptionType, IReadOnlyList<Frame> Frames);

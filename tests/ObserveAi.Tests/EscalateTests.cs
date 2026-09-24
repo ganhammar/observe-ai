@@ -6,10 +6,10 @@ using ObserveAi;
 namespace ObserveAi.Tests;
 
 /// <summary>
-/// Checks Pipeline.EscalateAsync: it returns the fetch commands and a drafted
+/// Checks Pipeline.EscalateAsync: it returns the fetch requests and a drafted
 /// issue built from a real IssueDraft/SourceVerification pass, without ever
-/// shelling out to git or calling GitHub. The per-frame "could this code throw
-/// here" question goes through a fake Bedrock invoker rather than a real model.
+/// calling GitHub itself. The per-frame "could this code throw here" question
+/// goes through a fake Bedrock invoker rather than a real model.
 /// </summary>
 public class EscalateTests
 {
@@ -59,7 +59,7 @@ public class EscalateTests
         """;
 
     [Fact]
-    public async Task ReturnsFetchCommandsAndADraftWithoutRunningGitOrGitHub()
+    public async Task ReturnsFetchRequestsAndADraftWithoutCallingGitHub()
     {
         var request = new EscalateRequest(
             "acme/catalog", "abc1234", Trace, RawTrace,
@@ -72,12 +72,11 @@ public class EscalateTests
 
         var result = await Pipeline.EscalateAsync(fake, "arn:model", request);
 
-        Assert.Equal(3, result.FetchCommands.Count);
+        var fetchRequest = Assert.Single(result.FetchRequests);
+        Assert.Equal("src/Pricing/Tiers/TierResolver.cs", fetchRequest.Path);
         Assert.Equal(
-            ["clone", "--depth", "1", "--filter=blob:none", "--sparse", "--", "https://github.com/acme/catalog.git"],
-            result.FetchCommands[0]);
-        Assert.Contains("src/Pricing/Tiers/TierResolver.cs", result.FetchCommands[1]);
-        Assert.Equal(["checkout", "--", "abc1234"], result.FetchCommands[2]);
+            "https://api.github.com/repos/acme/catalog/contents/src/Pricing/Tiers/TierResolver.cs?ref=abc1234",
+            fetchRequest.Url);
 
         // Only the frame that is both in-app and has a fetched source gets asked about.
         var verdict = Assert.Single(result.FrameVerdicts);

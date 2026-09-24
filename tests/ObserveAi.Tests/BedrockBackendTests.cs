@@ -7,8 +7,11 @@ namespace ObserveAi.Tests;
 
 /// <summary>
 /// Ports the intent of tests/test_bedrock_backend.py: letter mapping, missing
-/// options, abstention, declared_mass, the empty-top_logprobs error, and both
-/// Bedrock request shapes, all against a fake IBedrockInvoker rather than AWS.
+/// options, abstention, declared_mass, and the empty-top_logprobs error, all
+/// against a fake IBedrockInvoker rather than AWS. The response fixtures mix a
+/// chat-shaped logprobs.content and a completion-shaped logprobs.top_logprobs
+/// because FirstPositionLogprobs accepts either regardless of which request
+/// shape was sent; only the completion shape is ever requested now.
 /// </summary>
 public class BedrockBackendTests
 {
@@ -319,49 +322,6 @@ public class BedrockBackendTests
     }
 
     [Fact]
-    public async Task ChatApiStillSendsMessages()
-    {
-        var payload = new JsonObject
-        {
-            ["choices"] = new JsonArray(new JsonObject
-            {
-                ["index"] = 0,
-                ["message"] = new JsonObject { ["role"] = "assistant", ["content"] = "A" },
-                ["logprobs"] = new JsonObject
-                {
-                    ["content"] = new JsonArray(new JsonObject
-                    {
-                        ["token"] = "A",
-                        ["logprob"] = -0.2,
-                        ["top_logprobs"] = new JsonArray(
-                            new JsonObject { ["token"] = "A", ["logprob"] = -0.2 },
-                            new JsonObject { ["token"] = "B", ["logprob"] = -1.7 }),
-                    }),
-                },
-                ["finish_reason"] = "stop",
-            }),
-            ["usage"] = new JsonObject { ["prompt_tokens"] = 51, ["completion_tokens"] = 1, ["total_tokens"] = 52 },
-        };
-        var client = new FakeBedrockInvoker(Encoding.UTF8.GetBytes(payload.ToJsonString()));
-
-        await BedrockBackend.ScoreAsync(client, "arn:model", Row1(), api: "chat");
-
-        var sentBody = JsonDocument.Parse(client.Calls[0].Body).RootElement;
-        Assert.True(sentBody.TryGetProperty("messages", out _));
-        Assert.False(sentBody.TryGetProperty("prompt", out _));
-    }
-
-    [Fact]
-    public async Task RejectsUnknownApi()
-    {
-        var client = new FakeBedrockInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.2, ["B"] = -1.7 }));
-
-        var error = await Assert.ThrowsAsync<RowValidationException>(
-            () => BedrockBackend.ScoreAsync(client, "arn:model", Row1(), api: "responses"));
-        Assert.Contains("api must be", error.Message);
-    }
-
-    [Fact]
     public async Task MissingLogprobsRaisesActionableError()
     {
         var payload = new JsonObject
@@ -408,36 +368,4 @@ public class BedrockBackendTests
         Assert.False(sentBody.TryGetProperty("top_logprobs", out _));
     }
 
-    [Fact]
-    public async Task ChatSendsTheBooleanAndCountPair()
-    {
-        var payload = new JsonObject
-        {
-            ["choices"] = new JsonArray(new JsonObject
-            {
-                ["index"] = 0,
-                ["message"] = new JsonObject { ["role"] = "assistant", ["content"] = "A" },
-                ["logprobs"] = new JsonObject
-                {
-                    ["content"] = new JsonArray(new JsonObject
-                    {
-                        ["token"] = "A",
-                        ["logprob"] = -0.2,
-                        ["top_logprobs"] = new JsonArray(
-                            new JsonObject { ["token"] = "A", ["logprob"] = -0.2 },
-                            new JsonObject { ["token"] = "B", ["logprob"] = -1.7 }),
-                    }),
-                },
-                ["finish_reason"] = "stop",
-            }),
-            ["usage"] = new JsonObject { ["prompt_tokens"] = 51, ["completion_tokens"] = 1, ["total_tokens"] = 52 },
-        };
-        var client = new FakeBedrockInvoker(Encoding.UTF8.GetBytes(payload.ToJsonString()));
-
-        await BedrockBackend.ScoreAsync(client, "arn:model", Row1(), topLogprobs: 20, api: "chat");
-
-        var sentBody = JsonDocument.Parse(client.Calls[0].Body).RootElement;
-        Assert.True(sentBody.GetProperty("logprobs").GetBoolean());
-        Assert.Equal(20, sentBody.GetProperty("top_logprobs").GetInt32());
-    }
 }

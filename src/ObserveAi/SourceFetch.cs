@@ -1,26 +1,22 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace ObserveAi;
 
+/// <summary>One file's GitHub Contents API request: Path is repository-relative, Url is ready to GET.</summary>
+public sealed record SourceFetchRequest(
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("url")] string Url);
+
+/// <summary>What FetchAsync found: the source per path it resolved, and the paths that were not found anywhere.</summary>
+public sealed record FetchResult(IReadOnlyDictionary<string, string> Sources, IReadOnlyList<string> NotFound);
+
 /// <summary>
 /// Turns a parsed trace back into the minimal set of files worth reading, and
-/// builds the git commands that fetch only those.
-///
-/// TraceParser's Frame carries only the method, never a path, since fingerprinting
-/// never needed one. Recovering a path means reading the same raw trace text a
-/// second time with a path-capturing counterpart to each of TraceParser's frame
-/// regexes, rather than growing Frame past what fingerprinting needs.
-///
-/// Every input here originates somewhere an attacker can reach: paths come from
-/// stack trace text, which anyone able to trigger a log line can shape; repo and
-/// commitish come from a resource tag or a model call. Git treats a leading
-/// dash as an option rather than a value, so a crafted "--upload-pack=..." frame
-/// or ref is remote code execution, not a formatting nuisance, and a ".."
-/// segment can walk a sparse-checkout pattern outside the paths meant to be
-/// fetched. Both are dropped rather than run. A container-absolute path is not
-/// itself a threat, so it is mapped to a repository-relative guess instead of
-/// dropped; repo and commitish are single values with no safe partial form, so
-/// a bad one throws instead of being silently cleaned up.
+/// the GitHub API requests that fetch only those. Every path comes from stack
+/// trace text an attacker can shape and ends up in a URL, so a ".." segment is
+/// dropped; repo goes into the URL path itself, so it must match "owner/name".
 /// </summary>
 public static class SourceFetch
 {
@@ -34,8 +30,6 @@ public static class SourceFetch
     private static readonly Regex NodeFrame = new(@"^\s*at .+? \((?<path>[^)]+):\d+:\d+\)\s*$", RegexOptions.Compiled);
 
     private static readonly Regex RepoPattern = new(@"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.Compiled);
-    private static readonly Regex ShaCommitish = new(@"^[0-9a-fA-F]{7,40}$", RegexOptions.Compiled);
-    private static readonly Regex RefCommitish = new(@"^[A-Za-z0-9][A-Za-z0-9._/-]*$", RegexOptions.Compiled);
 
     /// <summary>Common container mount points, longest first among any that match, so a caller can add its own without losing these.</summary>
     public static readonly IReadOnlyList<string> DefaultMountPrefixes =
@@ -43,22 +37,10 @@ public static class SourceFetch
 
     /// <summary>
     /// The distinct file paths behind the trace's in-app frames, in frame order,
-    /// capped at maxFiles. rawTrace must be the same text TraceParser parsed into
-    /// trace; it is needed here because Frame does not retain a path to read back.
-    /// A .NET frame with no "in ...:line N" clause carries no path at all and
-    /// contributes nothing, same as a Java frame contributes a bare filename
-    /// rather than a full repository path: both are the raw trace text telling
-    /// the truth about what it does and does not know.
-    ///
-    /// A path rooted at a known container mount (mountPrefixes, defaulting to
-    /// DefaultMountPrefixes) has that mount stripped to guess the repository-
-    /// relative path; one still rooted afterwards has the leading slash dropped
-    /// as a best effort, since a sparse-checkout pattern that matches nothing in
-    /// the repo just costs that one file rather than failing the checkout. What
-    /// survives mapping is checked again: a result starting with "-" or
-    /// containing ".." is dropped, since the trace text is attacker-shaped, not
-    /// trusted input, and no mount-prefix guess should be allowed to reintroduce
-    /// either.
+    /// capped at maxFiles. rawTrace must be the text TraceParser parsed into
+    /// trace, since Frame does not retain a path to read back. A path rooted at a
+    /// known container mount (mountPrefixes, defaulting to DefaultMountPrefixes)
+    /// has that mount stripped to guess the repository-relative path.
     /// </summary>
     public static IReadOnlyList<string> PathsFor(
         ParsedTrace trace, string rawTrace, int maxFiles = 5, IReadOnlyList<string>? mountPrefixes = null)
@@ -93,34 +75,93 @@ public static class SourceFetch
         return paths;
     }
 
-    /// <summary>
-    /// The three argument lists for a blobless sparse checkout: clone with no
-    /// blob content, narrow the sparse set to just the frame paths, then move to
-    /// the commit the log line ran at. repo is "owner/name", never a URL, so the
-    /// URL is built here instead of accepted from a caller, and a "--"
-    /// end-of-options marker guards every positional argument against flag
-    /// smuggling. Returned as data rather than executed, so this stays testable
-    /// with no process or network dependency; the caller supplies the process
-    /// runner later.
-    /// </summary>
-    public static IReadOnlyList<string[]> CloneCommands(string repo, string commitish, IReadOnlyList<string> paths)
+    /// <summary>The Contents API request for each path at the given ref, returned as data for the caller's HTTP delegate to run.</summary>
+    public static IReadOnlyList<SourceFetchRequest> RequestsFor(string repo, string commitish, IReadOnlyList<string> paths)
     {
-        if (!RepoPattern.IsMatch(repo))
-        {
-            throw new ArgumentException($"repo must look like 'owner/name': '{repo}'", nameof(repo));
-        }
-        if (!ShaCommitish.IsMatch(commitish) && !IsSafeRef(commitish))
-        {
-            throw new ArgumentException($"commitish is not a commit sha or a safe ref name: '{commitish}'", nameof(commitish));
-        }
+        ValidateRepo(repo);
+        return paths.Select(path => new SourceFetchRequest(path, ContentsUrl(repo, commitish, path))).ToList();
+    }
 
-        var url = $"https://github.com/{repo}.git";
-        return
-        [
-            ["clone", "--depth", "1", "--filter=blob:none", "--sparse", "--", url],
-            ["sparse-checkout", "set", "--", ..paths],
-            ["checkout", "--", commitish],
-        ];
+    /// <summary>The recursive Git Trees API request, used to find a path the Contents API could not resolve directly.</summary>
+    public static string TreeRequest(string repo, string commitish)
+    {
+        ValidateRepo(repo);
+        return $"https://api.github.com/repos/{repo}/git/trees/{Uri.EscapeDataString(commitish)}?recursive=1";
+    }
+
+    /// <summary>
+    /// The tree path with the longest run of segments matching wantedPath from the
+    /// filename backwards (a monorepo holds "services/orders/payment.py" for a
+    /// trace naming "orders/payment.py"), or null on no match or a tie, since
+    /// guessing between two candidates is worse than reporting none found.
+    /// </summary>
+    public static string? MatchByBasename(IReadOnlyList<string> treePaths, string wantedPath)
+    {
+        var wanted = wantedPath.Split('/');
+        var matches = treePaths
+            .Select(path => (Path: path, Length: CommonSuffixLength(wanted, path.Split('/'))))
+            .Where(m => m.Length > 0).ToList();
+        if (matches.Count == 0) return null;
+
+        var longest = matches.Max(m => m.Length);
+        var winners = matches.Where(m => m.Length == longest).ToList();
+        return winners.Count == 1 ? winners[0].Path : null;
+    }
+
+    /// <summary>
+    /// Fetches each path's source, falling back once to a tree lookup and retry
+    /// when the direct request misses. get performs one GET and returns null for
+    /// a 404; nothing here touches HTTP itself, so a test can supply a fake.
+    /// </summary>
+    public static async Task<FetchResult> FetchAsync(
+        Func<string, CancellationToken, Task<string?>> get, string repo, string commitish, IReadOnlyList<string> paths,
+        CancellationToken cancellationToken = default)
+    {
+        var sources = new Dictionary<string, string>();
+        var notFound = new List<string>();
+        IReadOnlyList<string>? tree = null;
+
+        foreach (var request in RequestsFor(repo, commitish, paths))
+        {
+            var body = await get(request.Url, cancellationToken).ConfigureAwait(false);
+            if (body is null)
+            {
+                tree ??= await FetchTreeAsync(get, repo, commitish, cancellationToken).ConfigureAwait(false);
+                var match = tree is null ? null : MatchByBasename(tree, request.Path);
+                body = match is null ? null : await get(ContentsUrl(repo, commitish, match), cancellationToken).ConfigureAwait(false);
+            }
+            if (body is null) notFound.Add(request.Path); else sources[request.Path] = body;
+        }
+        return new FetchResult(sources, notFound);
+    }
+
+    private static async Task<IReadOnlyList<string>?> FetchTreeAsync(
+        Func<string, CancellationToken, Task<string?>> get, string repo, string commitish, CancellationToken cancellationToken)
+    {
+        var body = await get(TreeRequest(repo, commitish), cancellationToken).ConfigureAwait(false);
+        if (body is null) return null;
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("tree").EnumerateArray()
+            .Where(entry => entry.GetProperty("type").GetString() == "blob")
+            .Select(entry => entry.GetProperty("path").GetString()!).ToList();
+    }
+
+    private static void ValidateRepo(string repo)
+    {
+        if (!RepoPattern.IsMatch(repo)) throw new ArgumentException($"repo must look like 'owner/name': '{repo}'", nameof(repo));
+    }
+
+    private static string ContentsUrl(string repo, string commitish, string path)
+    {
+        var encodedPath = string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
+        return $"https://api.github.com/repos/{repo}/contents/{encodedPath}?ref={Uri.EscapeDataString(commitish)}";
+    }
+
+    private static int CommonSuffixLength(string[] a, string[] b)
+    {
+        var count = 0;
+        for (int i = a.Length - 1, j = b.Length - 1; i >= 0 && j >= 0 && a[i] == b[j]; i--, j--) count++;
+        return count;
     }
 
     /// <summary>Strips the longest matching mount prefix, or failing that a lone leading slash, to guess a repo-relative path.</summary>
@@ -134,11 +175,7 @@ public static class SourceFetch
         return path.StartsWith('/') ? path[1..] : path;
     }
 
-    private static bool IsSafePath(string path) =>
-        path.Length > 0 && path[0] != '-' && !path.Split('/', '\\').Contains("..");
-
-    private static bool IsSafeRef(string value) =>
-        RefCommitish.IsMatch(value) && !value.Contains("..") && !value.EndsWith('/') && !value.EndsWith(".lock");
+    private static bool IsSafePath(string path) => path.Length > 0 && !path.Split('/', '\\').Contains("..");
 
     private static List<string?> MatchLines(string[] lines, Regex frame) =>
         lines.Select(line => frame.Match(line)).Where(m => m.Success).Select(m => (string?)m.Groups["path"].Value).ToList();

@@ -12,22 +12,23 @@ public sealed record IdentifyResult(
 
 /// <summary>
 /// What escalate needs. FrameSources[i] is the fetched span for Trace.Frames[i],
-/// or null when nothing has been checked out for that frame yet; nothing here
-/// executes git or calls GitHub, so every field is data the caller already has.
+/// or null when nothing has been fetched for that frame yet; nothing here calls
+/// GitHub, so every field is data the caller already has.
 /// </summary>
 public sealed record EscalateRequest(
     string Repo, string Commitish, ParsedTrace Trace, string RawTrace, IReadOnlyList<string?> FrameSources,
     CombineResult Verdict, long Occurrences, DateTimeOffset FirstSeen, string RootCause);
 
-/// <summary>Escalate's outcome: what to fetch, what the checkout would have verified, and the issue drafted from both.</summary>
+/// <summary>Escalate's outcome: what to fetch, what the fetched source would have verified, and the issue drafted from both.</summary>
 public sealed record EscalateResult(
-    IReadOnlyList<string[]> FetchCommands, IReadOnlyList<FrameVerdict> FrameVerdicts, Draft Draft);
+    IReadOnlyList<SourceFetchRequest> FetchRequests, IReadOnlyList<FrameVerdict> FrameVerdicts, Draft Draft);
 
 /// <summary>
 /// The pipeline stages a Step Functions state machine drives this Lambda
-/// through: identify, resolve-repo, triage, check-rate, and escalate. Each is
-/// a plain function over the components it needs; the state machine owns the
-/// flow between them and everything with a real side effect.
+/// through: identify, resolve-repo, triage, check-rate, escalate, and
+/// file-issue. Each is a plain function over the components it needs; the
+/// state machine owns the flow between them and everything with a real side
+/// effect.
 /// </summary>
 public static class Pipeline
 {
@@ -53,47 +54,18 @@ public static class Pipeline
     }
 
     /// <summary>
-    /// Resolves the repository owning one log event, or null when nothing does.
-    /// Only a Lambda log group name carries enough to build a resource ARN
-    /// (arn:...:function:name); an ECS or EKS log group name has no cluster in
-    /// it, so those skip the tag lookup and fall through to the cache and
-    /// model. RepoResolver.ResolveWithModelAsync is not implemented yet and
-    /// throws NotImplementedException; that is caught here so an unresolvable
-    /// namespace reaches the state machine's UnknownRepo stop rather than
-    /// failing the execution.
+    /// Resolves the repository owning one log event by convention: the
+    /// GitHub organisation configured for the deployment, plus the resource
+    /// name the log group already names. Returns null when the log group
+    /// does not match a known shape, so the state machine reaches its
+    /// UnknownRepo stop rather than failing.
     /// </summary>
-    public static async Task<RepoResolution?> ResolveRepoAsync(
-        string logGroupName, string? namespacePrefix, string cacheTable, string region, string accountId,
-        RepoResolver.ReadCache readCache, RepoResolver.WriteCache writeCache, DateTimeOffset now,
-        CancellationToken cancellationToken = default)
-    {
-        var logGroup = ServiceIdentity.ParseLogGroup(logGroupName);
-        var resourceArn = logGroup?.Kind == LogGroupKind.Lambda
-            ? $"arn:aws:lambda:{region}:{accountId}:function:{logGroup.ResourceName}"
-            : null;
-
-        try
-        {
-            return await RepoResolver.ResolveAsync(
-                resourceArn, namespacePrefix, cacheTable, [], NoTags, readCache, writeCache,
-                RepoResolver.ResolveWithModelAsync, now, NamespaceCacheRetention, cancellationToken).ConfigureAwait(false);
-        }
-        catch (NotImplementedException)
-        {
-            return null;
-        }
-    }
-
-    private static readonly TimeSpan NamespaceCacheRetention = TimeSpan.FromDays(30);
-
-    // The Resource Groups Tagging API package is not referenced by this project yet, so every
-    // resource resolves as untagged here and RepoResolver falls through to the cache and model.
-    private static Task<IReadOnlyDictionary<string, string>> NoTags(string resourceArn, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>());
+    public static string? ResolveRepo(string logGroupName, string githubOrg) =>
+        ServiceIdentity.ConventionalRepo(logGroupName, githubOrg);
 
     /// <summary>The existing tree/flat scoring path for one row, relocated rather than changed so triage keeps today's behaviour.</summary>
     public static async Task<RowResultDto> TriageRowAsync(
-        JsonElement row, IBedrockInvoker client, string modelArn, string mode, string api,
+        JsonElement row, IBedrockInvoker client, string modelArn, string mode,
         Lazy<QuestionTree> lazyTree, ILambdaContext context)
     {
         if (row.ValueKind != JsonValueKind.Object)
@@ -111,7 +83,7 @@ public static class Pipeline
         {
             if (mode == "flat")
             {
-                var score = await BedrockBackend.ScoreAsync(client, modelArn, row, api: api).ConfigureAwait(false);
+                var score = await BedrockBackend.ScoreAsync(client, modelArn, row).ConfigureAwait(false);
                 return RowResultDto.FromScore(score);
             }
 
@@ -141,16 +113,16 @@ public static class Pipeline
     };
 
     /// <summary>
-    /// Plans the checkout and drafts the issue for one escalated defect. Never
-    /// shells out to git or calls GitHub itself: the caller runs FetchCommands
-    /// and opens the issue in Draft. Only the per-frame "could this code throw
-    /// here" questions go to the model.
+    /// Plans the fetch and drafts the issue for one escalated defect. Never
+    /// calls GitHub itself: the caller runs FetchRequests and opens the issue in
+    /// Draft. Only the per-frame "could this code throw here" questions go to
+    /// the model.
     /// </summary>
     public static async Task<EscalateResult> EscalateAsync(
         IBedrockInvoker client, string modelArn, EscalateRequest request, CancellationToken cancellationToken = default)
     {
         var paths = SourceFetch.PathsFor(request.Trace, request.RawTrace);
-        var commands = SourceFetch.CloneCommands(request.Repo, request.Commitish, paths);
+        var requests = SourceFetch.RequestsFor(request.Repo, request.Commitish, paths);
 
         var verdicts = new List<FrameVerdict>();
         for (var i = 0; i < request.Trace.Frames.Count; i++)
@@ -176,6 +148,6 @@ public static class Pipeline
         var draft = IssueDraft.Build(
             request.Trace, request.Verdict, request.Occurrences, request.FirstSeen, summary, request.RootCause, paths);
 
-        return new EscalateResult(commands, verdicts, draft);
+        return new EscalateResult(requests, verdicts, draft);
     }
 }

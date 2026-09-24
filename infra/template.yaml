@@ -35,18 +35,6 @@ Parameters:
     Description: >
       tree asks the seven grounded signals and combines them in code. flat asks
       one causal question, which is the path the published baseline measured.
-  SemifApi:
-    Type: String
-    Default: completion
-    AllowedValues:
-      - completion
-      - chat
-    Description: >
-      Bedrock request shape. completion renders the Qwen3 ChatML prompt in
-      the function with reasoning suppressed, which puts the answer letter
-      at the first sampled position. chat lets Bedrock apply the model's
-      packaged template, whose default leaves the model free to open a
-      reasoning block instead.
   IssuesPerRepoPerHour:
     Type: Number
     Default: 5
@@ -61,6 +49,28 @@ Parameters:
       Caps.TryConsumeAsync's hourly limit across every repository combined.
       Crossing it trips the breaker: nothing files and the caller notifies
       instead.
+  LogStreamArn:
+    Type: String
+    Description: >
+      ARN of the ingest stack's Kinesis stream (infra/ingest.yaml's
+      LogStreamArn output). Taken as a parameter rather than imported since
+      the ingest and application stacks deploy independently.
+    AllowedPattern: '^arn:aws:kinesis:[a-z0-9-]+:[0-9]{12}:stream/.+$'
+    ConstraintDescription: Must be a Kinesis stream ARN.
+  GitHubTokenSecretArn:
+    Type: String
+    Description: >
+      ARN of the Secrets Manager secret holding the GitHub token IssueFiler
+      uses to file and comment on issues. Created out of band; this stack
+      only reads it.
+    AllowedPattern: '^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+$'
+    ConstraintDescription: Must be a Secrets Manager secret ARN.
+  GitHubOrg:
+    Type: String
+    Description: >
+      GitHub organisation ServiceIdentity.ConventionalRepo combines with a
+      log group's own resource name to name the repository owning it, for
+      example {GitHubOrg}/billing-sync for /aws/lambda/billing-sync.
 
 Resources:
   TriageFunction:
@@ -95,13 +105,33 @@ Resources:
           MODEL_ARN: !Ref ModelArn
           BEDROCK_REGION: !Ref AWS::Region
           LOG_LEVEL: !Ref LogLevel
-          SEMIF_API: !Ref SemifApi
           SEMIF_MODE: !Ref SemifMode
           SEEN_TABLE: !Ref SeenTable
-          NAMESPACE_CACHE_TABLE: !Ref NamespaceCacheTable
+          GITHUB_ORG: !Ref GitHubOrg
           RATE_TABLE: !Ref RateTable
           ISSUES_PER_REPO_PER_HOUR: !Ref IssuesPerRepoPerHour
           ISSUES_PER_HOUR: !Ref IssuesPerHour
+          # Built rather than !Ref TriagePipeline: the pipeline's own definition
+          # already takes a hard dependency on this function's ARN (as the Task
+          # resource for every step), so a Ref back the other way would make the
+          # two resources circular. TriagePipeline's explicit Name below is what
+          # makes this ARN predictable without one.
+          PIPELINE_ARN: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-TriagePipeline
+          GITHUB_TOKEN_SECRET_ARN: !Ref GitHubTokenSecretArn
+      Events:
+        # CloudWatch Logs delivers into this stream account-wide
+        # (infra/ingest.yaml); each record can batch many log events, and
+        # LogEnvelope.Unpack turns each into one pipeline execution. A
+        # poisonous record bisects out of its batch and is retried at most
+        # twice, rather than blocking everything behind it on the shard.
+        LogStream:
+          Type: Kinesis
+          Properties:
+            Stream: !Ref LogStreamArn
+            BatchSize: 10
+            StartingPosition: LATEST
+            BisectBatchOnFunctionError: true
+            MaximumRetryAttempts: 2
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -115,38 +145,34 @@ Resources:
               Action:
                 - dynamodb:UpdateItem
               Resource: !GetAtt SeenTable.Arn
-            - Sid: ReadAndWriteNamespaceCacheOnly
-              Effect: Allow
-              Action:
-                - dynamodb:GetItem
-                - dynamodb:PutItem
-              Resource: !GetAtt NamespaceCacheTable.Arn
             - Sid: IncrementRateCountersOnly
               Effect: Allow
               Action:
                 - dynamodb:UpdateItem
               Resource: !GetAtt RateTable.Arn
-            # RepoResolver's tag step reads the observe-ai:repo tag off whatever
-            # resource the log group names (a Lambda function, an ECS service, an
-            # EKS workload); GetResources is how the Resource Groups Tagging API
-            # answers "what tags does this ARN have", and it has no resource-level
-            # ARN to scope this policy to.
-            - Sid: ReadResourceTagsForRepoResolution
+            # Held by the Kinesis-triggered consumer, which starts one execution
+            # per unpacked log event rather than running the pipeline inline.
+            # Same built ARN as PIPELINE_ARN above, for the same reason.
+            - Sid: StartTriagePipelineOnly
               Effect: Allow
               Action:
-                - tag:GetResources
-              Resource: '*'
-      # The intended caller is an internal service (another Lambda, a queue
-      # consumer, a batch job) invoking this function directly through the
-      # Invoke API, not a public HTTP endpoint. Uncomment one of the blocks
-      # below only if that stops being true.
+                - states:StartExecution
+              Resource: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-TriagePipeline
+            - Sid: ReadGitHubTokenOnly
+              Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref GitHubTokenSecretArn
+      # Beyond the Kinesis trigger above, the only other caller is the state
+      # machine invoking this function directly through the Invoke API, not a
+      # public HTTP endpoint. Add a key under Events above only if that stops
+      # being true, for example:
       #
-      # Events:
-      #   TriageApi:
-      #     Type: Api
-      #     Properties:
-      #       Path: /triage
-      #       Method: post
+      # TriageApi:
+      #   Type: Api
+      #   Properties:
+      #     Path: /triage
+      #     Method: post
       #
       # A function URL is the lighter-weight alternative to a full API
       # Gateway when the caller is still inside AWS (e.g. same account,
@@ -175,24 +201,6 @@ Resources:
           KeyType: HASH
         - AttributeName: fingerprint
           KeyType: RANGE
-      TimeToLiveSpecification:
-        AttributeName: expires_at
-        Enabled: true
-
-  # Caches the model's namespace-to-repo answers so RepoResolver's model step
-  # runs once per novel namespace rather than once per log. Keyed by namespace
-  # alone, unlike SeenTable: the same namespace always belongs to the same
-  # repo, so there is nothing repo-specific to add to the key.
-  NamespaceCacheTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: namespace
-          AttributeType: S
-      KeySchema:
-        - AttributeName: namespace
-          KeyType: HASH
       TimeToLiveSpecification:
         AttributeName: expires_at
         Enabled: true
@@ -233,6 +241,9 @@ Resources:
   TriagePipeline:
     Type: AWS::Serverless::StateMachine
     Properties:
+      # Named explicitly so TriageFunction can build this machine's ARN with
+      # Fn::Sub instead of a Ref, which would make the two resources circular.
+      Name: !Sub ${AWS::StackName}-TriagePipeline
       Type: STANDARD
       DefinitionUri: pipeline.asl.json
       DefinitionSubstitutions:

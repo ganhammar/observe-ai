@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Text.Json;
 using Amazon;
 using Amazon.BedrockRuntime;
@@ -6,20 +7,35 @@ using Amazon.Lambda.Core;
 using Amazon.Lambda.RuntimeSupport;
 using Amazon.Lambda.Serialization.SystemTextJson;
 using Amazon.Runtime;
+using Amazon.SecretsManager;
+using Amazon.SecretsManager.Model;
+using Amazon.StepFunctions;
+using Amazon.StepFunctions.Model;
 
 namespace ObserveAi;
 
 /// <summary>
 /// AWS Lambda entrypoint for the pipeline stages a Step Functions state machine drives, selected
-/// by an "action" field on the event: identify, resolve-repo, triage, check-rate, or escalate (a
-/// missing action means triage). One deployment, one binary; the flow between stages lives in the
-/// state machine, not here.
+/// by an "action" field on the event: identify, resolve-repo, triage, check-rate, escalate, or
+/// file-issue (a missing action means triage). The Kinesis event source that actually feeds this
+/// pipeline carries no action field at all; a top-level "Records" array is how that shape is told
+/// apart from everything else, ahead of the action switch. One deployment, one binary; the flow
+/// between stages lives in the state machine, not here.
 /// </summary>
 public static class Function
 {
     private static readonly Lazy<IBedrockInvoker> LazyClient = new(CreateClient);
     private static readonly Lazy<IAmazonDynamoDB> LazyDynamo = new(() => new AmazonDynamoDBClient());
+    private static readonly Lazy<IAmazonSecretsManager> LazySecretsManager = new(() => new AmazonSecretsManagerClient());
+    private static readonly Lazy<IAmazonStepFunctions> LazyStepFunctions = new(() => new AmazonStepFunctionsClient());
+    private static readonly Lazy<HttpClient> LazyHttp = new(() => new HttpClient());
     private static readonly Lazy<QuestionTree> LazyTree = new(QuestionTree.LoadEmbedded);
+
+    /// <summary>Reads one secret's current value. A test supplies a fake instead of a real Secrets Manager call.</summary>
+    internal delegate Task<string> ReadSecret(string secretArn, CancellationToken cancellationToken);
+
+    /// <summary>Starts one Step Functions execution. A test supplies a fake instead of a real StartExecution call.</summary>
+    internal delegate Task<StartExecutionResponse> StartExecution(StartExecutionRequest request, CancellationToken cancellationToken);
 
     public static async Task Main()
     {
@@ -37,12 +53,8 @@ public static class Function
         // the single flat question it replaced, kept so the two can be compared
         // against a deployed model without shipping code.
         var mode = Environment.GetEnvironmentVariable("SEMIF_MODE") ?? "tree";
-        // SEMIF_API selects the Bedrock request shape. It is an environment
-        // switch rather than a constant so the chat path can be tried against a
-        // deployed model without shipping code.
-        var api = Environment.GetEnvironmentVariable("SEMIF_API") ?? "completion";
 
-        return DispatchAsync(lambdaEvent, LazyClient.Value, modelArn, mode, api, context);
+        return DispatchAsync(lambdaEvent, LazyClient.Value, modelArn, mode, context);
     }
 
     /// <summary>
@@ -50,10 +62,16 @@ public static class Function
     /// supply a fake invoker instead of one built from real AWS configuration.
     /// </summary>
     internal static Task<LambdaResponse> DispatchAsync(
-        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, string api,
-        ILambdaContext context, RepoResolver.ReadCache? readCache = null, RepoResolver.WriteCache? writeCache = null,
-        Caps.UpdateItem? updateRate = null)
+        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, ILambdaContext context,
+        Caps.UpdateItem? updateRate = null, StartExecution? startExecution = null,
+        ReadSecret? readSecret = null, IssueFiler.CallGitHub? callGitHub = null)
     {
+        if (lambdaEvent.ValueKind == JsonValueKind.Object
+            && lambdaEvent.TryGetProperty("Records", out var records) && records.ValueKind == JsonValueKind.Array)
+        {
+            return RunStartExecutionsAsync(records, startExecution, context);
+        }
+
         var action = lambdaEvent.ValueKind == JsonValueKind.Object
             && lambdaEvent.TryGetProperty("action", out var actionProperty)
             && actionProperty.ValueKind == JsonValueKind.String
@@ -63,26 +81,52 @@ public static class Function
         return action switch
         {
             "identify" => Task.FromResult(RunIdentify(lambdaEvent)),
-            "resolve-repo" => RunResolveRepoAsync(lambdaEvent, context, readCache, writeCache),
-            "triage" => ScoreRowsAsync(lambdaEvent, client, modelArn, mode, api, context),
+            "resolve-repo" => Task.FromResult(RunResolveRepo(lambdaEvent)),
+            "triage" => ScoreRowsAsync(lambdaEvent, client, modelArn, mode, context),
             "check-rate" => RunCheckRateAsync(lambdaEvent, updateRate),
             "escalate" => RunEscalateAsync(lambdaEvent, client, modelArn, context),
+            "file-issue" => RunFileIssueAsync(lambdaEvent, readSecret, callGitHub),
             _ => throw new InvalidOperationException($"Unknown action: '{action}'"),
         };
     }
 
-    /// <summary>logGroupName is required; namespacePrefix is absent when identify found no in-app frame to name one from.</summary>
-    private static async Task<LambdaResponse> RunResolveRepoAsync(
-        JsonElement lambdaEvent, ILambdaContext context, RepoResolver.ReadCache? readCache, RepoResolver.WriteCache? writeCache)
+    /// <summary>
+    /// What the Kinesis event source actually invokes: each record batches many
+    /// CloudWatch Logs events, LogEnvelope.Unpack turns each into one candidate
+    /// execution, and every candidate starts its own run of the pipeline rather
+    /// than being triaged inline.
+    /// </summary>
+    private static async Task<LambdaResponse> RunStartExecutionsAsync(
+        JsonElement records, StartExecution? startExecution, ILambdaContext context)
+    {
+        var pipelineArn = RequireEnv("PIPELINE_ARN");
+        var start = startExecution ?? RealStartExecutionAsync;
+        var started = 0L;
+        foreach (var record in records.EnumerateArray())
+        {
+            var data = record.GetProperty("kinesis").GetProperty("data").GetString()!;
+            foreach (var execution in LogEnvelope.Unpack(data))
+            {
+                await start(new StartExecutionRequest
+                {
+                    StateMachineArn = pipelineArn,
+                    Input = JsonSerializer.Serialize(execution, LambdaJsonContext.Default.ExecutionInput),
+                }, default).ConfigureAwait(false);
+                started++;
+            }
+        }
+        context.Logger.LogInformation($"Started {started} execution(s)");
+        return new LambdaResponse { Started = started };
+    }
+
+    private static Task<StartExecutionResponse> RealStartExecutionAsync(StartExecutionRequest request, CancellationToken cancellationToken) =>
+        LazyStepFunctions.Value.StartExecutionAsync(request, cancellationToken);
+
+    private static LambdaResponse RunResolveRepo(JsonElement lambdaEvent)
     {
         var logGroupName = RequireString(lambdaEvent, "logGroupName");
-        var namespacePrefix = lambdaEvent.TryGetProperty("namespacePrefix", out var ns) && ns.ValueKind == JsonValueKind.String ? ns.GetString() : null;
-        var accountId = context.InvokedFunctionArn.Split(':').ElementAtOrDefault(4) ?? "";
-        var resolution = await Pipeline.ResolveRepoAsync(
-            logGroupName, namespacePrefix, RequireEnv("NAMESPACE_CACHE_TABLE"), RequireEnv("AWS_REGION"), accountId,
-            readCache ?? LazyDynamo.Value.GetItemAsync, writeCache ?? LazyDynamo.Value.PutItemAsync,
-            DateTimeOffset.UtcNow).ConfigureAwait(false);
-        return new LambdaResponse { Repo = resolution?.Repo, ResolvedBy = resolution?.Source.ToString() };
+        var repo = Pipeline.ResolveRepo(logGroupName, RequireEnv("GITHUB_ORG"));
+        return new LambdaResponse { Repo = repo, ResolvedBy = repo is null ? null : "convention" };
     }
 
     /// <summary>Buckets are keyed by hour; two hours of slack past the boundary is plenty for the TTL sweep to catch up.</summary>
@@ -110,14 +154,13 @@ public static class Function
 
     /// <summary>Scores a single SemIf row or a {"rows": [...]} batch, returning {"results": [...]}, unchanged from before actions existed.</summary>
     internal static async Task<LambdaResponse> ScoreRowsAsync(
-        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, string api,
-        ILambdaContext context)
+        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, ILambdaContext context)
     {
         var rows = ExtractRows(lambdaEvent);
         var results = new List<RowResultDto>(rows.Count);
         foreach (var row in rows)
         {
-            results.Add(await Pipeline.TriageRowAsync(row, client, modelArn, mode, api, LazyTree, context).ConfigureAwait(false));
+            results.Add(await Pipeline.TriageRowAsync(row, client, modelArn, mode, LazyTree, context).ConfigureAwait(false));
         }
 
         var failures = results.Count(result => result.Error is not null);
@@ -168,6 +211,28 @@ public static class Function
             e.TryGetProperty("occurrences", out var occ) ? occ.GetInt64() : 1,
             e.TryGetProperty("firstSeen", out var firstSeen) ? firstSeen.GetDateTimeOffset() : DateTimeOffset.UtcNow,
             e.TryGetProperty("rootCause", out var rootCause) ? rootCause.GetString() ?? "" : "");
+    }
+
+    /// <summary>Reads the token out of band and lets IssueFiler decide whether this is a fresh issue or a reopen of one already tracked.</summary>
+    private static async Task<LambdaResponse> RunFileIssueAsync(
+        JsonElement lambdaEvent, ReadSecret? readSecret, IssueFiler.CallGitHub? callGitHub)
+    {
+        var repo = RequireString(lambdaEvent, "repo");
+        var draft = new Draft(RequireString(lambdaEvent, "title"), RequireString(lambdaEvent, "body"));
+
+        var token = await (readSecret ?? ReadGitHubTokenAsync)(RequireEnv("GITHUB_TOKEN_SECRET_ARN"), default)
+            .ConfigureAwait(false);
+        var result = await IssueFiler.FileAsync(callGitHub ?? IssueFiler.Against(LazyHttp.Value, token), repo, draft)
+            .ConfigureAwait(false);
+
+        return new LambdaResponse { Outcome = result.Outcome.ToString().ToLowerInvariant(), IssueNumber = result.IssueNumber };
+    }
+
+    private static async Task<string> ReadGitHubTokenAsync(string secretArn, CancellationToken cancellationToken)
+    {
+        var response = await LazySecretsManager.Value.GetSecretValueAsync(
+            new GetSecretValueRequest { SecretId = secretArn }, cancellationToken).ConfigureAwait(false);
+        return response.SecretString;
     }
 
     private static string RequireString(JsonElement element, string field) =>

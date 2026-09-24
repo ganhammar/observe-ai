@@ -81,7 +81,7 @@ public class FunctionTests
             """).RootElement;
         var fake = new FakeInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -2.0 }));
 
-        var response = await Function.ScoreRowsAsync(row, fake, "arn:model", "flat", "completion", new FakeContext());
+        var response = await Function.ScoreRowsAsync(row, fake, "arn:model", "flat", new FakeContext());
 
         var result = Assert.Single(response.Results);
         Assert.Equal("row-1", result.Id);
@@ -99,7 +99,7 @@ public class FunctionTests
         var fake = new FakeInvoker(
             CompletionBody(new Dictionary<string, double> { ["A"] = -0.2, ["B"] = -1.0, ["C"] = -1.5, ["D"] = -2.0 }));
 
-        var response = await Function.ScoreRowsAsync(row, fake, "arn:model", "tree", "completion", new FakeContext());
+        var response = await Function.ScoreRowsAsync(row, fake, "arn:model", "tree", new FakeContext());
 
         var result = Assert.Single(response.Results);
         Assert.Equal("row-2", result.Id);

@@ -1,16 +1,20 @@
+using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Amazon.DynamoDBv2.Model;
 using Amazon.Lambda.Core;
+using Amazon.StepFunctions.Model;
 using ObserveAi;
 
 namespace ObserveAi.Tests;
 
 /// <summary>
 /// Checks Function.DispatchAsync's routing: each action reaches its own stage,
-/// a missing action still triages (nothing already deployed breaks), and an
-/// unknown action is an error rather than a silent no-op.
+/// a missing action still triages (nothing already deployed breaks), a Records
+/// array routes to start-executions ahead of the action switch since a Kinesis
+/// event carries no action field, and an unknown action is an error rather
+/// than a silent no-op.
 /// </summary>
 public class DispatchTests
 {
@@ -64,7 +68,7 @@ public class DispatchTests
             ["message"] = DotnetTrace,
         });
 
-        var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", "completion", new FakeContext());
+        var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext());
 
         Assert.NotNull(response.Identify);
         Assert.True(response.Identify!.Parsed);
@@ -87,7 +91,7 @@ public class DispatchTests
         });
         var fake = new FakeInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -2.0 }));
 
-        var response = await Function.DispatchAsync(row, fake, "arn:model", "flat", "completion", new FakeContext());
+        var response = await Function.DispatchAsync(row, fake, "arn:model", "flat", new FakeContext());
 
         var result = Assert.Single(response.Results!);
         Assert.Equal("row-1", result.Id);
@@ -115,78 +119,59 @@ public class DispatchTests
         });
 
         // No frame carries a fetched "source", so this must never call Bedrock.
-        var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", "completion", new FakeContext());
+        var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext());
 
         Assert.NotNull(response.Escalate);
-        Assert.NotEmpty(response.Escalate!.FetchCommands);
+        Assert.NotEmpty(response.Escalate!.FetchRequests);
         Assert.Empty(response.Escalate.FrameVerdicts);
         Assert.Null(response.Results);
         Assert.Null(response.Identify);
     }
 
-    /// <summary>A cache hit resolves the repo without ever reaching the (unimplemented) model step.</summary>
+    /// <summary>Resolving the repo is a pure convention now: the org from GITHUB_ORG plus the log group's own resource name.</summary>
     [Fact]
-    public async Task ResolveRepoActionReachesTheResolveRepoStage()
+    public async Task ResolveRepoActionAppliesTheConventionToARecognisedLogGroup()
     {
-        Environment.SetEnvironmentVariable("NAMESPACE_CACHE_TABLE", "namespace-cache");
-        Environment.SetEnvironmentVariable("AWS_REGION", "eu-central-1");
+        Environment.SetEnvironmentVariable("GITHUB_ORG", "acme");
         try
         {
             var evt = Parse(new JsonObject
             {
                 ["action"] = "resolve-repo",
                 ["logGroupName"] = "/aws/lambda/checkout-api",
-                ["namespacePrefix"] = "Checkout.",
             });
-            RepoResolver.ReadCache readCache = (_, _) => Task.FromResult(new GetItemResponse
-            {
-                Item = new Dictionary<string, AttributeValue> { ["repo"] = new("acme/checkout") },
-            });
-            RepoResolver.WriteCache writeCache = (_, _) => throw new InvalidOperationException("a cache hit must not write back");
 
-            var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", "completion", new FakeContext(),
-                readCache: readCache, writeCache: writeCache);
+            var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext());
 
-            Assert.Equal("acme/checkout", response.Repo);
-            Assert.Equal("Cache", response.ResolvedBy);
+            Assert.Equal("acme/checkout-api", response.Repo);
+            Assert.Equal("convention", response.ResolvedBy);
         }
         finally
         {
-            Environment.SetEnvironmentVariable("NAMESPACE_CACHE_TABLE", null);
-            Environment.SetEnvironmentVariable("AWS_REGION", null);
+            Environment.SetEnvironmentVariable("GITHUB_ORG", null);
         }
     }
 
     [Fact]
-    public async Task ResolveRepoActionReturnsAnAbsentRepoRatherThanThrowingWhenTheModelIsUnimplemented()
+    public async Task ResolveRepoActionReturnsAnAbsentRepoForAnUnrecognisedLogGroup()
     {
-        Environment.SetEnvironmentVariable("NAMESPACE_CACHE_TABLE", "namespace-cache");
-        Environment.SetEnvironmentVariable("AWS_REGION", "eu-central-1");
+        Environment.SetEnvironmentVariable("GITHUB_ORG", "acme");
         try
         {
             var evt = Parse(new JsonObject
             {
                 ["action"] = "resolve-repo",
-                ["logGroupName"] = "/aws/lambda/mystery-service",
-                ["namespacePrefix"] = "Mystery.",
+                ["logGroupName"] = "some-custom-log-group",
             });
-            // No tag, and this namespace is not in the cache, so ResolveAsync falls
-            // through to RepoResolver.ResolveWithModelAsync, which is not built yet.
-            RepoResolver.ReadCache readCache = (_, _) => Task.FromResult(new GetItemResponse());
-            RepoResolver.WriteCache writeCache = (_, _) => throw new InvalidOperationException("the model never returns, so nothing is cached");
 
-            var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", "completion", new FakeContext(),
-                readCache: readCache, writeCache: writeCache);
+            var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext());
 
             Assert.Null(response.Repo);
             Assert.Null(response.ResolvedBy);
         }
         finally
         {
-            Environment.SetEnvironmentVariable("NAMESPACE_CACHE_TABLE", null);
-            Environment.SetEnvironmentVariable("AWS_REGION", null);
+            Environment.SetEnvironmentVariable("GITHUB_ORG", null);
         }
     }
 
@@ -205,7 +190,7 @@ public class DispatchTests
             });
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", "completion", new FakeContext(), updateRate: updateRate);
+                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(), updateRate: updateRate);
 
             Assert.True(response.Allowed);
             Assert.False(response.Tripped);
@@ -235,7 +220,7 @@ public class DispatchTests
             });
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", "completion", new FakeContext(), updateRate: updateRate);
+                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(), updateRate: updateRate);
 
             Assert.False(response.Allowed);
             Assert.False(response.Tripped);
@@ -263,7 +248,7 @@ public class DispatchTests
             });
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", "completion", new FakeContext(), updateRate: updateRate);
+                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(), updateRate: updateRate);
 
             Assert.True(response.Tripped);
             Assert.True(response.Allowed);
@@ -282,7 +267,99 @@ public class DispatchTests
         var evt = Parse(new JsonObject { ["action"] = "bogus" });
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", "completion", new FakeContext()));
+            () => Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext()));
+    }
+
+    [Fact]
+    public async Task ARecordsArrayStartsOneExecutionPerLogEventAcrossEveryRecord()
+    {
+        Environment.SetEnvironmentVariable("PIPELINE_ARN", "arn:aws:states:eu-central-1:1:stateMachine:pipeline");
+        try
+        {
+            var evt = Parse(new JsonObject
+            {
+                ["Records"] = new JsonArray(
+                    new JsonObject { ["kinesis"] = new JsonObject { ["data"] = KinesisEnvelope("/aws/lambda/checkout-api", "first error") } },
+                    new JsonObject { ["kinesis"] = new JsonObject { ["data"] = KinesisEnvelope("/aws/lambda/orders", "second error", "third error") } }),
+            });
+            var started = new List<StartExecutionRequest>();
+            Function.StartExecution startExecution = (request, _) =>
+            {
+                started.Add(request);
+                return Task.FromResult(new StartExecutionResponse());
+            };
+
+            var response = await Function.DispatchAsync(
+                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(), startExecution: startExecution);
+
+            Assert.Equal(3, response.Started);
+            Assert.Equal(3, started.Count);
+            Assert.All(started, r => Assert.Equal("arn:aws:states:eu-central-1:1:stateMachine:pipeline", r.StateMachineArn));
+            Assert.Contains("\"logGroup\":\"/aws/lambda/checkout-api\"", started[0].Input);
+            Assert.Contains("\"message\":\"first error\"", started[0].Input);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PIPELINE_ARN", null);
+        }
+    }
+
+    [Fact]
+    public async Task FileIssueActionReadsTheSecretAndFilesThroughIssueFiler()
+    {
+        Environment.SetEnvironmentVariable("GITHUB_TOKEN_SECRET_ARN", "arn:aws:secretsmanager:eu-central-1:1:secret:github-token");
+        try
+        {
+            var evt = Parse(new JsonObject
+            {
+                ["action"] = "file-issue",
+                ["repo"] = "acme/orders",
+                ["title"] = "NullReferenceException in Orders.Billing.Build",
+                ["body"] = "Body text.",
+            });
+            var secretRequests = new List<string>();
+            Function.ReadSecret readSecret = (arn, _) =>
+            {
+                secretRequests.Add(arn);
+                return Task.FromResult("ghp_faketoken");
+            };
+            var calls = new List<(string Url, string Body)>();
+            IssueFiler.CallGitHub callGitHub = (url, body, _) =>
+            {
+                calls.Add((url, body));
+                return Task.FromResult(url.Contains("state=open") ? "[]" : """{"number":99}""");
+            };
+
+            var response = await Function.DispatchAsync(
+                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(),
+                readSecret: readSecret, callGitHub: callGitHub);
+
+            Assert.Equal(["arn:aws:secretsmanager:eu-central-1:1:secret:github-token"], secretRequests);
+            Assert.Equal("created", response.Outcome);
+            Assert.Equal(99, response.IssueNumber);
+            Assert.Equal(2, calls.Count);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN_SECRET_ARN", null);
+        }
+    }
+
+    /// <summary>Builds the gzipped base64 envelope a CloudWatch Logs subscription delivers as one Kinesis record's data.</summary>
+    private static string KinesisEnvelope(string logGroup, params string[] messages)
+    {
+        var events = string.Join(",", messages.Select((message, i) => $$"""{"id":"{{i}}","timestamp":1440442987000,"message":"{{message}}"}"""));
+        var json = $$"""
+            {"messageType":"DATA_MESSAGE","owner":"123456789012","logGroup":"{{logGroup}}","logStream":"testStream","subscriptionFilters":["f"],"logEvents":[{{events}}]}
+            """;
+
+        using var output = new MemoryStream();
+        using (var gzip = new GZipStream(output, CompressionMode.Compress, leaveOpen: true))
+        {
+            var bytes = Encoding.UTF8.GetBytes(json);
+            gzip.Write(bytes, 0, bytes.Length);
+        }
+        return Convert.ToBase64String(output.ToArray());
     }
 
     private static byte[] CompletionBody(Dictionary<string, double> letterLogprobs)
