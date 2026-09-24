@@ -87,8 +87,9 @@ jobs:
           echo "BUCKET=$BUCKET" >> "$GITHUB_ENV"
           echo "IMPORT_ROLE=$IMPORT_ROLE" >> "$GITHUB_ENV"
 
-      - name: Install huggingface-cli
-        run: pip install --upgrade "huggingface_hub[cli]"
+      - name: Install the hf CLI
+        # The hf entrypoint ships in the base package; the old cli extra is gone.
+        run: pip install --upgrade huggingface_hub
 
       - name: Report free disk space
         # Weights are staged to the runner before the S3 sync, so a full disk

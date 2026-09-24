@@ -12,7 +12,7 @@
 # default below.
 #
 # What this does, in order:
-#   1. Downloads the model weights from HuggingFace with huggingface-cli.
+#   1. Downloads the model weights from HuggingFace with the hf CLI.
 #   2. Syncs the weights to an S3 bucket/prefix that Bedrock reads from.
 #   3. Calls `aws bedrock create-model-import-job` to start the import.
 #   4. Polls `aws bedrock get-model-import-job` until the job reaches a
@@ -128,7 +128,7 @@ SANITIZED_MODEL_ID="$(sanitize "$MODEL_ID")"
 S3_PREFIX="${S3_PREFIX:-models/${SANITIZED_MODEL_ID}}"
 IMPORT_JOB_NAME="${IMPORT_JOB_NAME:-${SANITIZED_MODEL_ID}-import}"
 
-for cmd in huggingface-cli aws; do
+for cmd in hf aws; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "Error: required command '$cmd' was not found on PATH." >&2
     exit 1
@@ -184,7 +184,10 @@ trap 'rm -rf "$WORKDIR"' EXIT
 LOCAL_MODEL_DIR="${WORKDIR}/${SANITIZED_MODEL_ID}"
 
 log "Downloading $MODEL_ID to $LOCAL_MODEL_DIR ..."
-huggingface-cli download "$MODEL_ID" --local-dir "$LOCAL_MODEL_DIR"
+# Bedrock reads safetensors. Excluding the other checkpoint formats some
+# repos also carry keeps the runner from staging the same weights twice.
+hf download "$MODEL_ID" --local-dir "$LOCAL_MODEL_DIR" \
+  --exclude "*.pth" "*.bin" "*.gguf" "original/*"
 
 S3_URI="s3://${S3_BUCKET}/${S3_PREFIX}/"
 log "Syncing weights to $S3_URI ..."
