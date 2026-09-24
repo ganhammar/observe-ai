@@ -154,11 +154,20 @@ EOF
 # it and stop. Creating a second one would leave both in the account, each
 # carrying its own monthly per-CMU storage charge, and only one of them would
 # be wired into the stack.
-EXISTING_MODEL_ARN="$(aws bedrock list-imported-models \
+# A failed lookup is not the same answer as an empty one. Swallowing an
+# AccessDenied here would read as "no model exists" and import a second
+# billable copy, so the failure stops the script instead.
+if ! LIST_OUTPUT="$(aws bedrock list-imported-models \
   --region "$REGION" \
   --name-contains "$IMPORT_JOB_NAME" \
   --query "modelSummaries[?modelName=='${IMPORT_JOB_NAME}'].modelArn | [0]" \
-  --output text 2>/dev/null || true)"
+  --output text 2>&1)"; then
+  echo "Could not list imported models in $REGION, so it is not safe to" >&2
+  echo "assume none exists. Fix the error below and re-run." >&2
+  echo "$LIST_OUTPUT" >&2
+  exit 1
+fi
+EXISTING_MODEL_ARN="$LIST_OUTPUT"
 if [[ -n "$EXISTING_MODEL_ARN" && "$EXISTING_MODEL_ARN" != "None" ]]; then
   log "Imported model '$IMPORT_JOB_NAME' already exists, nothing to do."
   echo "$EXISTING_MODEL_ARN"

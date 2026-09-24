@@ -2,6 +2,20 @@
 
 Deploys the observe-ai triage Lambda with AWS SAM. The function calls a Bedrock Custom Model Import model that must exist before the first deploy, so setup has a manual, one-time step ahead of anything CI does.
 
+## IAM permissions the deploy role needs
+
+`GithubDeploy` is assumed by both workflows. Beyond what CloudFormation and Lambda deployment require, it needs:
+
+| Action | Used by | Why |
+|---|---|---|
+| `bedrock:ListImportedModels` | Deploy, Import Model | Resolve the model ARN by name at deploy time |
+| `bedrock:CreateModelImportJob` | Import Model | Start the import |
+| `bedrock:GetModelImportJob` | Import Model | Poll it to completion |
+| `s3:PutObject`, `s3:ListBucket` | Import Model | Stage weights in the bucket |
+| `iam:PassRole` | Import Model | Hand the Bedrock import service role to the job |
+
+`iam:PassRole` should be scoped to the Bedrock import role specifically rather than granted broadly, since passing arbitrary roles is an escalation path.
+
 ## First-time setup
 
 1. Create an S3 bucket in `eu-central-1` to stage the model weights, for example `aws s3 mb s3://your-observe-ai-models --region eu-central-1`.
