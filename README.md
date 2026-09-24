@@ -43,6 +43,15 @@ The `SEMIF_API` environment variable flips the deployed function between `comple
 
 The ambiguous band is the point of the fixture. A null reference caused by a dependency returning an empty body is labelled `downstream`; a 400 from a dependency caused by our own arithmetic underflow is labelled `bug`. Anything that scores well on the clear bands and at chance on the ambiguous band has learned the lookup table and nothing more.
 
+Those rows carry an `evidence` field holding the signals a log pipeline already has: adjacent response metadata, dependency health, connection counts, recent deploys. The evidence states facts and never names a cause, so deciding still means relating the frames to the signals. Generate the fixture with `--no-evidence` to ask the harder question of whether the trace alone is enough:
+
+```bash
+python eval/fixture.py                  # ambiguous rows carry evidence
+python eval/fixture.py --no-evidence    # trace only
+```
+
+Both variants are worth running. The gap between them is how much the surrounding context is worth, which is a separate question from whether the readout works at all.
+
 ```bash
 python eval/fixture.py                       # regenerate logs.jsonl and labels.json
 python eval/run_bedrock.py --model-arn ...   # score the fixture, writes results.jsonl

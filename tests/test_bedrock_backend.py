@@ -127,6 +127,41 @@ def test_missing_option_letter_is_recorded_and_zeroed():
     assert result["probabilities"][1] == pytest.approx(expected_ab[1] / total)
     # declared_mass excludes the missing letter's contribution (it is -inf, exp = 0).
     assert result["declared_mass"] == pytest.approx(math.exp(-0.5) + math.exp(-1.5))
+    # Only one of three option letters is missing, so this is not an abstention.
+    assert result["abstained"] is False
+
+
+def test_abstained_true_when_every_option_letter_is_missing():
+    top_logprobs = [
+        {"token": "Based", "logprob": -0.1, "bytes": [66, 97]},
+        {"token": "on", "logprob": -1.0, "bytes": [111, 110]},
+    ]
+    client = StubClient(make_body(top_logprobs, "Based", -0.1))
+
+    result = score(client, "arn:model", ROW_2, constrain=False)
+
+    assert result["missing_options"] == ["bug", "downstream"]
+    assert result["abstained"] is True
+    assert result["declared_mass"] == 0.0
+    assert result["probabilities"] == [0.0, 0.0]
+
+
+def test_empty_top_logprobs_raises_clear_error():
+    payload = {
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": ""},
+                "logprobs": {"content": [{"token": "", "logprob": 0.0, "bytes": [], "top_logprobs": []}]},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 1, "total_tokens": 11},
+    }
+    client = StubClient(payload)
+
+    with pytest.raises(ValueError, match="no candidate tokens"):
+        score(client, "arn:model", ROW_2, constrain=False)
 
 
 def test_declared_mass_is_low_when_model_prefers_other_tokens():
@@ -230,22 +265,60 @@ def test_handler_single_row_without_wrapper(monkeypatch):
     assert response["results"][0]["id"] == "row-2"
 
 
-def test_handler_wraps_http_response_for_api_gateway_events(monkeypatch):
-    top_logprobs = [
-        {"token": "A", "logprob": -0.1, "bytes": [65]},
-        {"token": "B", "logprob": -2.5, "bytes": [66]},
-    ]
-    stub_client = StubClient(make_body(top_logprobs, "A", -0.1))
-    monkeypatch.setattr(handler_module, "_get_client", lambda: stub_client)
+def test_handler_rejects_non_dict_row(monkeypatch):
     monkeypatch.setenv("MODEL_ARN", "arn:model")
     monkeypatch.setenv("BEDROCK_REGION", "eu-central-1")
 
-    event = dict(ROW_2, requestContext={"http": {"method": "POST"}})
+    response = handler_module.handler({"rows": ["not a row"]}, None)
+
+    results = response["results"]
+    assert len(results) == 1
+    assert results[0]["id"] is None
+    assert "must be a JSON object" in results[0]["error"]
+
+
+def test_handler_records_client_error_per_row_without_failing_the_batch(monkeypatch):
+    from botocore.exceptions import ClientError
+
+    def fake_score(client, model_arn, row, *, api):
+        if row["id"] == "row-2":
+            raise ClientError({"Error": {"Code": "ThrottlingException", "Message": "Rate exceeded"}}, "InvokeModel")
+        return {"id": row["id"], "option_ids": [], "probabilities": []}
+
+    monkeypatch.setattr(handler_module, "_get_client", lambda: object())
+    monkeypatch.setattr(handler_module, "score", fake_score)
+    monkeypatch.setenv("MODEL_ARN", "arn:model")
+    monkeypatch.setenv("BEDROCK_REGION", "eu-central-1")
+
+    other_row = dict(ROW_2, id="row-3")
+    event = {"rows": [ROW_2, other_row]}
+
     response = handler_module.handler(event, None)
 
-    assert response["statusCode"] == 200
-    body = json.loads(response["body"])
-    assert body["results"][0]["id"] == "row-2"
+    results = response["results"]
+    assert results[0]["id"] == "row-2"
+    assert "ClientError" in results[0]["error"]
+    assert "ThrottlingException" in results[0]["error"]
+    assert results[1]["id"] == "row-3"
+    assert "error" not in results[1]
+
+
+def test_handler_records_botocore_error_with_class_name(monkeypatch):
+    from botocore.exceptions import BotoCoreError
+
+    def fake_score(client, model_arn, row, *, api):
+        raise BotoCoreError()
+
+    monkeypatch.setattr(handler_module, "_get_client", lambda: object())
+    monkeypatch.setattr(handler_module, "score", fake_score)
+    monkeypatch.setenv("MODEL_ARN", "arn:model")
+    monkeypatch.setenv("BEDROCK_REGION", "eu-central-1")
+
+    response = handler_module.handler(ROW_2, None)
+
+    result = response["results"][0]
+    assert result["id"] == "row-2"
+    assert "BotoCoreError" in result["error"]
 
 
 # --- raw completion path and dual logprobs shapes ---

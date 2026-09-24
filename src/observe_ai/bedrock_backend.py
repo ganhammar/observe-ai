@@ -39,6 +39,12 @@ def score(client, model_arn: str, row: dict, *, top_logprobs: int = 20, constrai
     (probability 0) rather than raising, since one crowded-out option should
     not fail the whole row.
 
+    abstained is True when every option letter is missing from top_logprobs, so
+    declared_mass is 0 and probabilities are all zero; it is False otherwise.
+    This spares a consumer from having to infer abstention from an all-zero
+    probability vector, which an unguarded argmax would otherwise silently
+    score as a confident prediction for the first option.
+
     declared_mass is the sum of exp(logprob) over the option letters, taken
     before renormalisation into probabilities. It answers a different question
     than probabilities does: not "which option is favoured", but "how much of
@@ -108,6 +114,8 @@ def score(client, model_arn: str, row: dict, *, top_logprobs: int = 20, constrai
     payload = json.loads(response["body"].read())
 
     by_letter = _first_position_logprobs(payload)
+    if not by_letter:
+        raise ValueError(f"Row {row['id']}: response returned no candidate tokens in top_logprobs")
 
     option_logprobs = []
     missing_options = []
@@ -121,6 +129,7 @@ def score(client, model_arn: str, row: dict, *, top_logprobs: int = 20, constrai
 
     declared_mass = sum(math.exp(logprob) for logprob in option_logprobs if math.isfinite(logprob))
     probabilities = _softmax_allow_missing(option_logprobs)
+    abstained = len(missing_options) == len(options)
 
     top_token_name = max(by_letter, key=by_letter.get)
     top_token = {"token": top_token_name, "probability": math.exp(by_letter[top_token_name])}
@@ -132,6 +141,7 @@ def score(client, model_arn: str, row: dict, *, top_logprobs: int = 20, constrai
         "option_logprobs": option_logprobs,
         "declared_mass": declared_mass,
         "missing_options": missing_options,
+        "abstained": abstained,
         "top_token": top_token,
         "input_tokens": payload["usage"]["prompt_tokens"],
         "total_seconds": time.perf_counter() - started,

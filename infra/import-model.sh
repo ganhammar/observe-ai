@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #
-# import-model.sh - one-time helper that gets a Qwen3 model into Amazon
-# Bedrock Custom Model Import so infra/template.yaml has a ModelArn to
-# deploy against. Run this by hand, once per model, before the first
-# deploy; it is not part of the CI/CD pipeline.
+# import-model.sh - gets a Qwen3 model into Amazon Bedrock Custom Model
+# Import so infra/template.yaml has a ModelArn to deploy against. The
+# Import Model GitHub Actions workflow runs this after deploying
+# infra/bootstrap.yaml, passing the staging bucket and Bedrock import role
+# from that stack's outputs as --bucket and --role-arn. It can also be run
+# by hand against an existing bucket and role.
 #
 # Verified constraint: Bedrock Custom Model Import supports only the
 # Qwen3ForCausalLM and Qwen3MoeForCausalLM architectures for the Qwen3
@@ -25,12 +27,12 @@
 # job is not reused; this script starts a new one with a timestamp suffix
 # and leaves the failed job in place for inspection.
 #
-# Prerequisites this script does NOT create for you:
-#   - The S3 bucket (create it in the same region you pass with --region).
-#   - An IAM role that Bedrock can assume to read that bucket. It needs a
-#     trust policy for the bedrock.amazonaws.com service principal and
-#     s3:GetObject / s3:ListBucket permissions on the bucket. See
-#     infra/README.md for the exact policy documents.
+# Prerequisites: an S3 bucket to stage weights in, and an IAM role Bedrock
+# assumes to read them (trust policy for the bedrock.amazonaws.com service
+# principal, s3:GetObject / s3:ListBucket on the bucket). The Import Model
+# workflow creates both by deploying infra/bootstrap.yaml and passes their
+# names through; running this by hand needs an existing bucket and role
+# instead, see infra/bootstrap.yaml for the exact policy documents.
 #
 # Usage:
 #   ./import-model.sh --bucket my-bucket --role-arn arn:aws:iam::123456789012:role/BedrockImportRole [options]
@@ -79,7 +81,7 @@ log() {
 }
 
 usage() {
-  sed -n '2,64p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,66p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 sanitize() {

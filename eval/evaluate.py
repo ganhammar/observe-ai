@@ -19,11 +19,15 @@ Input formats:
   --json out.json: (optional) Dump metrics as JSON
 
 Handles degenerate cases without crashing: empty inputs, bands with zero rows,
-classes with zero true instances (reports n/a rather than dividing by zero).
+classes with zero true instances (reports n/a rather than dividing by zero),
+result rows that failed scoring (skipped, counted, and reported separately),
+and abstentions where every declared option's letter was missing from the
+model's output (excluded from accuracy-style metrics, counted separately).
 """
 
 import argparse
 import json
+import math
 import sys
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -62,12 +66,22 @@ def load_labels(path: str) -> Dict[str, LabelInfo]:
     return result
 
 
-def load_results(path: str) -> List[PredictionResult]:
-    """Load prediction results from JSONL file."""
+def load_results(path: str) -> Tuple[List[PredictionResult], int]:
+    """Load prediction results from JSONL file.
+
+    Returns the parsed results together with a count of rows skipped because
+    they carry an "error" key instead of a scored prediction. The runner
+    writes those for rows that failed scoring, and a partial results file is
+    still expected to score correctly.
+    """
     results = []
+    skipped_errors = 0
     with open(path) as f:
         for line in f:
             data = json.loads(line)
+            if "error" in data:
+                skipped_errors += 1
+                continue
             results.append(PredictionResult(
                 id=data["id"],
                 option_ids=data["option_ids"],
@@ -76,7 +90,7 @@ def load_results(path: str) -> List[PredictionResult]:
                 missing_options=data.get("missing_options"),
                 total_seconds=data.get("total_seconds")
             ))
-    return results
+    return results, skipped_errors
 
 
 def get_predicted_label(result: PredictionResult) -> str:
@@ -90,6 +104,22 @@ def get_predicted_label(result: PredictionResult) -> str:
             max_prob = prob
             max_idx = i
     return result.option_ids[max_idx]
+
+
+def is_abstention(result: PredictionResult) -> bool:
+    """A result is an abstention when no declared option carried any probability mass.
+
+    This happens when every option letter is missing from the model's top
+    logprobs: probabilities are all zero, or missing_options covers every
+    option id. Argmax over an all-zero vector would otherwise silently pick
+    index 0 and score it as a real prediction.
+    """
+    if result.probabilities and all(probability == 0.0 for probability in result.probabilities):
+        return True
+    if result.option_ids and result.missing_options is not None \
+            and set(result.missing_options) >= set(result.option_ids):
+        return True
+    return False
 
 
 def compute_mean(values: List[float]) -> float:
@@ -208,7 +238,7 @@ def compute_ece(true_labels: List[str], pred_probs: List[float], num_bins: int =
     return ece, bin_stats
 
 
-def compute_threshold_sweep(true_labels: List[str], pred_probs: List[float], label_map: Dict[str, int]) -> List[Dict]:
+def compute_threshold_sweep(true_labels: List[str], pred_probs: List[float]) -> List[Dict]:
     """Compute precision, recall, and forwarded count for different thresholds."""
     thresholds = [0.05 * (i + 1) for i in range(19)]  # 0.05, 0.10, ..., 0.95
     results = []
@@ -235,10 +265,23 @@ def compute_threshold_sweep(true_labels: List[str], pred_probs: List[float], lab
     return results
 
 
-def find_threshold_for_recall(sweep_results: List[Dict], target_recall: float = 0.95) -> Optional[float]:
-    """Find the lowest threshold achieving at least target_recall."""
-    for result in sweep_results:
-        if result["recall"] >= target_recall:
+def find_highest_threshold_for_recall(sweep_results: List[Dict], target_recall: float = 0.95) -> Optional[float]:
+    """Find the highest threshold that still achieves at least target_recall.
+
+    Recall is monotonically non-increasing as the threshold rises, so the
+    lowest qualifying threshold is always the lowest threshold in the sweep,
+    which forwards everything and is useless as an operating point. The
+    highest qualifying threshold is the one that filters the most rows while
+    still meeting the recall target, so this scans from the top down and
+    returns the first match. A NaN recall (no rows forwarded at that
+    threshold) never qualifies; that is checked explicitly rather than
+    relying on a NaN comparison already being False.
+    """
+    for result in reversed(sweep_results):
+        recall = result["recall"]
+        if math.isnan(recall):
+            continue
+        if recall >= target_recall:
             return result["threshold"]
     return None
 
@@ -279,7 +322,7 @@ def main():
     args = parser.parse_args()
 
     labels = load_labels(args.labels)
-    results = load_results(args.results)
+    results, skipped_error_rows = load_results(args.results)
 
     # Match results to labels
     result_map = {r.id: r for r in results}
@@ -299,9 +342,21 @@ def main():
         print("ERROR: No matched rows between labels and results")
         sys.exit(1)
 
-    true_labels = [label_map[rid].label for rid in sorted(matched_ids)]
-    pred_results = [result_map[rid] for rid in sorted(matched_ids)]
+    sorted_matched_ids = sorted(matched_ids)
+    all_matched_results = [result_map[rid] for rid in sorted_matched_ids]
+
+    # Abstentions (no declared option letter recovered) are excluded from every
+    # accuracy-style metric below; scoring them would silently argmax an
+    # all-zero probability vector into index 0.
+    abstained_ids = {rid for rid in sorted_matched_ids if is_abstention(result_map[rid])}
+    abstained_count = len(abstained_ids)
+    scored_ids = [rid for rid in sorted_matched_ids if rid not in abstained_ids]
+
+    true_labels = [label_map[rid].label for rid in scored_ids]
+    pred_results = [result_map[rid] for rid in scored_ids]
     pred_labels = [get_predicted_label(r) for r in pred_results]
+
+    missing_options_count = sum(1 for r in pred_results if r.missing_options)
 
     # Get predicted probabilities for "bug" class
     pred_probs_bug = []
@@ -322,23 +377,23 @@ def main():
     bug_recall = compute_per_class_recall(true_labels, pred_labels, "bug")
     downstream_recall = compute_per_class_recall(true_labels, pred_labels, "downstream")
 
-    macro_precision = compute_mean([bug_precision, downstream_precision] if not ((bug_precision != bug_precision) or (downstream_precision != downstream_precision)) else
-                                   [bug_precision if not (bug_precision != bug_precision) else 0,
-                                    downstream_precision if not (downstream_precision != downstream_precision) else 0])
-    macro_recall = compute_mean([bug_recall, downstream_recall] if not ((bug_recall != bug_recall) or (downstream_recall != downstream_recall)) else
-                                [bug_recall if not (bug_recall != bug_recall) else 0,
-                                 downstream_recall if not (downstream_recall != downstream_recall) else 0])
+    # Average only the classes with a defined (finite) value; a class with no
+    # true instances contributes nothing rather than dragging the average
+    # toward zero. n/a (NaN) when neither class has one.
+    finite_precisions = [p for p in (bug_precision, downstream_precision) if not math.isnan(p)]
+    macro_precision = compute_mean(finite_precisions) if finite_precisions else float("nan")
+    finite_recalls = [r for r in (bug_recall, downstream_recall) if not math.isnan(r)]
+    macro_recall = compute_mean(finite_recalls) if finite_recalls else float("nan")
     macro_f1 = 2 * (macro_precision * macro_recall) / (macro_precision + macro_recall) if (macro_precision + macro_recall) > 0 else 0.0
 
-    # Per-band metrics
+    # Per-band metrics (scored rows only; abstentions are excluded above)
     bands_data = {}
-    sorted_matched_ids = sorted(matched_ids)
-    for i, rid in enumerate(sorted_matched_ids):
+    for rid, pred_label in zip(scored_ids, pred_labels):
         band = label_map[rid].band
         if band not in bands_data:
             bands_data[band] = {"true": [], "pred": []}
         bands_data[band]["true"].append(label_map[rid].label)
-        bands_data[band]["pred"].append(pred_labels[i])
+        bands_data[band]["pred"].append(pred_label)
 
     band_metrics = {}
     for band in ["clear_bug", "clear_downstream", "ambiguous"]:
@@ -348,16 +403,17 @@ def main():
             bal_acc = compute_balanced_accuracy(data["true"], data["pred"])
             band_metrics[band] = {"accuracy": acc, "balanced_accuracy": bal_acc, "count": len(data["true"])}
         else:
-            band_metrics[band] = {"accuracy": 0.0, "balanced_accuracy": 0.0, "count": 0}
+            # No scored rows in this band: report n/a rather than a false 0.0%.
+            band_metrics[band] = {"accuracy": None, "balanced_accuracy": None, "count": 0}
 
-    # Per-runtime metrics
+    # Per-runtime metrics (scored rows only; abstentions are excluded above)
     runtime_data = {}
-    for i, rid in enumerate(sorted_matched_ids):
+    for rid, pred_label in zip(scored_ids, pred_labels):
         runtime = label_map[rid].runtime
         if runtime not in runtime_data:
             runtime_data[runtime] = {"true": [], "pred": []}
         runtime_data[runtime]["true"].append(label_map[rid].label)
-        runtime_data[runtime]["pred"].append(pred_labels[i])
+        runtime_data[runtime]["pred"].append(pred_label)
 
     runtime_metrics = {}
     for runtime, data in runtime_data.items():
@@ -370,8 +426,9 @@ def main():
     # ECE
     ece, bin_stats = compute_ece(true_labels, pred_probs_bug)
 
-    # Declared mass
-    declared_masses = [r.declared_mass for r in pred_results if r.declared_mass is not None]
+    # Declared mass (all matched rows, including abstentions: a low or zero
+    # declared mass is exactly the signal that a row abstained)
+    declared_masses = [r.declared_mass for r in all_matched_results if r.declared_mass is not None]
     declared_mass_stats = None
     if declared_masses:
         declared_mass_stats = {
@@ -381,13 +438,13 @@ def main():
             "p10": compute_percentile(declared_masses, 10)
         }
 
-    # Threshold sweep
-    sweep_results = compute_threshold_sweep(true_labels, pred_probs_bug, label_map)
-    threshold_for_95_recall = find_threshold_for_recall(sweep_results, 0.95)
+    # Threshold sweep (scored rows only)
+    sweep_results = compute_threshold_sweep(true_labels, pred_probs_bug)
+    threshold_for_95_recall = find_highest_threshold_for_recall(sweep_results, 0.95)
 
-    # Timing
+    # Timing (all matched rows, including abstentions: they still cost wall time)
     timing_stats = None
-    total_seconds = [r.total_seconds for r in pred_results if r.total_seconds is not None]
+    total_seconds = [r.total_seconds for r in all_matched_results if r.total_seconds is not None]
     if total_seconds:
         p95_seconds = compute_percentile(total_seconds, 95)
         timing_stats = {
@@ -400,11 +457,18 @@ def main():
     print("OVERALL")
     print("=" * 60)
     print(f"Row count:          {len(matched_ids)}")
+    print(f"Skipped {skipped_error_rows} row(s) that failed scoring")
+    print(f"Abstained (no option letter recovered): {abstained_count}")
+    print(f"Scored rows:        {len(scored_ids)}")
+    print(f"Rows with missing option letters: {missing_options_count}")
     print(f"Accuracy:           {format_percentage(overall_accuracy)}")
     print(f"Balanced accuracy:  {format_percentage(overall_balanced_accuracy)}")
     print(f"Macro precision:    {format_percentage(macro_precision)}")
     print(f"Macro recall:       {format_percentage(macro_recall)}")
     print(f"Macro F1:           {format_percentage(macro_f1)}")
+    if len(scored_ids) < 100:
+        print("\nWARNING: fewer than 100 rows scored; the 10-bin ECE and the 19-step "
+              "threshold sweep below are not meaningful at this sample size.")
 
     print("\n" + "=" * 60)
     print("PER BAND")
@@ -470,7 +534,7 @@ def main():
     print_table(["Threshold", "Precision", "Recall", "Forwarded"], table_data)
 
     if threshold_for_95_recall:
-        print(f"\nLowest threshold for recall >= 0.95: {format_float(threshold_for_95_recall, 2)}")
+        print(f"\nHighest threshold still achieving recall >= 0.95: {format_float(threshold_for_95_recall, 2)}")
     else:
         print("\nNo threshold achieves recall >= 0.95")
 
@@ -486,6 +550,10 @@ def main():
         metrics = {
             "overall": {
                 "row_count": len(matched_ids),
+                "skipped_error_rows": skipped_error_rows,
+                "abstained_count": abstained_count,
+                "scored_row_count": len(scored_ids),
+                "missing_options_count": missing_options_count,
                 "accuracy": overall_accuracy,
                 "balanced_accuracy": overall_balanced_accuracy,
                 "macro_precision": macro_precision,

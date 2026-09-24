@@ -8,6 +8,8 @@ points the other.
 
 import json
 
+from ambiguous import AMBIGUOUS
+
 # (id, band, label, service, runtime, level, message, stack)
 ROWS = [
     # ---------- clear downstream ----------
@@ -162,107 +164,9 @@ AttributeError: 'NoneType' object has no attribute 'lower'"""),
      """RangeError: Maximum call stack size exceeded
     at deepMerge (/app/src/bff/config.js:19:22)
     at deepMerge (/app/src/bff/config.js:24:14)
-    at deepMerge (/app/src/bff/config.js:24:14)"""),
-
-    # ---------- ambiguous ----------
-    # Exception type screams "code bug" but the trigger is a dependency response.
-    ("am-01", "ambiguous", "downstream", "checkout-api", "dotnet", "ERROR",
-     "System.NullReferenceException after payments returned an empty 200 body",
-     """System.NullReferenceException: Object reference not set to an instance of an object.
-   at Checkout.Clients.PaymentsClient.<ChargeAsync>d__12.MoveNext()
---- End of stack trace from previous location ---
-   at Checkout.Handlers.CheckoutHandler.HandleAsync(CheckoutCommand cmd, CancellationToken ct)
-Context: PaymentsClient received HTTP 200 with Content-Length: 0 from payments.internal; deserialised response was null."""),
-
-    # Looks like a downstream 400 but we sent a malformed request.
-    ("am-02", "ambiguous", "bug", "order-worker", "java", "ERROR",
-     "HttpClientErrorException$BadRequest: 400 from inventory service",
-     """org.springframework.web.client.HttpClientErrorException$BadRequest: 400 Bad Request: {"error":"quantity must be a positive integer, got -1"}
-\tat com.acme.orders.client.InventoryClient.reserve(InventoryClient.java:94)
-\tat com.acme.orders.OrderWorker.process(OrderWorker.java:141)
-Context: quantity was computed as requested - allocated, which underflows when allocated exceeds requested."""),
-
-    # Timeout, but caused by our own N+1 query loop.
-    ("am-03", "ambiguous", "bug", "report-fn", "python", "ERROR",
-     "psycopg.OperationalError: statement timeout after 30s",
-     """Traceback (most recent call last):
-  File "/var/task/report/summarise.py", line 88, in load_lines
-    cur.execute(SELECT_LINE, (order_id,))
-psycopg.errors.QueryCanceled: canceling statement due to statement timeout
-Context: load_lines is called once per order inside a loop over 12,400 orders; each call opens its own statement."""),
-
-    # Deserialisation failure from an upstream contract change.
-    ("am-04", "ambiguous", "downstream", "catalog-api", "java", "ERROR",
-     "JsonMappingException: Cannot deserialize value of type BigDecimal from String \"n/a\"",
-     """com.fasterxml.jackson.databind.exc.InvalidFormatException: Cannot deserialize value of type `java.math.BigDecimal` from String "n/a": not a valid representation
-\tat com.acme.catalog.client.SupplierClient.fetchPrice(SupplierClient.java:63)
-\tat com.acme.catalog.ProductService.enrich(ProductService.java:203)
-Context: supplier feed began emitting "n/a" for unpriced SKUs on 2026-09-21; the field was previously always numeric."""),
-
-    # Connection pool exhausted, but by our own leak.
-    ("am-05", "ambiguous", "bug", "billing-sync", "dotnet", "ERROR",
-     "NpgsqlException: connection pool exhausted during nightly sync",
-     """Npgsql.NpgsqlException (0x80004005): The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
-   at Npgsql.ConnectorPool.RentAsync(NpgsqlConnection conn, NpgsqlTimeout timeout, Boolean async, CancellationToken cancellationToken)
-   at Billing.Sync.LedgerSyncJob.RunAsync(CancellationToken ct)
-Context: LedgerSyncJob opens an NpgsqlConnection per account and does not dispose it; pool usage grows monotonically through the run."""),
-
-    # OOM killed, but the upstream payload grew 50x.
-    ("am-06", "ambiguous", "downstream", "ingest-worker", "go", "ERROR",
-     "fatal error: runtime: out of memory",
-     """fatal error: runtime: out of memory
-goroutine 1 [running]:
-main.(*Ingestor).readAll(0xc0000b4000)
-\t/app/ingest/read.go:41 +0x88
-Context: upstream partner switched from paginated batches to a single 4.2 GB payload without notice; readAll buffers the whole response."""),
-
-    # 401 from a dependency: our token refresh is broken.
-    ("am-07", "ambiguous", "bug", "auth-api", "java", "ERROR",
-     "HttpClientErrorException$Unauthorized: 401 from directory service",
-     """org.springframework.web.client.HttpClientErrorException$Unauthorized: 401 Unauthorized
-\tat com.acme.auth.client.DirectoryClient.lookup(DirectoryClient.java:71)
-\tat com.acme.auth.LoginService.authenticate(LoginService.java:118)
-Context: the cached service token is refreshed on a 3600s timer but the issuer reduced token lifetime to 900s; refresh logic ignores the expires_in field."""),
-
-    # NPE, and it really is our bug (no dependency involved).
-    ("am-08", "ambiguous", "bug", "pricing-api", "dotnet", "ERROR",
-     "System.NullReferenceException in tier resolution",
-     """System.NullReferenceException: Object reference not set to an instance of an object.
-   at Pricing.Tiers.TierResolver.Resolve(Decimal amount, Tier[] tiers)
-   at Pricing.Quote.QuoteBuilder.Build(QuoteRequest request)
-Context: tiers is null when a product has no tier configuration; Resolve does not check before indexing."""),
-
-    # Rate limited by a partner: genuinely their limit, our volume is nominal.
-    ("am-09", "ambiguous", "downstream", "notify-fn", "node", "ERROR",
-     "Error: 429 Too Many Requests from provider",
-     """Error: Request failed with status code 429
-    at settle (/app/node_modules/axios/lib/core/settle.js:19:12)
-    at sendDigest (/app/src/notify/digest.js:58:11)
-Context: provider reduced the plan limit from 500/min to 100/min at 02:00 UTC; our send rate is unchanged at 180/min."""),
-
-    # Deadlock, our transaction ordering.
-    ("am-10", "ambiguous", "bug", "ledger-api", "dotnet", "ERROR",
-     "SqlException: Transaction was deadlocked on lock resources",
-     """Microsoft.Data.SqlClient.SqlException (0x80131904): Transaction (Process ID 71) was deadlocked on lock resources with another process and has been chosen as the deadlock victim.
-   at Ledger.Posting.PostingService.Post(PostingRequest request)
-Context: PostingService locks accounts in request order; concurrent transfers between the same two accounts acquire the locks in opposite order."""),
-
-    # Certificate expiry on the dependency side.
-    ("am-11", "ambiguous", "downstream", "checkout-api", "dotnet", "ERROR",
-     "AuthenticationException: The remote certificate is invalid",
-     """System.Security.Authentication.AuthenticationException: The remote certificate is invalid according to the validation procedure: RemoteCertificateNotYetValid, RemoteCertificateChainErrors
-   at System.Net.Security.SslStream.SendAuthResetSignal(ProtocolToken message, ExceptionDispatchInfo exception)
-   at Checkout.Clients.ShippingClient.QuoteAsync(QuoteRequest request, CancellationToken ct)
-Context: shipping.internal presented a certificate with notBefore 2026-09-24T12:00Z; current time is 2026-09-24T09:14Z."""),
-
-    # Retry storm we caused.
-    ("am-12", "ambiguous", "bug", "order-worker", "java", "ERROR",
-     "TimeoutException after retry exhaustion against inventory",
-     """java.util.concurrent.TimeoutException: Did not observe any item or terminal signal within 30000ms
-\tat com.acme.orders.client.InventoryClient.reserve(InventoryClient.java:94)
-\tat com.acme.orders.OrderWorker.process(OrderWorker.java:141)
-Context: retry policy is 10 attempts with no backoff and no jitter; inventory reports our service as the sole source of a 40x traffic spike."""),
+    at deepMerge (/app/src/bff/config.js:24:14)""")
 ]
+
 
 QUESTION = ("Does this error indicate a defect in this service's own source code, "
             "or a failure in an external dependency or infrastructure it calls?")
@@ -275,7 +179,13 @@ OPTIONS = [
 ]
 
 
-def build():
+def build(include_evidence: bool = True):
+    """Return SemIf rows and their labels.
+
+    include_evidence controls whether ambiguous rows carry their surrounding
+    signals. Withholding it asks whether the trace alone is enough; including
+    it asks whether the signals a log pipeline already has close the gap.
+    """
     rows, labels = [], {}
     for rid, band, label, service, runtime, level, message, stack in ROWS:
         rows.append({
@@ -291,20 +201,48 @@ def build():
             "options": OPTIONS,
         })
         labels[rid] = {"label": label, "band": band, "runtime": runtime}
+    for rid, label, service, runtime, message, stack, evidence in AMBIGUOUS:
+        state = {
+            "service": service,
+            "runtime": runtime,
+            "level": "ERROR",
+            "message": message,
+            "stack_trace": stack,
+        }
+        if include_evidence:
+            state["evidence"] = evidence
+        rows.append({
+            "id": rid,
+            "state": state,
+            "question": QUESTION,
+            "options": OPTIONS,
+        })
+        labels[rid] = {"label": label, "band": "ambiguous", "runtime": runtime}
     return rows, labels
 
 
 if __name__ == "__main__":
+    import argparse
     import pathlib
-    rows, labels = build()
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--no-evidence", action="store_true",
+                        help="Omit the evidence field from ambiguous rows")
+    parser.add_argument("--output", type=pathlib.Path,
+                        default=pathlib.Path(__file__).parent / "logs.jsonl")
+    args = parser.parse_args()
+
+    rows, labels = build(include_evidence=not args.no_evidence)
     out = pathlib.Path(__file__).parent
-    with (out / "logs.jsonl").open("w") as fh:
+    with args.output.open("w") as fh:
         for row in rows:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
     (out / "labels.json").write_text(json.dumps(labels, indent=2))
     counts = {}
     for meta in labels.values():
-        counts[(meta["band"], meta["label"])] = counts.get((meta["band"], meta["label"]), 0) + 1
-    print(f"{len(rows)} rows -> logs.jsonl")
+        key = (meta["band"], meta["label"])
+        counts[key] = counts.get(key, 0) + 1
+    evidence = "without" if args.no_evidence else "with"
+    print(f"{len(rows)} rows -> {args.output} ({evidence} evidence on ambiguous rows)")
     for key in sorted(counts):
         print(f"  {key[0]:<17} {key[1]:<11} {counts[key]}")
