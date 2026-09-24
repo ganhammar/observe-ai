@@ -93,6 +93,8 @@ None of it is certain, so the pipeline **verifies instead of assuming**. After c
 
 **Step Functions, not one big handler.** The pipeline branches, retries per step, and fans out seven parallel calls. The execution history is also the audit trail for why a log did or did not become an issue, which matters the first time it files something wrong.
 
+**Filtering happens at capture, not in the pipeline.** The account subscription's filter pattern keeps only lines mentioning an error, exception, traceback or panic. Everything else never reaches Kinesis, is never billed as a stream record and never wakes a consumer. Volume reduction is cheapest at the earliest available point, and this is that point.
+
 **Kinesis from the start, not subscription straight to Lambda.** A service that starts log-spamming would otherwise exhaust account concurrency.
 
 **Lambda, not AgentCore.** AgentCore solves session duration beyond 15 minutes and per-session isolation. Reading source named by a stack trace is targeted retrieval plus one model call, bounded in seconds. If following references beyond one hop turns out to be routinely necessary, that is the signal to revisit.

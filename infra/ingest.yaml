@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  observe-ai ingestion. Captures every log group in the account into a Kinesis
+  stream. Separate from the application stack because it is account-wide and
+  deployed once, while the application stack changes with every release.
+
+Parameters:
+  ShardCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    Description: >
+      One shard carries 1 MB/s or 1000 records/s. Raise it for a noisy account.
+  ExcludedLogGroupPrefix:
+    Type: String
+    Default: /aws/lambda/observe-ai
+    Description: >
+      Log groups under this prefix are not captured. This is the recursion
+      guard and it is a parameter so it can be widened without a code change.
+  RetentionHours:
+    Type: Number
+    Default: 24
+    MinValue: 24
+    Description: Hours a record survives in the stream if nothing consumes it.
+
+Resources:
+  LogStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      ShardCount: !Ref ShardCount
+      RetentionPeriodHours: !Ref RetentionHours
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+
+  # CloudWatch Logs delivers into the stream under this role.
+  DeliveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringLike:
+                aws:SourceArn: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+      Policies:
+        - PolicyName: WriteToLogStream
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kinesis:PutRecord
+                  - kinesis:PutRecords
+                Resource: !GetAtt LogStream.Arn
+
+  # One policy captures every log group in the account, including ones created
+  # after this deploys, which is what makes the service work without being told
+  # about each service.
+  #
+  # The exclusion is the important part. This pipeline writes logs of its own,
+  # and capturing them would mean triaging a log produces a log that triggers
+  # triage. AWS documents that recursion as a way to run up ingestion billing.
+  # Our own log groups are therefore excluded here, and the service reads its
+  # own logs on a schedule instead, because a poll cannot feed itself while a
+  # filter is one typo away from doing so.
+  CaptureAllLogGroups:
+    Type: AWS::Logs::AccountPolicy
+    Properties:
+      PolicyName: observe-ai-capture
+      PolicyType: SUBSCRIPTION_FILTER_POLICY
+      Scope: ALL
+      SelectionCriteria: !Sub 'LogGroupName NOT IN ["${ExcludedLogGroupPrefix}"]'
+      PolicyDocument: !Sub |
+        {
+          "DestinationArn": "${LogStream.Arn}",
+          "RoleArn": "${DeliveryRole.Arn}",
+          "FilterPattern": "?ERROR ?Error ?error ?Exception ?Traceback ?panic:",
+          "Distribution": "ByLogStream"
+        }
+
+Outputs:
+  LogStreamArn:
+    Description: Stream the batch reader consumes.
+    Value: !GetAtt LogStream.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-LogStreamArn
+  LogStreamName:
+    Value: !Ref LogStream
+    Export:
+      Name: !Sub ${AWS::StackName}-LogStreamName

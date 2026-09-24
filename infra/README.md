@@ -33,9 +33,10 @@ Deploy looks the model up by name at deploy time rather than reading a stored AR
 | Stack | Template | Holds |
 |---|---|---|
 | `observe-ai-bootstrap` | `infra/bootstrap.yaml` | Staging bucket, Bedrock import role |
-| `observe-ai` | `infra/template.yaml` | The triage Lambda and its IAM policy |
+| `observe-ai-ingest` | `infra/ingest.yaml` | Kinesis stream, delivery role, account capture policy |
+| `observe-ai` | `infra/template.yaml` | The triage Lambda, its tables and IAM |
 
-They are separate because the bootstrap has to exist before an imported model does, and the app stack cannot deploy until that model exists. The imported model itself sits between them and is not a stack resource: AWS does not support Custom Model Import in CloudFormation.
+They are separate because their lifecycles differ. The bootstrap has to exist before an imported model does, and the app stack cannot deploy until that model exists. Ingestion is account-wide and deployed once, so an application release should not tear it down and recreate it. The imported model itself sits between them and is not a stack resource: AWS does not support Custom Model Import in CloudFormation.
 
 Staged weights expire after 7 days by a lifecycle rule. Bedrock copies them during import, so they are only needed while a job runs.
 
