@@ -1,0 +1,162 @@
+{
+  "dn-01": {
+    "label": "downstream",
+    "band": "clear_downstream",
+    "runtime": "dotnet"
+  },
+  "dn-02": {
+    "label": "downstream",
+    "band": "clear_downstream",
+    "runtime": "java"
+  },
+  "dn-03": {
+    "label": "downstream",
+    "band": "clear_downstream",
+    "runtime": "python"
+  },
+  "dn-04": {
+    "label": "downstream",
+    "band": "clear_downstream",
+    "runtime": "dotnet"
+  },
+  "dn-05": {
+    "label": "downstream",
+    "band": "clear_downstream",
+    "runtime": "node"
+  },
+  "dn-06": {
+    "label": "downstream",
+    "band": "clear_downstream",
+    "runtime": "dotnet"
+  },
+  "dn-07": {
+    "label": "downstream",
+    "band": "clear_downstream",
+    "runtime": "go"
+  },
+  "dn-08": {
+    "label": "downstream",
+    "band": "clear_downstream",
+    "runtime": "java"
+  },
+  "dn-09": {
+    "label": "downstream",
+    "band": "clear_downstream",
+    "runtime": "python"
+  },
+  "dn-10": {
+    "label": "downstream",
+    "band": "clear_downstream",
+    "runtime": "java"
+  },
+  "bg-01": {
+    "label": "bug",
+    "band": "clear_bug",
+    "runtime": "dotnet"
+  },
+  "bg-02": {
+    "label": "bug",
+    "band": "clear_bug",
+    "runtime": "java"
+  },
+  "bg-03": {
+    "label": "bug",
+    "band": "clear_bug",
+    "runtime": "python"
+  },
+  "bg-04": {
+    "label": "bug",
+    "band": "clear_bug",
+    "runtime": "node"
+  },
+  "bg-05": {
+    "label": "bug",
+    "band": "clear_bug",
+    "runtime": "dotnet"
+  },
+  "bg-06": {
+    "label": "bug",
+    "band": "clear_bug",
+    "runtime": "go"
+  },
+  "bg-07": {
+    "label": "bug",
+    "band": "clear_bug",
+    "runtime": "java"
+  },
+  "bg-08": {
+    "label": "bug",
+    "band": "clear_bug",
+    "runtime": "dotnet"
+  },
+  "bg-09": {
+    "label": "bug",
+    "band": "clear_bug",
+    "runtime": "python"
+  },
+  "bg-10": {
+    "label": "bug",
+    "band": "clear_bug",
+    "runtime": "node"
+  },
+  "am-01": {
+    "label": "downstream",
+    "band": "ambiguous",
+    "runtime": "dotnet"
+  },
+  "am-02": {
+    "label": "bug",
+    "band": "ambiguous",
+    "runtime": "java"
+  },
+  "am-03": {
+    "label": "bug",
+    "band": "ambiguous",
+    "runtime": "python"
+  },
+  "am-04": {
+    "label": "downstream",
+    "band": "ambiguous",
+    "runtime": "java"
+  },
+  "am-05": {
+    "label": "bug",
+    "band": "ambiguous",
+    "runtime": "dotnet"
+  },
+  "am-06": {
+    "label": "downstream",
+    "band": "ambiguous",
+    "runtime": "go"
+  },
+  "am-07": {
+    "label": "bug",
+    "band": "ambiguous",
+    "runtime": "java"
+  },
+  "am-08": {
+    "label": "bug",
+    "band": "ambiguous",
+    "runtime": "dotnet"
+  },
+  "am-09": {
+    "label": "downstream",
+    "band": "ambiguous",
+    "runtime": "node"
+  },
+  "am-10": {
+    "label": "bug",
+    "band": "ambiguous",
+    "runtime": "dotnet"
+  },
+  "am-11": {
+    "label": "downstream",
+    "band": "ambiguous",
+    "runtime": "dotnet"
+  },
+  "am-12": {
+    "label": "bug",
+    "band": "ambiguous",
+    "runtime": "java"
+  }
+}

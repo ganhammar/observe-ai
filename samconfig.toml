@@ -1,0 +1,10 @@
+version = 0.1
+
+[default.global.parameters]
+template_file = "infra/template.yaml"
+
+[default.deploy.parameters]
+region = "eu-central-1"
+stack_name = "observe-ai"
+capabilities = "CAPABILITY_IAM"
+resolve_s3 = true

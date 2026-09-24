@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  observe-ai - first-pass triage of application error logs. A Lambda function
+  builds a decision request and calls Amazon Bedrock Custom Model Import (an
+  imported Qwen3 model) for option log probabilities, returning calibrated-
+  style probabilities as JSON. Deployed to eu-central-1 for EU data
+  residency, since that is a region where Bedrock Custom Model Import runs.
+
+Parameters:
+  ModelArn:
+    Type: String
+    Description: >
+      ARN of the Bedrock Custom Model Import model the function invokes,
+      for example arn:aws:bedrock:eu-central-1:123456789012:imported-model/abcdef1234.
+      Produced once by infra/import-model.sh; there is no default because
+      the function is not usable without a real imported model.
+    AllowedPattern: '^arn:aws:bedrock:[a-z0-9-]+:[0-9]{12}:imported-model/.+$'
+    ConstraintDescription: Must be a Bedrock imported-model ARN.
+  LogLevel:
+    Type: String
+    Default: INFO
+    AllowedValues:
+      - DEBUG
+      - INFO
+      - WARNING
+      - ERROR
+    Description: Python logging level passed to the function as LOG_LEVEL.
+  SemifApi:
+    Type: String
+    Default: completion
+    AllowedValues:
+      - completion
+      - chat
+    Description: >
+      Bedrock request shape. completion renders the Qwen3 ChatML prompt in
+      the function with reasoning suppressed, which puts the answer letter
+      at the first sampled position. chat lets Bedrock apply the model's
+      packaged template, whose default leaves the model free to open a
+      reasoning block instead.
+
+Resources:
+  TriageFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      # Builds with the standard Python 3.12 pip workflow, which copies the
+      # whole CodeUri tree into the artifact and then installs
+      # requirements.txt alongside it. CodeUri is src/ rather than the
+      # project root for that reason: the root also holds .venv, eval
+      # fixtures, and tests, and all of it would ship to Lambda and count
+      # against the 250 MB unzipped limit. src/ contains exactly the
+      # observe_ai package, so the handler path below resolves from the
+      # artifact root with nothing extra attached.
+      BuildMethod: python3.12
+    Properties:
+      CodeUri: ../src
+      Handler: observe_ai.handler.handler
+      Runtime: python3.12
+      Architectures:
+        - arm64
+      # The function does no inference locally: it assembles a small JSON
+      # request and waits on a Bedrock InvokeModel call, so it needs no
+      # more memory than boto3 and the JSON payload require. 512 MB is
+      # comfortably above that floor and also buys a bit more CPU share,
+      # which shortens the JSON marshalling and TLS handshake time that
+      # dominates a run this thin.
+      MemorySize: 512
+      # A cold Bedrock Custom Model Import target can take longer than a
+      # typical managed-model InvokeModel call to respond, particularly
+      # when the imported model copy has scaled to zero after 5 minutes of
+      # no traffic and has to reactivate. 60 seconds gives that reactivation
+      # path, plus normal inference latency and retries, room to complete
+      # without the Lambda timing out first.
+      Timeout: 60
+      Environment:
+        Variables:
+          MODEL_ARN: !Ref ModelArn
+          BEDROCK_REGION: !Ref AWS::Region
+          LOG_LEVEL: !Ref LogLevel
+          SEMIF_API: !Ref SemifApi
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: InvokeImportedModelOnly
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: !Ref ModelArn
+      # The intended caller is an internal service (another Lambda, a queue
+      # consumer, a batch job) invoking this function directly through the
+      # Invoke API, not a public HTTP endpoint. Uncomment one of the blocks
+      # below only if that stops being true.
+      #
+      # Events:
+      #   TriageApi:
+      #     Type: Api
+      #     Properties:
+      #       Path: /triage
+      #       Method: post
+      #
+      # A function URL is the lighter-weight alternative to a full API
+      # Gateway when the caller is still inside AWS (e.g. same account,
+      # or with IAM SigV4 signing) and does not need routing, throttling
+      # plans, or a custom domain:
+      #
+      # FunctionUrlConfig:
+      #   AuthType: AWS_IAM
+
+  TriageFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${TriageFunction}
+      RetentionInDays: 30
+
+Outputs:
+  TriageFunctionArn:
+    Description: ARN of the triage Lambda function.
+    Value: !GetAtt TriageFunction.Arn
+  TriageFunctionName:
+    Description: Name of the triage Lambda function.
+    Value: !Ref TriageFunction

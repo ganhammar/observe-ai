@@ -1,0 +1,64 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install package with test extra
+        run: pip install -e ".[test]"
+
+      - name: Run tests
+        run: pytest
+
+  deploy:
+    name: Deploy
+    needs: test
+    runs-on: ubuntu-latest
+    # Requires a GitHub Environment named "production" in this repository's
+    # settings. Add required reviewers there to gate deploys on approval.
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: sam build
+        run: sam build
+
+      - name: sam deploy
+        run: |
+          sam deploy \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides ModelArn=${{ vars.MODEL_ARN }}

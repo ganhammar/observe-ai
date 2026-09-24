@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "observe-ai"
+version = "0.1.0"
+description = "Bedrock Custom Model Import backend for the SemIf direct-decision readout"
+requires-python = ">=3.12"
+dependencies = [
+  "boto3",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+tokenizer = ["transformers"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
