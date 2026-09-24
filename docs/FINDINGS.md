@@ -34,6 +34,39 @@ The swing is the interesting column, because it is a within-model comparison: sa
 
 **But integration is not accuracy.** The 32B lands at 50% on the ambiguous band, which is chance. Eight times the parameters bought 8.3 points.
 
+## The technique is not model-portable
+
+Qwen3 was chosen because it was on Bedrock Custom Model Import's architecture list, not for any measured property. Testing Mistral-7B-Instruct-v0.3 on the same fixture shows that choice mattered more than expected.
+
+Rendered through Mistral's own chat template, verbatim, the model puts **no probability at all** on the declared option letters. Its top token is `**`, at probability 0.0009: it is opening a formatted answer rather than emitting a letter.
+
+| prompt | declared mass | top token |
+|---|---:|---|
+| Mistral's own template | 0.0000 | `**` |
+| with a leading BOS | 0.0000 | `The` |
+| with a trailing space | 0.155 | the answer letter |
+| with a `" The answer is "` lead-in | 0.24 average | the answer letter |
+| **Qwen3-4B, no lead-in** | **1.0000** | the answer letter |
+
+A trailing space is the difference between never producing a letter and the letter being the most likely token. The best lead-in found still reaches only about a quarter of Qwen's mass.
+
+With that prompt, on the full fixture:
+
+| | Qwen3-4B | Mistral-7B |
+|---|---:|---:|
+| declared mass, median | 1.0000 | 0.19 |
+| rows missing an option letter | 0 of 32 | 27 of 32 |
+| clear_downstream | 1.000 | 1.000 |
+| clear_bug | 1.000 | 0.700 |
+| ambiguous | 0.417 | 0.417 |
+| overall | 0.781 | 0.688 |
+
+Low declared mass degrades the result where the lexical cue is weakest. Mistral holds `clear_downstream`, where a connection refused is unmistakable, and loses 30 points on `clear_bug`. The ambiguous band is unchanged only because both models already sit at chance there.
+
+So the requirement is not capability or size, it is **whether the model will emit a bare option letter as its first token**, which is a property of instruction tuning and not visible in any benchmark score. Note the comparison gives Mistral a tuned lead-in that Qwen does not need, so it is each model at its best effort rather than an identical prompt.
+
+This is also what declared mass is for. Mistral answers the first row correctly, `downstream` at probability 1.0, while holding 0.00004 of the distribution. Without the diagnostic, a model swap degrades silently behind answers that still look confident.
+
 ## The flat readout produces labels, not probabilities
 
 The 4B's output is saturated: 31 of 32 rows fall in the 0.00 to 0.10 or 0.90 to 1.00 bins, with exactly one in between. The 0.00 to 0.10 bin carries an observed bug rate of 27.8% against a mean predicted 0.0000. ECE is 0.210.
@@ -96,7 +129,7 @@ The 32B being faster than the 4B is presumably provisioning per model copy, not 
 
 Two things worth knowing before building on this:
 
-- **Cold start scales badly with model size.** The 32B exhausted nine retries and still returned `ModelNotReadyException` on first invocation after import. Behind a scale-to-zero endpoint, the first request after idle is a failure, not a slow response. The 4B did not have this problem.
+- **Cold start scales badly with model size**, consistently across three models. First invocation after import: Qwen3-4B at 8 GB succeeded in about 36 seconds; Mistral-7B at 14.5 GB exhausted nine retries over 68 seconds; Qwen3-32B at 65 GB exhausted nine retries. Above roughly 8 GB the first request after a scale-to-zero is a failure rather than a slow response, so a caller has to retry deliberately instead of waiting.
 - **`instructSupported` is False** for both imported Qwen3 models, so Bedrock detects no chat template. Sending `messages` and relying on server-side templating is not safe; the prompt is rendered locally with reasoning suppressed instead.
 
 ## An API detail that silently destroys the readout
