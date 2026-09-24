@@ -184,14 +184,15 @@ trap 'rm -rf "$WORKDIR"' EXIT
 LOCAL_MODEL_DIR="${WORKDIR}/${SANITIZED_MODEL_ID}"
 
 log "Downloading $MODEL_ID to $LOCAL_MODEL_DIR ..."
-# Bedrock reads safetensors. Excluding the other checkpoint formats some
-# repos also carry keeps the runner from staging the same weights twice.
-hf download "$MODEL_ID" --local-dir "$LOCAL_MODEL_DIR" \
-  --exclude "*.pth" "*.bin" "*.gguf" "original/*"
+hf download "$MODEL_ID" --local-dir "$LOCAL_MODEL_DIR"
 
 S3_URI="s3://${S3_BUCKET}/${S3_PREFIX}/"
 log "Syncing weights to $S3_URI ..."
-aws s3 sync "$LOCAL_MODEL_DIR" "$S3_URI" --region "$REGION"
+# Bedrock expects config.json and the weights at the prefix root. The hf
+# metadata cache is not part of the checkpoint, and --delete keeps a
+# retry from leaving files behind from an earlier attempt.
+aws s3 sync "$LOCAL_MODEL_DIR" "$S3_URI" --region "$REGION" \
+  --exclude ".cache/*" --delete
 
 get_status() {
   aws bedrock get-model-import-job \
