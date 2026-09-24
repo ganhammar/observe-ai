@@ -83,6 +83,7 @@ Resources:
           LOG_LEVEL: !Ref LogLevel
           SEMIF_API: !Ref SemifApi
           SEMIF_MODE: !Ref SemifMode
+          SEEN_TABLE: !Ref SeenTable
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -91,6 +92,11 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource: !Ref ModelArn
+            - Sid: CountOccurrencesOnly
+              Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt SeenTable.Arn
       # The intended caller is an internal service (another Lambda, a queue
       # consumer, a batch job) invoking this function directly through the
       # Invoke API, not a public HTTP endpoint. Uncomment one of the blocks
@@ -110,6 +116,29 @@ Resources:
       #
       # FunctionUrlConfig:
       #   AuthType: AWS_IAM
+
+
+  # Counts occurrences per distinct failure. The triage tree costs nine model
+  # calls, so it runs on first sighting only; every repeat after that is an
+  # increment. Keyed by repository as well as fingerprint, because the same
+  # framework exception from two services is two defects.
+  SeenTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: repo
+          AttributeType: S
+        - AttributeName: fingerprint
+          AttributeType: S
+      KeySchema:
+        - AttributeName: repo
+          KeyType: HASH
+        - AttributeName: fingerprint
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
 
   TriageFunctionLogGroup:
     Type: AWS::Logs::LogGroup
