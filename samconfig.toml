@@ -1,6 +1,13 @@
 version = 0.1
 
-[default.global.parameters]
+# template_file is scoped to build only. Setting it globally makes sam deploy
+# read the source template and package CodeUri verbatim, which skips the build
+# output entirely. With it here, deploy picks up .aws-sam/build/template.yaml
+# and ships what was actually built.
+[default.build.parameters]
+template_file = "infra/template.yaml"
+
+[default.validate.parameters]
 template_file = "infra/template.yaml"
 
 [default.deploy.parameters]

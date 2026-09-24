@@ -76,8 +76,16 @@ jobs:
         # the failure would surface as a Lambda that cannot start. Fail here
         # instead.
         run: |
-          MAX=$(objdump -T .aws-sam/build/TriageFunction/bootstrap \
-            | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -uV | tail -1)
+          BIN=.aws-sam/build/TriageFunction/bootstrap
+          if [ ! -f "$BIN" ]; then
+            echo "::error::$BIN was not produced. provided.al2023 runs a file named bootstrap and nothing else."
+            exit 1
+          fi
+          MAX=$(objdump -T "$BIN" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -uV | tail -1)
+          if [ -z "$MAX" ]; then
+            echo "::error::No GLIBC symbols found in $BIN; it is not the expected dynamically linked binary."
+            exit 1
+          fi
           echo "highest required symbol: $MAX"
           if [ "$(printf '%s\n' "$MAX" GLIBC_2.34 | sort -uV | tail -1)" != "GLIBC_2.34" ]; then
             echo "::error::Binary needs $MAX but provided.al2023 offers GLIBC_2.34."
