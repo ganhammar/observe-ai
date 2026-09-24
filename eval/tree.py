@@ -13,104 +13,22 @@ Stage 2 questions are independent rather than chained, so one wrong answer
 degrades the result instead of derailing the rest of the tree.
 """
 
-from __future__ import annotations
+import json
+from pathlib import Path
 
-# The flat question the single-question baseline asks. It scores 100% on rows
-# that carry no evidence, where the signal questions have nothing to read and
-# answer off the stack trace instead.
-BASELINE = {
-    "key": "baseline",
-    "question": ("Does this error indicate a defect in this service's own source code, "
-                 "or a failure in an external dependency or infrastructure it calls?"),
-    "options": [
-        {"id": "bug", "description": "A defect in this service's own source code. Resolving it requires a change to this repository."},
-        {"id": "downstream", "description": "A failure in an external dependency or in infrastructure this service calls. This service's own code is behaving correctly."},
-    ],
-}
+# The definitions live in src/ObserveAi/tree.json so the C# runtime can embed
+# the same bytes it is deployed with. Loading rather than duplicating them is
+# what stops the two implementations drifting; tests/vectors/combine.json
+# guards the combining rule on top of that.
+_DEFINITION = json.loads((Path(__file__).resolve().parents[1]
+                          / "src" / "ObserveAi" / "tree.json").read_text())
 
-SURFACE = {
-    "key": "surface",
-    "question": "Where did this failure surface?",
-    "options": [
-        {"id": "network", "description": "While calling another service over the network, or awaiting its response."},
-        {"id": "resource", "description": "While acquiring a finite local resource such as a connection, thread, or memory."},
-        {"id": "data", "description": "While parsing, deserialising, or validating data."},
-        {"id": "logic", "description": "Inside this service's own computation, with no external call or resource involved."},
-    ],
-}
-
-# Signals that attribute the failure to this service. Each asks about something
-# stated in the evidence, never about blame.
-BUG_SIGNALS = [
-    {
-        "key": "unreleased_resource",
-        "question": "Does the evidence show a resource being acquired far more often than it is released or returned?",
-        "options": [
-            {"id": "yes", "description": "Acquisitions substantially outnumber releases, or usage grows and never falls."},
-            {"id": "no", "description": "Acquisition and release are balanced, or the evidence does not describe this."},
-        ],
-    },
-    {
-        "key": "self_inflicted_load",
-        "question": "Does the evidence show this service's own request volume or repetition as unusual compared with its own recent baseline?",
-        "options": [
-            {"id": "yes", "description": "This service's own rate or repeat count is far above its normal level."},
-            {"id": "no", "description": "This service's own volume is normal, or the evidence does not describe it."},
-        ],
-    },
-    {
-        "key": "invalid_value_sent",
-        "question": "Does the evidence show that a value this service supplied is the one the error identifies as unacceptable?",
-        "options": [
-            {"id": "yes", "description": "A value in the outgoing request matches what the error names as invalid."},
-            {"id": "no", "description": "No supplied value is identified as invalid, or the evidence does not describe this."},
-        ],
-    },
-    {
-        "key": "internal_inconsistency",
-        "question": "Does the evidence show two of this service's own settings or assumptions that disagree with each other?",
-        "options": [
-            {"id": "yes", "description": "Two values this service controls are mutually inconsistent."},
-            {"id": "no", "description": "This service's own settings are consistent, or the evidence does not describe them."},
-        ],
-    },
-]
-
-# Signals that attribute the failure outside this service.
-BUG_SIGNALS.append({
-    "key": "repeated_work",
-    "question": "Does the evidence show this service repeating the same work many times within a single operation?",
-    "options": [
-        {"id": "yes", "description": "The same call or statement is issued far more times than there are distinct items."},
-        {"id": "no", "description": "Work is not repeated in that way."},
-    ],
-})
-
-DOWNSTREAM_SIGNALS = [
-    {
-        "key": "external_change",
-        "question": "Does the evidence show that an external party recently changed its data, limits, or configuration?",
-        "options": [
-            {"id": "yes", "description": "Something outside this service changed recently, and the change is described."},
-            {"id": "no", "description": "Nothing external is described as having changed."},
-        ],
-    },
-    {
-        "key": "external_unavailable",
-        "question": "Does the evidence show the external party failing or refusing service for reasons unrelated to what this service sent?",
-        "options": [
-            {"id": "yes", "description": "The external party is unreachable, erroring, or rejecting independently of our request content."},
-            {"id": "no", "description": "The external party is responding normally, or its failure follows from what we sent."},
-        ],
-    },
-]
-
+PRIOR = _DEFINITION["prior"]
+BASELINE = _DEFINITION["baseline"]
+SURFACE = _DEFINITION["surface"]
+BUG_SIGNALS = [s for s in _DEFINITION["signals"] if s["side"] == "bug"]
+DOWNSTREAM_SIGNALS = [s for s in _DEFINITION["signals"] if s["side"] == "downstream"]
 STAGE2 = BUG_SIGNALS + DOWNSTREAM_SIGNALS
-
-# Uniform mass added to both sides before normalising, so a verdict cannot
-# reach certainty on the strength of one signal alone.
-PRIOR = 0.15
-
 
 def rows_for(row: dict) -> list[dict]:
     """Expand one triage row into the tree's individual decision rows."""
@@ -177,15 +95,15 @@ def combine(answers: dict, evidence_present: bool = True) -> dict:
         bug_p = float(flat.get("bug", 0.5))
         return {"bug": bug_p, "downstream": 1.0 - bug_p, "fallback": True}
 
-    external_change = _yes(answers, "external_change")
     bug_values = []
     for signal in BUG_SIGNALS:
         value = _yes(answers, signal["key"])
-        if signal["key"] == "invalid_value_sent":
+        dampener = signal.get("dampened_by")
+        if dampener:
             # Sending a value the other side rejects is only ours when the other
             # side did not just change what it accepts. Without this the two
             # signals both fire on a contract change and cancel each other.
-            value *= (1.0 - external_change)
+            value *= (1.0 - _yes(answers, dampener))
         bug_values.append(value)
     bug = _noisy_or(bug_values)
     downstream = _noisy_or([_yes(answers, signal["key"]) for signal in DOWNSTREAM_SIGNALS])

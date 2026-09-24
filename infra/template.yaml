@@ -43,27 +43,22 @@ Resources:
   TriageFunction:
     Type: AWS::Serverless::Function
     Metadata:
-      # Builds with the standard Python 3.12 pip workflow, which copies the
-      # whole CodeUri tree into the artifact and then installs
-      # requirements.txt alongside it. CodeUri is src/ rather than the
-      # project root for that reason: the root also holds .venv, eval
-      # fixtures, and tests, and all of it would ship to Lambda and count
-      # against the 250 MB unzipped limit. src/ contains exactly the
-      # observe_ai package, so the handler path below resolves from the
-      # artifact root with nothing extra attached.
-      BuildMethod: python3.12
+      # The .NET NativeAOT publish runs through a Makefile because SAM's own
+      # dotnet workflow packages a managed assembly, not a native binary.
+      BuildMethod: makefile
     Properties:
-      CodeUri: ../src
-      Handler: observe_ai.handler.handler
-      Runtime: python3.12
+      CodeUri: ../src/ObserveAi
+      # provided.al2023 ignores Handler and runs the bootstrap binary, but
+      # CloudFormation still requires the property to be present.
+      Handler: bootstrap
+      Runtime: provided.al2023
       Architectures:
         - arm64
       # The function does no inference locally: it assembles a small JSON
-      # request and waits on a Bedrock InvokeModel call, so it needs no
-      # more memory than boto3 and the JSON payload require. 512 MB is
-      # comfortably above that floor and also buys a bit more CPU share,
-      # which shortens the JSON marshalling and TLS handshake time that
-      # dominates a run this thin.
+      # request and waits on a Bedrock InvokeModel call. A NativeAOT binary
+      # has no JIT and no managed heap to warm, so the floor is low. 512 MB
+      # is above what the payload needs and buys CPU share for the TLS
+      # handshake, which is most of a run this thin.
       MemorySize: 512
       # A cold Bedrock Custom Model Import target can take longer than a
       # typical managed-model InvokeModel call to respond, particularly

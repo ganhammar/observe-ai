@@ -35,3 +35,8 @@ ENV/
 # Local logs and scratch artifacts
 *.log
 *.tmp
+
+# .NET
+bin/
+obj/
+*.user

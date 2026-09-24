@@ -6,18 +6,28 @@ on:
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run .NET tests
+        run: dotnet test tests/ObserveAi.Tests --nologo
 
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
-      - name: Install package with test extra
-        run: pip install -e ".[test]"
-
-      - name: Run tests
-        run: pytest
+      - name: Run Python eval tests
+        # The Python package is the evaluation implementation, not the deployed
+        # one. Its tests still run because tests/vectors/combine.json is
+        # generated from it and the C# combining rule is checked against it.
+        run: |
+          pip install -e ".[test]"
+          pytest -q

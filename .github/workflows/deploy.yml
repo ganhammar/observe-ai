@@ -9,26 +9,36 @@ on:
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Run .NET tests
+        run: dotnet test tests/ObserveAi.Tests --nologo
 
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
-      - name: Install package with test extra
-        run: pip install -e ".[test]"
-
-      - name: Run tests
-        run: pytest
+      - name: Run Python eval tests
+        # The Python package is the evaluation implementation, not the deployed
+        # one. Its tests still run because tests/vectors/combine.json is
+        # generated from it and the C# combining rule is checked against it.
+        run: |
+          pip install -e ".[test]"
+          pytest -q
 
   deploy:
     name: Deploy
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     # Requires a GitHub Environment named "production" in this repository's
     # settings. Add required reviewers there to gate deploys on approval.
     environment: production
@@ -45,16 +55,34 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: eu-central-1
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
         with:
-          python-version: '3.12'
+          dotnet-version: '10.0.x'
+
+      - name: Install native toolchain
+        # NativeAOT links with clang and lld; neither ships on the runner image.
+        run: sudo apt-get update && sudo apt-get install -y clang lld
 
       - name: Set up AWS SAM CLI
         uses: aws-actions/setup-sam@v3
 
       - name: sam build
         run: sam build
+
+      - name: Check glibc requirement
+        # provided.al2023 carries glibc 2.34. NativeAOT links against whatever
+        # the builder has, so a runner image upgrade can raise this silently and
+        # the failure would surface as a Lambda that cannot start. Fail here
+        # instead.
+        run: |
+          MAX=$(objdump -T .aws-sam/build/TriageFunction/bootstrap \
+            | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -uV | tail -1)
+          echo "highest required symbol: $MAX"
+          if [ "$(printf '%s\n' "$MAX" GLIBC_2.34 | sort -uV | tail -1)" != "GLIBC_2.34" ]; then
+            echo "::error::Binary needs $MAX but provided.al2023 offers GLIBC_2.34."
+            exit 1
+          fi
 
       - name: Resolve imported model
         # Bedrock Custom Model Import is not a CloudFormation resource, so the

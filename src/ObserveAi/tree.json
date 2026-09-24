@@ -1,0 +1,148 @@
+{
+  "version": "tree-v1",
+  "prior": 0.15,
+  "baseline": {
+    "key": "baseline",
+    "question": "Does this error indicate a defect in this service's own source code, or a failure in an external dependency or infrastructure it calls?",
+    "options": [
+      {
+        "id": "bug",
+        "description": "A defect in this service's own source code. Resolving it requires a change to this repository."
+      },
+      {
+        "id": "downstream",
+        "description": "A failure in an external dependency or in infrastructure this service calls. This service's own code is behaving correctly."
+      }
+    ]
+  },
+  "surface": {
+    "key": "surface",
+    "question": "Where did this failure surface?",
+    "options": [
+      {
+        "id": "network",
+        "description": "While calling another service over the network, or awaiting its response."
+      },
+      {
+        "id": "resource",
+        "description": "While acquiring a finite local resource such as a connection, thread, or memory."
+      },
+      {
+        "id": "data",
+        "description": "While parsing, deserialising, or validating data."
+      },
+      {
+        "id": "logic",
+        "description": "Inside this service's own computation, with no external call or resource involved."
+      }
+    ]
+  },
+  "signals": [
+    {
+      "key": "unreleased_resource",
+      "side": "bug",
+      "question": "Does the evidence show a resource being acquired far more often than it is released or returned?",
+      "options": [
+        {
+          "id": "yes",
+          "description": "Acquisitions substantially outnumber releases, or usage grows and never falls."
+        },
+        {
+          "id": "no",
+          "description": "Acquisition and release are balanced, or the evidence does not describe this."
+        }
+      ]
+    },
+    {
+      "key": "self_inflicted_load",
+      "side": "bug",
+      "question": "Does the evidence show this service's own request volume or repetition as unusual compared with its own recent baseline?",
+      "options": [
+        {
+          "id": "yes",
+          "description": "This service's own rate or repeat count is far above its normal level."
+        },
+        {
+          "id": "no",
+          "description": "This service's own volume is normal, or the evidence does not describe it."
+        }
+      ]
+    },
+    {
+      "key": "invalid_value_sent",
+      "side": "bug",
+      "question": "Does the evidence show that a value this service supplied is the one the error identifies as unacceptable?",
+      "options": [
+        {
+          "id": "yes",
+          "description": "A value in the outgoing request matches what the error names as invalid."
+        },
+        {
+          "id": "no",
+          "description": "No supplied value is identified as invalid, or the evidence does not describe this."
+        }
+      ],
+      "dampened_by": "external_change"
+    },
+    {
+      "key": "internal_inconsistency",
+      "side": "bug",
+      "question": "Does the evidence show two of this service's own settings or assumptions that disagree with each other?",
+      "options": [
+        {
+          "id": "yes",
+          "description": "Two values this service controls are mutually inconsistent."
+        },
+        {
+          "id": "no",
+          "description": "This service's own settings are consistent, or the evidence does not describe them."
+        }
+      ]
+    },
+    {
+      "key": "repeated_work",
+      "side": "bug",
+      "question": "Does the evidence show this service repeating the same work many times within a single operation?",
+      "options": [
+        {
+          "id": "yes",
+          "description": "The same call or statement is issued far more times than there are distinct items."
+        },
+        {
+          "id": "no",
+          "description": "Work is not repeated in that way."
+        }
+      ]
+    },
+    {
+      "key": "external_change",
+      "side": "downstream",
+      "question": "Does the evidence show that an external party recently changed its data, limits, or configuration?",
+      "options": [
+        {
+          "id": "yes",
+          "description": "Something outside this service changed recently, and the change is described."
+        },
+        {
+          "id": "no",
+          "description": "Nothing external is described as having changed."
+        }
+      ]
+    },
+    {
+      "key": "external_unavailable",
+      "side": "downstream",
+      "question": "Does the evidence show the external party failing or refusing service for reasons unrelated to what this service sent?",
+      "options": [
+        {
+          "id": "yes",
+          "description": "The external party is unreachable, erroring, or rejecting independently of our request content."
+        },
+        {
+          "id": "no",
+          "description": "The external party is responding normally, or its failure follows from what we sent."
+        }
+      ]
+    }
+  ]
+}
