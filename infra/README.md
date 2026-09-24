@@ -1,98 +1,64 @@
-# infra
+# Deploying observe-ai
 
-Deploys the observe-ai triage Lambda with AWS SAM. The function calls a Bedrock Custom Model Import model that must exist before the first deploy, so setup has a manual, one-time step ahead of anything CI does.
+Everything except the model import runs on push to `main`. Nothing is created by hand.
 
-## IAM permissions the deploy role needs
+## First time
 
-`GithubDeploy` is assumed by both workflows. Beyond what CloudFormation and Lambda deployment require, it needs:
+1. Create an IAM role in the target account trusted by GitHub OIDC, and set it as the repository variable `AWS_DEPLOY_ROLE_ARN`. The subject to trust is:
 
-| Action | Used by | Why |
+   ```
+   repo:<owner>@<owner_id>/<repo>@<repo_id>:environment:production
+   ```
+
+   The environment form is required because both workflows declare `environment: production`. The `production` environment is restricted to the `main` branch, so no other ref can mint that claim.
+
+2. Run the **Import Model** workflow from the Actions tab. It deploys the bootstrap stack, downloads the weights, stages them, starts the Bedrock import job and polls it to completion.
+
+3. Push to `main`, or run **Deploy**.
+
+## Workflows
+
+| Workflow | Trigger | Does |
 |---|---|---|
-| `bedrock:ListImportedModels` | Deploy, Import Model | Resolve the model ARN by name at deploy time |
-| `bedrock:CreateModelImportJob` | Import Model | Start the import |
-| `bedrock:GetModelImportJob` | Import Model | Poll it to completion |
-| `s3:PutObject`, `s3:ListBucket` | Import Model | Stage weights in the bucket |
-| `iam:PassRole` | Import Model | Hand the Bedrock import service role to the job |
+| PR | pull_request | Tests |
+| Import Model | manual | Bootstrap stack, then the one-time model import |
+| Deploy | push to `main`, manual | Resolves the model by name, then deploys the app stack |
 
-`iam:PassRole` should be scoped to the Bedrock import role specifically rather than granted broadly, since passing arbitrary roles is an escalation path.
+Import Model is manual because it downloads several GB and produces a resource that bills monthly. Re-running it is safe: it exits early when a model of that name already exists.
 
-## First-time setup
+Deploy looks the model up by name at deploy time rather than reading a stored ARN, so the stack cannot point at a model that no longer exists. With no model imported it fails with a message saying to run Import Model first.
 
-1. Create an S3 bucket in `eu-central-1` to stage the model weights, for example `aws s3 mb s3://your-observe-ai-models --region eu-central-1`.
-2. Create an IAM role that Bedrock can assume to read that bucket during import. Trust policy:
+## Stacks
 
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [
-       {
-         "Effect": "Allow",
-         "Principal": { "Service": "bedrock.amazonaws.com" },
-         "Action": "sts:AssumeRole"
-       }
-     ]
-   }
-   ```
-
-   Permissions policy, scoped to the bucket from step 1:
-
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [
-       {
-         "Effect": "Allow",
-         "Action": ["s3:GetObject", "s3:ListBucket"],
-         "Resource": [
-           "arn:aws:s3:::your-observe-ai-models",
-           "arn:aws:s3:::your-observe-ai-models/*"
-         ]
-       }
-     ]
-   }
-   ```
-
-3. Run `infra/import-model.sh --bucket your-observe-ai-models --role-arn <role ARN from step 2>`. It downloads the model, uploads it to S3, starts the Bedrock import job, waits for it to finish, and prints the resulting model ARN. Read the cost warning it prints before confirming; see [Cost](#cost) below.
-4. Note the model ARN from step 3. It becomes the `ModelArn` stack parameter and the the imported model repository variable.
-5. Create an IAM role for GitHub Actions to assume over OIDC, no long-lived access keys. If the account does not already have a `token.actions.githubusercontent.com` OIDC identity provider, create that first. Trust policy for the role:
-
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [
-       {
-         "Effect": "Allow",
-         "Principal": {
-           "Federated": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
-         },
-         "Action": "sts:AssumeRoleWithWebIdentity",
-         "Condition": {
-           "StringEquals": {
-             "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
-           },
-           "StringLike": {
-             "token.actions.githubusercontent.com:sub": "repo:<ORG>/<REPO>:environment:production"
-           }
-         }
-       }
-     ]
-   }
-   ```
-
-   Attach a permissions policy that covers what `sam deploy` needs for this stack: CloudFormation stack operations, Lambda function management, IAM role creation for the function's own execution role, CloudWatch Logs, and S3 access to the SAM managed deployment bucket (`resolve_s3 = true` in `samconfig.toml` creates and uses one automatically).
-6. In the GitHub repository, create an environment named `production` (Settings > Environments) and add required reviewers there if deploys should wait for approval. Then set the repository variables listed below.
-7. Push to `main`, or run the `Deploy` workflow manually with `workflow_dispatch`.
-
-## Repository variables
-
-Set these under Settings > Secrets and variables > Actions > Variables. No secrets are needed since deploys authenticate with OIDC.
-
-| Variable | Used by | Value |
+| Stack | Template | Holds |
 |---|---|---|
-| `AWS_DEPLOY_ROLE_ARN` | `.github/workflows/deploy.yml` | ARN of the OIDC role from setup step 5 |
+| `observe-ai-bootstrap` | `infra/bootstrap.yaml` | Staging bucket, Bedrock import role |
+| `observe-ai` | `infra/template.yaml` | The triage Lambda and its IAM policy |
+
+They are separate because the bootstrap has to exist before an imported model does, and the app stack cannot deploy until that model exists. The imported model itself sits between them and is not a stack resource: AWS does not support Custom Model Import in CloudFormation.
+
+Staged weights expire after 7 days by a lifecycle rule. Bedrock copies them during import, so they are only needed while a job runs.
+
+## Permissions
+
+The deploy role is assumed by both workflows and needs, beyond ordinary CloudFormation and Lambda deployment rights:
+
+| Action | Used by |
+|---|---|
+| `bedrock:ListImportedModels` | Deploy, Import Model |
+| `bedrock:CreateModelImportJob` | Import Model |
+| `bedrock:GetModelImportJob` | Import Model |
+| `s3:PutObject`, `s3:ListBucket` on the staging bucket | Import Model |
+| `iam:PassRole` for the Bedrock import role | Import Model |
+
+Scope `iam:PassRole` to the import role rather than granting it broadly, since passing arbitrary roles is an escalation path.
 
 ## Cost
 
-Amazon Bedrock Custom Model Import bills per Custom Model Unit (CMU) per minute while the imported model is active, plus a separate monthly storage charge per CMU regardless of activity. An active model scales down to zero CMUs after about 5 minutes with no invocations, and reactivates (with added latency) on the next call. Traffic patterns that keep pinging the model just often enough to prevent that scale-down will cost far more than batching calls and letting it idle out between batches. Check current Bedrock pricing for `eu-central-1` for exact per-CMU rates before importing a model.
+The import job is not charged. What costs money:
 
-Bedrock Custom Model Import only supports the `Qwen3ForCausalLM` and `Qwen3MoeForCausalLM` architectures for the Qwen3 family; Qwen3.5 checkpoints report a different architecture string and will not import. `infra/import-model.sh` defaults to `Qwen/Qwen3-4B`.
+- Model storage, per Custom Model Unit per month, from import until the model is deleted.
+- Inference, per CMU per minute while a model copy is active, billed in 5 minute windows from the first successful call, scaling to zero after 5 minutes idle.
+- S3 for staged weights until the lifecycle rule expires them.
+
+Check current Bedrock pricing for the region; the CMU count for a given model is set by Bedrock at import and readable from `GetImportedModel`.

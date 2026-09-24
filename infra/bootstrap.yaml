@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  observe-ai bootstrap. Creates the S3 bucket that model weights are staged in
+  and the role Bedrock assumes to read them. Deployed by the Import Model
+  workflow before the import runs. Kept separate from the application stack
+  because it has to exist before an imported model does, and the application
+  stack cannot deploy until that model exists.
+
+Parameters:
+  StagingExpirationDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    Description: >
+      Days before staged weights are deleted. Bedrock copies the weights
+      during import, so the staged objects are only needed while a job is
+      running. Keeping them costs S3 storage for no benefit.
+
+Resources:
+  StagingBucket:
+    Type: AWS::S3::Bucket
+    # Retained so that deleting this stack cannot silently discard staged
+    # weights while an import job is still reading them.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub observe-ai-model-staging-${AWS::AccountId}-${AWS::Region}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireStagedWeights
+            Status: Enabled
+            ExpirationInDays: !Ref StagingExpirationDays
+          - Id: AbortIncompleteUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  ModelImportRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Assumed by Bedrock Custom Model Import to read staged model weights.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              # Scopes the trust to this account's import jobs so another
+              # account cannot have Bedrock assume this role on its behalf.
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:model-import-job/*
+      Policies:
+        - PolicyName: ReadStagedWeights
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt StagingBucket.Arn
+                  - !Sub ${StagingBucket.Arn}/*
+
+Outputs:
+  StagingBucketName:
+    Description: Bucket the Import Model workflow stages weights in.
+    Value: !Ref StagingBucket
+  ModelImportRoleArn:
+    Description: Role ARN passed to create-model-import-job.
+    Value: !GetAtt ModelImportRole.Arn
