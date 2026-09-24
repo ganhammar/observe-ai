@@ -47,6 +47,17 @@ public static class Triage
         var byKey = answers
             .Where(answer => answer.Probabilities is not null)
             .ToDictionary(answer => answer.Key, answer => answer.Probabilities!);
+
+        // Combine returns a number whatever it is given, so an empty answer set
+        // yields a confident looking 0.5 built from nothing. Losing every
+        // sub-question is an outage, not a verdict, so it surfaces as an error.
+        if (byKey.Count == 0)
+        {
+            var reasons = answers.Select(answer => answer.Error).Where(e => e is not null).Distinct();
+            throw new RowValidationException(
+                $"Every sub-question failed, so there is no verdict: {string.Join("; ", reasons)}");
+        }
+
         var verdict = tree.Combine(byKey, QuestionTree.HasEvidence(state));
         return new TriageResult(verdict, answers);
     }

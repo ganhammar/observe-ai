@@ -26,6 +26,15 @@ Parameters:
       - WARNING
       - ERROR
     Description: Python logging level passed to the function as LOG_LEVEL.
+  SemifMode:
+    Type: String
+    Default: tree
+    AllowedValues:
+      - tree
+      - flat
+    Description: >
+      tree asks the seven grounded signals and combines them in code. flat asks
+      one causal question, which is the path the published baseline measured.
   SemifApi:
     Type: String
     Default: completion
@@ -73,6 +82,7 @@ Resources:
           BEDROCK_REGION: !Ref AWS::Region
           LOG_LEVEL: !Ref LogLevel
           SEMIF_API: !Ref SemifApi
+          SEMIF_MODE: !Ref SemifMode
       Policies:
         - Version: '2012-10-17'
           Statement:

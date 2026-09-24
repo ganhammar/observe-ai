@@ -108,6 +108,14 @@ public static class Function
 
             var tree = LazyTree.Value;
             var result = await Triage.RunAsync(client, modelArn, row, tree).ConfigureAwait(false);
+
+            // A verdict built from some of the signals is still usable, but the
+            // gaps change what it means, so they belong in the log rather than
+            // only in the response.
+            foreach (var failed in result.Answers.Where(answer => answer.Error is not null))
+            {
+                context.Logger.LogWarning($"Row {rowId} signal {failed.Key} failed: {failed.Error}");
+            }
             return RowResultDto.FromTriage(rowId, result, tree);
         }
         catch (Exception error) when (error is RowValidationException or AmazonServiceException or AmazonClientException)
