@@ -49,7 +49,7 @@
 #                      Required. (env IMPORT_ROLE_ARN)
 #   --job-name NAME    Import job / imported model name.
 #                      (env IMPORT_JOB_NAME, default: derived from --model-id)
-#   --yes, -y          Skip the interactive cost confirmation.
+#   --dry-run          Report whether the model already exists, then stop.
 #   -h, --help         Show this help and exit.
 #
 # ------------------------------------------------------------------------
@@ -60,7 +60,8 @@
 # copy scales down to zero CMUs after about 5 minutes with no invocations,
 # but reactivates (with added latency) on the next call. Check current
 # Bedrock pricing for the region you pass before proceeding; this script
-# does not estimate cost for you and requires explicit confirmation below.
+# does not estimate cost for you. Importing itself is not charged; the
+# storage charge begins once the model exists and runs until it is deleted.
 # ------------------------------------------------------------------------
 
 set -euo pipefail
@@ -71,7 +72,7 @@ S3_PREFIX="${S3_PREFIX:-}"
 REGION="${AWS_REGION:-eu-central-1}"
 IMPORT_ROLE_ARN="${IMPORT_ROLE_ARN:-}"
 IMPORT_JOB_NAME="${IMPORT_JOB_NAME:-}"
-AUTO_YES="false"
+DRY_RUN="false"
 
 log() {
   printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*" >&2
@@ -101,8 +102,8 @@ while [[ $# -gt 0 ]]; do
       IMPORT_ROLE_ARN="$2"; shift 2 ;;
     --job-name)
       IMPORT_JOB_NAME="$2"; shift 2 ;;
-    --yes|-y)
-      AUTO_YES="true"; shift ;;
+    --dry-run)
+      DRY_RUN="true"; shift ;;
     -h|--help)
       usage; exit 0 ;;
     *)
@@ -149,12 +150,24 @@ cat >&2 <<EOF
 
 EOF
 
-if [[ "$AUTO_YES" != "true" ]]; then
-  read -r -p "Type 'yes' to continue: " CONFIRM
-  if [[ "$CONFIRM" != "yes" ]]; then
-    echo "Aborted, nothing was changed." >&2
-    exit 1
-  fi
+# An existing imported model of this name is the finished product, so report
+# it and stop. Creating a second one would leave both in the account, each
+# carrying its own monthly per-CMU storage charge, and only one of them would
+# be wired into the stack.
+EXISTING_MODEL_ARN="$(aws bedrock list-imported-models \
+  --region "$REGION" \
+  --name-contains "$IMPORT_JOB_NAME" \
+  --query "modelSummaries[?modelName=='${IMPORT_JOB_NAME}'].modelArn | [0]" \
+  --output text 2>/dev/null || true)"
+if [[ -n "$EXISTING_MODEL_ARN" && "$EXISTING_MODEL_ARN" != "None" ]]; then
+  log "Imported model '$IMPORT_JOB_NAME' already exists, nothing to do."
+  echo "$EXISTING_MODEL_ARN"
+  exit 0
+fi
+
+if [[ "$DRY_RUN" == "true" ]]; then
+  log "Dry run: no model exists yet; a real run would download, stage and import."
+  exit 0
 fi
 
 WORKDIR="$(mktemp -d)"
@@ -205,13 +218,17 @@ case "$EXISTING_STATUS" in
     log "Import job '$IMPORT_JOB_NAME' already completed, skipping straight to the result."
     ;;
   Failed)
+    # Job names are unique per account, so a retry needs a fresh one. The
+    # imported model name stays fixed: it is the key the existence check above
+    # matches on, and letting retries suffix it would produce one more billable
+    # imported model per attempt.
     JOB_TO_POLL="${IMPORT_JOB_NAME}-$(date -u +%Y%m%d%H%M%S)"
     log "Import job '$IMPORT_JOB_NAME' previously failed; starting a new job '$JOB_TO_POLL' instead."
     log "Inspect the failed job with: aws bedrock get-model-import-job --region $REGION --job-identifier $IMPORT_JOB_NAME"
     aws bedrock create-model-import-job \
       --region "$REGION" \
       --job-name "$JOB_TO_POLL" \
-      --imported-model-name "$JOB_TO_POLL" \
+      --imported-model-name "$IMPORT_JOB_NAME" \
       --role-arn "$IMPORT_ROLE_ARN" \
       --model-data-source "{\"s3DataSource\":{\"s3Uri\":\"${S3_URI}\"}}" \
       >/dev/null
