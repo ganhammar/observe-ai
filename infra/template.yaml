@@ -28,24 +28,6 @@ Parameters:
       issue is about to be filed. The eu. profile is required: the bare model
       ID is not enabled for on-demand invocation in this region, and the
       profile keeps the request inside EU regions.
-  LogLevel:
-    Type: String
-    Default: INFO
-    AllowedValues:
-      - DEBUG
-      - INFO
-      - WARNING
-      - ERROR
-    Description: Python logging level passed to the function as LOG_LEVEL.
-  SemifMode:
-    Type: String
-    Default: tree
-    AllowedValues:
-      - tree
-      - flat
-    Description: >
-      tree asks the seven grounded signals and combines them in code. flat asks
-      one causal question, which is the path the published baseline measured.
   IssuesPerRepoPerHour:
     Type: Number
     Default: 5
@@ -108,21 +90,15 @@ Resources:
       # is above what the payload needs and buys CPU share for the TLS
       # handshake, which is most of a run this thin.
       MemorySize: 512
-      # A cold Bedrock Custom Model Import target can take longer than a
-      # typical managed-model InvokeModel call to respond, particularly
-      # when the imported model copy has scaled to zero after 5 minutes of
-      # no traffic and has to reactivate. 60 seconds gives that reactivation
-      # path, plus normal inference latency and retries, room to complete
-      # without the Lambda timing out first. Escalate additionally fetches up
-      # to five files from GitHub and waits on one generative call.
+      # 90 seconds covers an imported model copy reactivating after scaling
+      # to zero, plus inference and SDK retries. Escalate also fetches up to
+      # five files from GitHub and waits on one generative call.
       Timeout: 90
       Environment:
         Variables:
           MODEL_ARN: !Ref ModelArn
           DIAGNOSIS_MODEL_ID: !Ref DiagnosisModelId
           BEDROCK_REGION: !Ref AWS::Region
-          LOG_LEVEL: !Ref LogLevel
-          SEMIF_MODE: !Ref SemifMode
           SEEN_TABLE: !Ref SeenTable
           GITHUB_ORG: !Ref GitHubOrg
           RATE_TABLE: !Ref RateTable
@@ -186,24 +162,8 @@ Resources:
               Action:
                 - states:StartExecution
               Resource: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-TriagePipeline
-      # Beyond the Kinesis trigger (TriageFunctionLogStreamMapping below), the
-      # only other caller is the state machine invoking this function directly
-      # through the Invoke API; there is no public HTTP endpoint. Add a key
-      # under Events above only if that changes, for example:
-      #
-      # TriageApi:
-      #   Type: Api
-      #   Properties:
-      #     Path: /triage
-      #     Method: post
-      #
-      # A function URL is a lighter-weight option than a full API Gateway
-      # when the caller is inside AWS (e.g. same account, or with IAM SigV4
-      # signing) and does not need routing, throttling plans, or a custom
-      # domain:
-      #
-      # FunctionUrlConfig:
-      #   AuthType: AWS_IAM
+      # The only callers are the Kinesis trigger below and the state machine
+      # through the Invoke API; there is no HTTP endpoint.
 
   # CloudWatch Logs delivers into this stream account-wide (infra/ingest.yaml).
   # Each record can batch many log events, and LogEnvelope.Unpack turns each
@@ -247,9 +207,9 @@ Resources:
               - kinesis:ListStreams
             Resource: !Ref LogStreamArn
 
-  # Counts occurrences per distinct failure. The triage tree costs nine model
-  # calls, so it runs on first sighting only; every repeat after that is an
-  # increment. Keyed by repository as well as fingerprint, because the same
+  # Counts occurrences per distinct failure. The triage tree costs up to nine
+  # model calls, so it runs on first sighting only; every repeat after that is
+  # an increment. Keyed by repository as well as fingerprint, because the same
   # framework exception from two services is two defects.
   SeenTable:
     Type: AWS::DynamoDB::Table
@@ -309,9 +269,7 @@ Resources:
   # a log became an issue; EXPRESS executions do not keep it. ALL-level
   # logging to CloudWatch Logs records the states a completed execution
   # passed through, without needing to open the execution in the console.
-  # The machine calls DynamoDB directly for CountOccurrence, so its role
-  # needs dynamodb:UpdateItem on SeenTable in addition to permission to
-  # invoke TriageFunction for every other step.
+  # Its role needs only permission to invoke TriageFunction for every step.
   TriagePipeline:
     Type: AWS::Serverless::StateMachine
     Properties:
@@ -341,11 +299,6 @@ Resources:
               Action:
                 - lambda:InvokeFunction
               Resource: !GetAtt TriageFunction.Arn
-            - Sid: CountOccurrencesOnly
-              Effect: Allow
-              Action:
-                - dynamodb:UpdateItem
-              Resource: !GetAtt SeenTable.Arn
             # Step Functions delivers execution history to CloudWatch Logs through
             # the account's log delivery configuration. This delivery API accepts
             # only '*' as the resource; this is the AWS-documented policy shape
