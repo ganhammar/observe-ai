@@ -1,0 +1,380 @@
+{"row": "dn-01", "signal": "baseline", "probabilities": {"bug": 0.0, "external": 1.0}, "declared_mass": 1.0}
+{"row": "dn-01", "signal": "surface", "probabilities": {"network": 0.999999999993181, "resource": 5.789356328691174e-12, "data": 4.193795658350947e-13, "logic": 6.101936677563714e-13}, "declared_mass": 1.000000000006819}
+{"row": "dn-01", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "dn-01", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "dn-01", "signal": "invalid_value_sent", "probabilities": {"yes": 4.1399375473943306e-08, "no": 0.9999999586006244}, "declared_mass": 1.0000000413993773}
+{"row": "dn-01", "signal": "internal_inconsistency", "probabilities": {"yes": 5.905303995456778e-10, "no": 0.9999999994094697}, "declared_mass": 1.0000000005905303}
+{"row": "dn-01", "signal": "repeated_work", "probabilities": {"yes": 2.734698291584396e-12, "no": 0.9999999999972653}, "declared_mass": 1.0000000000027347}
+{"row": "dn-01", "signal": "external_change", "probabilities": {"yes": 2.0611536181902033e-09, "no": 0.9999999979388463}, "declared_mass": 1.0000000020611537}
+{"row": "dn-01", "signal": "external_unavailable", "probabilities": {"yes": 0.9999999997210531, "no": 2.7894680920908113e-10}, "declared_mass": 1.0000000002789469}
+{"row": "dn-01", "signal": "platform_intervention", "probabilities": {"yes": 0.2689414213699951, "no": 0.7310585786300049}, "declared_mass": 0.999928059544233}
+{"row": "dn-02", "signal": "baseline", "probabilities": {"bug": 1.1628233028868813e-10, "external": 0.9999999998837177}, "declared_mass": 1.0000000001162823}
+{"row": "dn-02", "signal": "surface", "probabilities": {"network": 0.9999999999976159, "resource": 2.1297851709507073e-12, "data": 2.543665647370858e-13, "logic": 0.0}, "declared_mass": 1.000000000002384}
+{"row": "dn-02", "signal": "unreleased_resource", "probabilities": {"yes": 1.1628233028868813e-10, "no": 0.9999999998837177}, "declared_mass": 1.0000000001162823}
+{"row": "dn-02", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "dn-02", "signal": "invalid_value_sent", "probabilities": {"yes": 1.1861120010657661e-08, "no": 0.99999998813888}, "declared_mass": 1.00000001186112}
+{"row": "dn-02", "signal": "internal_inconsistency", "probabilities": {"yes": 2.0206839089813854e-11, "no": 0.999999999979793}, "declared_mass": 1.000000000020207}
+{"row": "dn-02", "signal": "repeated_work", "probabilities": {"yes": 4.599055376537186e-10, "no": 0.9999999995400946}, "declared_mass": 1.0000000004599054}
+{"row": "dn-02", "signal": "external_change", "probabilities": {"yes": 2.4616969512093895e-10, "no": 0.9999999997538302}, "declared_mass": 1.0000000002461698}
+{"row": "dn-02", "signal": "external_unavailable", "probabilities": {"yes": 0.9999982396569966, "no": 1.760343003490802e-06}, "declared_mass": 0.9999999722068016}
+{"row": "dn-02", "signal": "platform_intervention", "probabilities": {"yes": 9.056076988852742e-11, "no": 0.9999999999094393}, "declared_mass": 1.0000000000905607}
+{"row": "dn-03", "signal": "baseline", "probabilities": {"bug": 2.4133627718273893e-12, "external": 0.9999999999975866}, "declared_mass": 1.0000000000024134}
+{"row": "dn-03", "signal": "surface", "probabilities": {"network": 0.999999999923959, "resource": 7.052879850575852e-11, "data": 3.0988191384861885e-12, "logic": 2.4133627716496993e-12}, "declared_mass": 1.000000000076041}
+{"row": "dn-03", "signal": "unreleased_resource", "probabilities": {"yes": 1.6052280526088547e-09, "no": 0.999999998394772}, "declared_mass": 1.000000001605228}
+{"row": "dn-03", "signal": "self_inflicted_load", "probabilities": {"yes": 5.4927883506529765e-11, "no": 0.9999999999450722}, "declared_mass": 1.0000000000549278}
+{"row": "dn-03", "signal": "invalid_value_sent", "probabilities": {"yes": 0.00015843616032953632, "no": 0.9998415638396705}, "declared_mass": 0.9999947877594564}
+{"row": "dn-03", "signal": "internal_inconsistency", "probabilities": {"yes": 2.646573631904765e-09, "no": 0.9999999973534264}, "declared_mass": 1.0000000026465736}
+{"row": "dn-03", "signal": "repeated_work", "probabilities": {"yes": 4.363462233903899e-09, "no": 0.9999999956365377}, "declared_mass": 1.0000000043634623}
+{"row": "dn-03", "signal": "external_change", "probabilities": {"yes": 5.60279640614594e-09, "no": 0.9999999943972036}, "declared_mass": 1.0000000056027964}
+{"row": "dn-03", "signal": "external_unavailable", "probabilities": {"yes": 0.9999999804443193, "no": 1.955568070542584e-08}, "declared_mass": 1.000000019555681}
+{"row": "dn-03", "signal": "platform_intervention", "probabilities": {"yes": 0.001169510438306388, "no": 0.9988304895616935}, "declared_mass": 0.999998934476209}
+{"row": "dn-04", "signal": "baseline", "probabilities": {"bug": 4.058652608657463e-10, "external": 0.9999999995941347}, "declared_mass": 0.9999998811965899}
+{"row": "dn-04", "signal": "surface", "probabilities": {"network": 2.8823507934346075e-13, "resource": 0.9999999999966069, "data": 6.914400106916742e-13, "logic": 2.4133627718250253e-12}, "declared_mass": 1.000000000003393}
+{"row": "dn-04", "signal": "unreleased_resource", "probabilities": {"yes": 0.999999974890009, "no": 2.5109990926928157e-08}, "declared_mass": 1.0000000251099916}
+{"row": "dn-04", "signal": "self_inflicted_load", "probabilities": {"yes": 1.2256067443949272e-11, "no": 0.999999999987744}, "declared_mass": 1.000000000012256}
+{"row": "dn-04", "signal": "invalid_value_sent", "probabilities": {"yes": 4.944450477491054e-09, "no": 0.9999999950555496}, "declared_mass": 1.0000000049444504}
+{"row": "dn-04", "signal": "internal_inconsistency", "probabilities": {"yes": 4.363462233903899e-09, "no": 0.9999999956365377}, "declared_mass": 1.0000000043634623}
+{"row": "dn-04", "signal": "repeated_work", "probabilities": {"yes": 6.475945666070602e-07, "no": 0.9999993524054333}, "declared_mass": 1.0000000515485004}
+{"row": "dn-04", "signal": "external_change", "probabilities": {"yes": 5.4927883506529765e-11, "no": 0.9999999999450722}, "declared_mass": 1.0000000000549278}
+{"row": "dn-04", "signal": "external_unavailable", "probabilities": {"yes": 7.889264466933239e-06, "no": 0.9999921107355331}, "declared_mass": 1.0000000215134}
+{"row": "dn-04", "signal": "platform_intervention", "probabilities": {"yes": 6.69158608681505e-10, "no": 0.9999999993308415}, "declared_mass": 1.0000000006691585}
+{"row": "dn-05", "signal": "baseline", "probabilities": {"bug": 1.1399918530430558e-12, "external": 0.99999999999886}, "declared_mass": 1.00000000000114}
+{"row": "dn-05", "signal": "surface", "probabilities": {"network": 0.9999999999218636, "resource": 7.052879850561073e-11, "data": 3.098819138479695e-12, "logic": 4.508755241942527e-12}, "declared_mass": 1.0000000000781364}
+{"row": "dn-05", "signal": "unreleased_resource", "probabilities": {"yes": 2.7894680920908113e-10, "no": 0.9999999997210531}, "declared_mass": 1.0000000002789469}
+{"row": "dn-05", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "dn-05", "signal": "invalid_value_sent", "probabilities": {"yes": 3.535625071602016e-05, "no": 0.999964643749284}, "declared_mass": 0.9999972106345928}
+{"row": "dn-05", "signal": "internal_inconsistency", "probabilities": {"yes": 4.363462233903899e-09, "no": 0.9999999956365377}, "declared_mass": 1.0000000043634623}
+{"row": "dn-05", "signal": "repeated_work", "probabilities": {"yes": 9.056076988852742e-11, "no": 0.9999999999094393}, "declared_mass": 1.0000000000905607}
+{"row": "dn-05", "signal": "external_change", "probabilities": {"yes": 1.4449802095675028e-07, "no": 0.9999998555019791}, "declared_mass": 1.0000000252887493}
+{"row": "dn-05", "signal": "external_unavailable", "probabilities": {"yes": 0.999999997664407, "no": 2.3355930333443423e-09}, "declared_mass": 1.000000002335593}
+{"row": "dn-05", "signal": "platform_intervention", "probabilities": {"yes": 6.825603724121504e-08, "no": 0.9999999317439627}, "declared_mass": 0.9999999490467584}
+{"row": "dn-06", "signal": "baseline", "probabilities": {"bug": 2.4616969512093895e-10, "external": 0.9999999997538302}, "declared_mass": 1.0000000002461698}
+{"row": "dn-06", "signal": "surface", "probabilities": {"network": 0.9999999999768967, "resource": 1.78324729077344e-11, "data": 1.2917800047561518e-12, "logic": 3.978962535745313e-12}, "declared_mass": 1.0000000000231033}
+{"row": "dn-06", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "dn-06", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "dn-06", "signal": "invalid_value_sent", "probabilities": {"yes": 1.0261879630648829e-10, "no": 0.9999999998973812}, "declared_mass": 1.0000000001026188}
+{"row": "dn-06", "signal": "internal_inconsistency", "probabilities": {"yes": 5.211412485172657e-10, "no": 0.9999999994788586}, "declared_mass": 1.0000000005211414}
+{"row": "dn-06", "signal": "repeated_work", "probabilities": {"yes": 1.3176514268359263e-10, "no": 0.999999999868235}, "declared_mass": 1.000000000131765}
+{"row": "dn-06", "signal": "external_change", "probabilities": {"yes": 1.6918979223288786e-10, "no": 0.9999999998308102}, "declared_mass": 1.0000000001691898}
+{"row": "dn-06", "signal": "external_unavailable", "probabilities": {"yes": 0.999290329695098, "no": 0.0007096703049020562}, "declared_mass": 1.0000000445413926}
+{"row": "dn-06", "signal": "platform_intervention", "probabilities": {"yes": 9.54503492274952e-12, "no": 0.999999999990455}, "declared_mass": 1.000000000009545}
+{"row": "dn-07", "signal": "baseline", "probabilities": {"bug": 8.878265478451776e-13, "external": 0.9999999999991123}, "declared_mass": 1.0000000000008877}
+{"row": "dn-07", "signal": "surface", "probabilities": {"network": 0.9999999999799203, "resource": 1.7832472907788317e-11, "data": 7.835041784907064e-13, "logic": 1.4637785140965167e-12}, "declared_mass": 1.0000000000200797}
+{"row": "dn-07", "signal": "unreleased_resource", "probabilities": {"yes": 2.7894680920908113e-10, "no": 0.9999999997210531}, "declared_mass": 1.0000000002789469}
+{"row": "dn-07", "signal": "self_inflicted_load", "probabilities": {"yes": 9.54503492274952e-12, "no": 0.999999999990455}, "declared_mass": 1.000000000009545}
+{"row": "dn-07", "signal": "invalid_value_sent", "probabilities": {"yes": 1.6701415872385704e-05, "no": 0.9999832985841277}, "declared_mass": 0.9999979858735345}
+{"row": "dn-07", "signal": "internal_inconsistency", "probabilities": {"yes": 4.363462233903899e-09, "no": 0.9999999956365377}, "declared_mass": 1.0000000043634623}
+{"row": "dn-07", "signal": "repeated_work", "probabilities": {"yes": 3.775134544136581e-11, "no": 0.9999999999622486}, "declared_mass": 1.0000000000377514}
+{"row": "dn-07", "signal": "external_change", "probabilities": {"yes": 1.3176514268359263e-10, "no": 0.999999999868235}, "declared_mass": 1.000000000131765}
+{"row": "dn-07", "signal": "external_unavailable", "probabilities": {"yes": 0.999999999782756, "no": 2.1724399346070676e-10}, "declared_mass": 1.000000000217244}
+{"row": "dn-07", "signal": "platform_intervention", "probabilities": {"yes": 0.8519527963298947, "no": 0.1480472036701053}, "declared_mass": 0.9999974096660597}
+{"row": "dn-08", "signal": "baseline", "probabilities": {"bug": 7.83504178505825e-13, "external": 0.9999999999992164}, "declared_mass": 1.0000000000007836}
+{"row": "dn-08", "signal": "surface", "probabilities": {"network": 0.9999999999926437, "resource": 5.109089028025741e-12, "data": 7.835041785006752e-13, "logic": 1.4637785141151408e-12}, "declared_mass": 1.0000000000073563}
+{"row": "dn-08", "signal": "unreleased_resource", "probabilities": {"yes": 5.905303995456778e-10, "no": 0.9999999994094697}, "declared_mass": 1.0000000005905303}
+{"row": "dn-08", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "dn-08", "signal": "invalid_value_sent", "probabilities": {"yes": 1.1861120010657661e-08, "no": 0.99999998813888}, "declared_mass": 1.00000001186112}
+{"row": "dn-08", "signal": "internal_inconsistency", "probabilities": {"yes": 5.211412485172657e-10, "no": 0.9999999994788586}, "declared_mass": 1.0000000005211414}
+{"row": "dn-08", "signal": "repeated_work", "probabilities": {"yes": 1.0261879630648829e-10, "no": 0.9999999998973812}, "declared_mass": 1.0000000001026188}
+{"row": "dn-08", "signal": "external_change", "probabilities": {"yes": 2.5109990926928157e-08, "no": 0.999999974890009}, "declared_mass": 1.0000000251099916}
+{"row": "dn-08", "signal": "external_unavailable", "probabilities": {"yes": 0.9999999956365377, "no": 4.363462233903899e-09}, "declared_mass": 1.0000000043634623}
+{"row": "dn-08", "signal": "platform_intervention", "probabilities": {"yes": 3.535624647873866e-05, "no": 0.9999646437535213}, "declared_mass": 0.9999830255053611}
+{"row": "dn-09", "signal": "baseline", "probabilities": {"bug": 7.83504178505825e-13, "external": 0.9999999999992164}, "declared_mass": 1.0000000000007836}
+{"row": "dn-09", "signal": "surface", "probabilities": {"network": 0.9999999955438585, "resource": 4.363462233499497e-09, "data": 3.775134527456564e-11, "logic": 5.4927883264780414e-11}, "declared_mass": 1.0000000044561415}
+{"row": "dn-09", "signal": "unreleased_resource", "probabilities": {"yes": 0.005220125966806113, "no": 0.994779874033194}, "declared_mass": 0.9997892413470618}
+{"row": "dn-09", "signal": "self_inflicted_load", "probabilities": {"yes": 3.7266410610855467e-06, "no": 0.9999962733589388}, "declared_mass": 0.9999965741219662}
+{"row": "dn-09", "signal": "invalid_value_sent", "probabilities": {"yes": 0.9988304899934608, "no": 0.0011695100065391496}, "declared_mass": 0.9999888133071065}
+{"row": "dn-09", "signal": "internal_inconsistency", "probabilities": {"yes": 2.5109990926928157e-08, "no": 0.999999974890009}, "declared_mass": 1.0000000251099916}
+{"row": "dn-09", "signal": "repeated_work", "probabilities": {"yes": 0.9999997617630333, "no": 2.3823696679343506e-07}, "declared_mass": 0.9999999998184445}
+{"row": "dn-09", "signal": "external_change", "probabilities": {"yes": 3.0590237279112865e-07, "no": 0.9999996940976271}, "declared_mass": 0.9999998290653896}
+{"row": "dn-09", "signal": "external_unavailable", "probabilities": {"yes": 0.731058584489497, "no": 0.26894141551050293}, "declared_mass": 0.9999062678367836}
+{"row": "dn-09", "signal": "platform_intervention", "probabilities": {"yes": 1.6701415872932528e-05, "no": 0.999983298584127}, "declared_mass": 0.9999998931874033}
+{"row": "dn-10", "signal": "baseline", "probabilities": {"bug": 1.3176514268359263e-10, "external": 0.999999999868235}, "declared_mass": 1.000000000131765}
+{"row": "dn-10", "signal": "surface", "probabilities": {"network": 0.9999999991440303, "resource": 6.691586085564986e-10, "data": 7.052879845075108e-11, "logic": 1.1628233020267555e-10}, "declared_mass": 1.0000000008559697}
+{"row": "dn-10", "signal": "unreleased_resource", "probabilities": {"yes": 1.9555683036644596e-08, "no": 0.9999999804443168}, "declared_mass": 0.9999999003464057}
+{"row": "dn-10", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "dn-10", "signal": "invalid_value_sent", "probabilities": {"yes": 1.6701423834955865e-05, "no": 0.999983298576165}, "declared_mass": 0.9999946481028044}
+{"row": "dn-10", "signal": "internal_inconsistency", "probabilities": {"yes": 2.7894680920908113e-10, "no": 0.9999999997210531}, "declared_mass": 1.0000000002789469}
+{"row": "dn-10", "signal": "repeated_work", "probabilities": {"yes": 4.363462233903899e-09, "no": 0.9999999956365377}, "declared_mass": 1.0000000043634623}
+{"row": "dn-10", "signal": "external_change", "probabilities": {"yes": 1.3709578605790399e-06, "no": 0.9999986290421393}, "declared_mass": 0.9999999404483507}
+{"row": "dn-10", "signal": "external_unavailable", "probabilities": {"yes": 0.9999898700126424, "no": 1.0129987357628251e-05}, "declared_mass": 0.9999999972999862}
+{"row": "dn-10", "signal": "platform_intervention", "probabilities": {"yes": 2.4616969512093895e-10, "no": 0.9999999997538302}, "declared_mass": 1.0000000002461698}
+{"row": "bg-01", "signal": "baseline", "probabilities": {"bug": 0.9999999999572222, "external": 4.277787868786004e-11}, "declared_mass": 1.0000000000427778}
+{"row": "bg-01", "signal": "surface", "probabilities": {"network": 2.8823507934013183e-13, "resource": 5.109089027986984e-12, "data": 9.545034922698004e-12, "logic": 0.9999999999850577}, "declared_mass": 1.0000000000149423}
+{"row": "bg-01", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 0.9999995231630692}
+{"row": "bg-01", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-01", "signal": "invalid_value_sent", "probabilities": {"yes": 2.382368815932174e-07, "no": 0.9999997617631183}, "declared_mass": 0.9999994037724019}
+{"row": "bg-01", "signal": "internal_inconsistency", "probabilities": {"yes": 1.2501528648238603e-09, "no": 0.9999999987498471}, "declared_mass": 1.0000000012501529}
+{"row": "bg-01", "signal": "repeated_work", "probabilities": {"yes": 9.736200303530205e-10, "no": 0.9999999990263799}, "declared_mass": 1.00000000097362}
+{"row": "bg-01", "signal": "external_change", "probabilities": {"yes": 6.560200168110742e-12, "no": 0.9999999999934397}, "declared_mass": 1.0000000000065603}
+{"row": "bg-01", "signal": "external_unavailable", "probabilities": {"yes": 1.955568070542584e-08, "no": 0.9999999804443193}, "declared_mass": 1.000000019555681}
+{"row": "bg-01", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-02", "signal": "baseline", "probabilities": {"bug": 0.9999999999705993, "external": 2.940077739198032e-11}, "declared_mass": 1.0000000000294007}
+{"row": "bg-02", "signal": "surface", "probabilities": {"network": 0.0, "resource": 7.835041785043525e-13, "data": 1.879528816534078e-12, "logic": 0.999999999997337}, "declared_mass": 1.000000000002663}
+{"row": "bg-02", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 0.9999998807907247}
+{"row": "bg-02", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-02", "signal": "invalid_value_sent", "probabilities": {"yes": 1.0677032518814388e-06, "no": 0.9999989322967482}, "declared_mass": 0.9999988027305382}
+{"row": "bg-02", "signal": "internal_inconsistency", "probabilities": {"yes": 5.8291286406632705e-05, "no": 0.9999417087135934}, "declared_mass": 0.9999997629377564}
+{"row": "bg-02", "signal": "repeated_work", "probabilities": {"yes": 1.65867835891148e-12, "no": 0.9999999999983413}, "declared_mass": 1.0000000000016587}
+{"row": "bg-02", "signal": "external_change", "probabilities": {"yes": 1.5428112031916497e-13, "no": 0.9999999999998457}, "declared_mass": 1.0000000000001543}
+{"row": "bg-02", "signal": "external_unavailable", "probabilities": {"yes": 1.9171715133907573e-10, "no": 0.9999999998082829}, "declared_mass": 1.000000000191717}
+{"row": "bg-02", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-03", "signal": "baseline", "probabilities": {"bug": 0.9999999847700205, "external": 1.522997951276035e-08}, "declared_mass": 1.0000000152299797}
+{"row": "bg-03", "signal": "surface", "probabilities": {"network": 7.360295629543469e-10, "resource": 2.0007357861874538e-09, "data": 0.9706877646311772, "logic": 0.029312232632057497}, "declared_mass": 1.0000000069742008}
+{"row": "bg-03", "signal": "unreleased_resource", "probabilities": {"yes": 7.582564037808945e-10, "no": 0.9999999992417437}, "declared_mass": 0.9999995239213252}
+{"row": "bg-03", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-03", "signal": "invalid_value_sent", "probabilities": {"yes": 0.008577486704653395, "no": 0.9914225132953465}, "declared_mass": 0.9996546227125411}
+{"row": "bg-03", "signal": "internal_inconsistency", "probabilities": {"yes": 0.0003353502313215046, "no": 0.9996646497686785}, "declared_mass": 0.9999984585949857}
+{"row": "bg-03", "signal": "repeated_work", "probabilities": {"yes": 1.955568070542584e-08, "no": 0.9999999804443193}, "declared_mass": 1.000000019555681}
+{"row": "bg-03", "signal": "external_change", "probabilities": {"yes": 3.9278634073828336e-07, "no": 0.9999996072136592}, "declared_mass": 1.0000000351586067}
+{"row": "bg-03", "signal": "external_unavailable", "probabilities": {"yes": 0.1480472055495773, "no": 0.8519527944504226}, "declared_mass": 0.9999810654742107}
+{"row": "bg-03", "signal": "platform_intervention", "probabilities": {"yes": 3.978962535821407e-12, "no": 0.999999999996021}, "declared_mass": 1.000000000003979}
+{"row": "bg-04", "signal": "baseline", "probabilities": {"bug": 0.9999999847700205, "external": 1.522997951276035e-08}, "declared_mass": 1.0000000152299797}
+{"row": "bg-04", "signal": "surface", "probabilities": {"network": 1.2256067442981627e-11, "resource": 8.423463753700356e-12, "data": 7.052879850468878e-11, "logic": 0.9999999999087916}, "declared_mass": 1.0000000000912084}
+{"row": "bg-04", "signal": "unreleased_resource", "probabilities": {"yes": 4.599055376537186e-10, "no": 0.9999999995400946}, "declared_mass": 1.0000000004599054}
+{"row": "bg-04", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-04", "signal": "invalid_value_sent", "probabilities": {"yes": 4.539788486441253e-05, "no": 0.9999546021151355}, "declared_mass": 0.9999887761701792}
+{"row": "bg-04", "signal": "internal_inconsistency", "probabilities": {"yes": 2.646573631904765e-09, "no": 0.9999999973534264}, "declared_mass": 1.0000000026465736}
+{"row": "bg-04", "signal": "repeated_work", "probabilities": {"yes": 4.1399375473943306e-08, "no": 0.9999999586006244}, "declared_mass": 1.0000000413993773}
+{"row": "bg-04", "signal": "external_change", "probabilities": {"yes": 3.581747929000289e-10, "no": 0.9999999996418252}, "declared_mass": 1.0000000003581748}
+{"row": "bg-04", "signal": "external_unavailable", "probabilities": {"yes": 1.8553916819077567e-07, "no": 0.9999998144608317}, "declared_mass": 0.9999998279113884}
+{"row": "bg-04", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-05", "signal": "baseline", "probabilities": {"bug": 0.9999982396569966, "external": 1.760343003490802e-06}, "declared_mass": 0.9999999722068016}
+{"row": "bg-05", "signal": "surface", "probabilities": {"network": 0.0, "resource": 1.006039279277165e-12, "data": 5.109089028032082e-12, "logic": 0.9999999999938849}, "declared_mass": 1.000000000006115}
+{"row": "bg-05", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-05", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-05", "signal": "invalid_value_sent", "probabilities": {"yes": 1.955568070542584e-08, "no": 0.9999999804443193}, "declared_mass": 1.000000019555681}
+{"row": "bg-05", "signal": "internal_inconsistency", "probabilities": {"yes": 6.224144622520382e-11, "no": 0.9999999999377585}, "declared_mass": 1.0000000000622415}
+{"row": "bg-05", "signal": "repeated_work", "probabilities": {"yes": 4.599055376537186e-10, "no": 0.9999999995400946}, "declared_mass": 1.0000000004599054}
+{"row": "bg-05", "signal": "external_change", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-05", "signal": "external_unavailable", "probabilities": {"yes": 1.4449802095675028e-07, "no": 0.9999998555019791}, "declared_mass": 1.0000000252887493}
+{"row": "bg-05", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-06", "signal": "baseline", "probabilities": {"bug": 0.9999999999666846, "external": 3.3315445420554206e-11}, "declared_mass": 1.0000000000333154}
+{"row": "bg-06", "signal": "surface", "probabilities": {"network": 3.9789625293310265e-12, "resource": 2.594609494033883e-11, "data": 0.9999999983648469, "logic": 1.605228052560818e-09}, "declared_mass": 1.0000000016351531}
+{"row": "bg-06", "signal": "unreleased_resource", "probabilities": {"yes": 2.3355930333443423e-09, "no": 0.999999997664407}, "declared_mass": 1.000000002335593}
+{"row": "bg-06", "signal": "self_inflicted_load", "probabilities": {"yes": 1.8795288165355504e-12, "no": 0.9999999999981204}, "declared_mass": 1.0000000000018796}
+{"row": "bg-06", "signal": "invalid_value_sent", "probabilities": {"yes": 2.1444945858953816e-05, "no": 0.999978555054141}, "declared_mass": 0.9999986764624923}
+{"row": "bg-06", "signal": "internal_inconsistency", "probabilities": {"yes": 1.8553914607279394e-07, "no": 0.999999814460854}, "declared_mass": 0.999999947120614}
+{"row": "bg-06", "signal": "repeated_work", "probabilities": {"yes": 1.955568070542584e-08, "no": 0.9999999804443193}, "declared_mass": 1.000000019555681}
+{"row": "bg-06", "signal": "external_change", "probabilities": {"yes": 1.65867835891148e-12, "no": 0.9999999999983413}, "declared_mass": 1.0000000000016587}
+{"row": "bg-06", "signal": "external_unavailable", "probabilities": {"yes": 5.043476486929152e-07, "no": 0.9999994956523514}, "declared_mass": 1.0000000275107317}
+{"row": "bg-06", "signal": "platform_intervention", "probabilities": {"yes": 1.2256067443949272e-11, "no": 0.999999999987744}, "declared_mass": 1.000000000012256}
+{"row": "bg-07", "signal": "baseline", "probabilities": {"bug": 0.999999999989184, "external": 1.0815941557168708e-11}, "declared_mass": 1.000000000010816}
+{"row": "bg-07", "signal": "surface", "probabilities": {"network": 0.0, "resource": 3.0988191386891875e-12, "data": 7.433680672273894e-12, "logic": 0.9999999999894675}, "declared_mass": 1.0000000000105325}
+{"row": "bg-07", "signal": "unreleased_resource", "probabilities": {"yes": 1.3440409770490404e-08, "no": 0.9999999865595903}, "declared_mass": 1.00000001344041}
+{"row": "bg-07", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-07", "signal": "invalid_value_sent", "probabilities": {"yes": 1.1861120010657661e-08, "no": 0.99999998813888}, "declared_mass": 1.00000001186112}
+{"row": "bg-07", "signal": "internal_inconsistency", "probabilities": {"yes": 1.6918979223288786e-10, "no": 0.9999999998308102}, "declared_mass": 1.0000000001691898}
+{"row": "bg-07", "signal": "repeated_work", "probabilities": {"yes": 0.9999999804443193, "no": 1.955568070542584e-08}, "declared_mass": 1.000000019555681}
+{"row": "bg-07", "signal": "external_change", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-07", "signal": "external_unavailable", "probabilities": {"yes": 4.363462233903899e-09, "no": 0.9999999956365377}, "declared_mass": 1.0000000043634623}
+{"row": "bg-07", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-08", "signal": "baseline", "probabilities": {"bug": 0.9999999998082829, "external": 1.9171715133907573e-10}, "declared_mass": 1.000000000191717}
+{"row": "bg-08", "signal": "surface", "probabilities": {"network": 6.56020016620984e-12, "resource": 1.0815941554080682e-11, "data": 0.999999999703677, "logic": 2.789468092042341e-10}, "declared_mass": 1.000000000296323}
+{"row": "bg-08", "signal": "unreleased_resource", "probabilities": {"yes": 1.1032561626447475e-09, "no": 0.9999999988967438}, "declared_mass": 0.9999998818939807}
+{"row": "bg-08", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-08", "signal": "invalid_value_sent", "probabilities": {"yes": 0.5621765008857981, "no": 0.4378234991142019}, "declared_mass": 0.9961128313656382}
+{"row": "bg-08", "signal": "internal_inconsistency", "probabilities": {"yes": 1.8553914607279394e-07, "no": 0.999999814460854}, "declared_mass": 0.999999947120614}
+{"row": "bg-08", "signal": "repeated_work", "probabilities": {"yes": 5.4927883506529765e-11, "no": 0.9999999999450722}, "declared_mass": 1.0000000000549278}
+{"row": "bg-08", "signal": "external_change", "probabilities": {"yes": 2.5946094982091465e-11, "no": 0.9999999999740539}, "declared_mass": 1.0000000000259461}
+{"row": "bg-08", "signal": "external_unavailable", "probabilities": {"yes": 8.764249540882477e-08, "no": 0.9999999123575046}, "declared_mass": 0.9999998492239599}
+{"row": "bg-08", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-09", "signal": "baseline", "probabilities": {"bug": 0.9999999966017321, "external": 3.3982678079468468e-09}, "declared_mass": 1.000000003398268}
+{"row": "bg-09", "signal": "surface", "probabilities": {"network": 8.579262599247532e-10, "resource": 1.2482753425660194e-09, "data": 0.001501181990606333, "logic": 0.9984988159031921}, "declared_mass": 0.9999999735549839}
+{"row": "bg-09", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 0.9999997615814777}
+{"row": "bg-09", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-09", "signal": "invalid_value_sent", "probabilities": {"yes": 0.11920293453832885, "no": 0.8807970654616711}, "declared_mass": 0.9986262763094704}
+{"row": "bg-09", "signal": "internal_inconsistency", "probabilities": {"yes": 1.4449802095675028e-07, "no": 0.9999998555019791}, "declared_mass": 1.0000000252887493}
+{"row": "bg-09", "signal": "repeated_work", "probabilities": {"yes": 9.736200303530205e-10, "no": 0.9999999990263799}, "declared_mass": 1.00000000097362}
+{"row": "bg-09", "signal": "external_change", "probabilities": {"yes": 1.2256067443949272e-11, "no": 0.999999999987744}, "declared_mass": 1.000000000012256}
+{"row": "bg-09", "signal": "external_unavailable", "probabilities": {"yes": 0.07585817323116976, "no": 0.9241418267688303}, "declared_mass": 0.9999797116274908}
+{"row": "bg-09", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-10", "signal": "baseline", "probabilities": {"bug": 0.9999999997538302, "external": 2.4616969512093895e-10}, "declared_mass": 1.0000000002461698}
+{"row": "bg-10", "signal": "surface", "probabilities": {"network": 0.0, "resource": 3.0988191386942826e-12, "data": 5.7893563286791945e-12, "logic": 0.9999999999911118}, "declared_mass": 1.0000000000088882}
+{"row": "bg-10", "signal": "unreleased_resource", "probabilities": {"yes": 3.3982698334723197e-09, "no": 0.9999999966017301}, "declared_mass": 0.9999994073521682}
+{"row": "bg-10", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "bg-10", "signal": "invalid_value_sent", "probabilities": {"yes": 6.475947210046347e-07, "no": 0.9999993524052789}, "declared_mass": 0.9999988594578295}
+{"row": "bg-10", "signal": "internal_inconsistency", "probabilities": {"yes": 0.7310585669110203, "no": 0.2689414330889798}, "declared_mass": 0.9999720020017032}
+{"row": "bg-10", "signal": "repeated_work", "probabilities": {"yes": 0.9999999586006244, "no": 4.1399375473943306e-08}, "declared_mass": 1.0000000413993773}
+{"row": "bg-10", "signal": "external_change", "probabilities": {"yes": 2.2897348455931243e-11, "no": 0.9999999999771028}, "declared_mass": 1.0000000000228972}
+{"row": "bg-10", "signal": "external_unavailable", "probabilities": {"yes": 9.237449576640118e-09, "no": 0.9999999907625504}, "declared_mass": 1.0000000092374497}
+{"row": "bg-10", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-01", "signal": "baseline", "probabilities": {"bug": 0.999999814460854, "external": 1.8553914607279394e-07}, "declared_mass": 0.999999947120614}
+{"row": "am-01", "signal": "surface", "probabilities": {"network": 0.9999999873671025, "resource": 6.691586006758661e-10, "data": 1.0261879502064617e-10, "logic": 1.1861120001503515e-08}, "declared_mass": 1.0000000126328976}
+{"row": "am-01", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 0.9999998807907247}
+{"row": "am-01", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-01", "signal": "invalid_value_sent", "probabilities": {"yes": 2.3823699519348276e-07, "no": 0.9999997617630049}, "declared_mass": 0.9999998806092188}
+{"row": "am-01", "signal": "internal_inconsistency", "probabilities": {"yes": 1.1628233028868813e-10, "no": 0.9999999998837177}, "declared_mass": 1.0000000001162823}
+{"row": "am-01", "signal": "repeated_work", "probabilities": {"yes": 3.098819138712223e-12, "no": 0.9999999999969011}, "declared_mass": 1.0000000000030989}
+{"row": "am-01", "signal": "external_change", "probabilities": {"yes": 1.2917800047843274e-12, "no": 0.9999999999987081}, "declared_mass": 1.0000000000012919}
+{"row": "am-01", "signal": "external_unavailable", "probabilities": {"yes": 0.00015843625487900343, "no": 0.999841563745121}, "declared_mass": 0.9999999130249843}
+{"row": "am-01", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-02", "signal": "baseline", "probabilities": {"bug": 5.3157849718487075e-08, "external": 0.9999999468421502}, "declared_mass": 1.0000000531578526}
+{"row": "am-02", "signal": "surface", "probabilities": {"network": 0.9999999999935894, "resource": 5.109089028030572e-12, "data": 6.914400106895877e-13, "logic": 6.101936677566207e-13}, "declared_mass": 1.0000000000064106}
+{"row": "am-02", "signal": "unreleased_resource", "probabilities": {"yes": 2.06115509244221e-09, "no": 0.999999997938845}, "declared_mass": 0.9999992868058994}
+{"row": "am-02", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-02", "signal": "invalid_value_sent", "probabilities": {"yes": 0.9999869928761863, "no": 1.3007123813725573e-05}, "declared_mass": 1.0000000134804292}
+{"row": "am-02", "signal": "internal_inconsistency", "probabilities": {"yes": 3.160881453314576e-10, "no": 0.999999999683912}, "declared_mass": 1.000000000316088}
+{"row": "am-02", "signal": "repeated_work", "probabilities": {"yes": 5.4927883506529765e-11, "no": 0.9999999999450722}, "declared_mass": 1.0000000000549278}
+{"row": "am-02", "signal": "external_change", "probabilities": {"yes": 0.0002034269495804164, "no": 0.9997965730504196}, "declared_mass": 0.9999995013440387}
+{"row": "am-02", "signal": "external_unavailable", "probabilities": {"yes": 0.9999952149049347, "no": 4.785095065258562e-06}, "declared_mass": 0.9999998975374709}
+{"row": "am-02", "signal": "platform_intervention", "probabilities": {"yes": 1.3176514268359263e-10, "no": 0.999999999868235}, "declared_mass": 1.000000000131765}
+{"row": "am-03", "signal": "baseline", "probabilities": {"bug": 4.0586521248284276e-10, "external": 0.9999999995941349}, "declared_mass": 1.0000000004058651}
+{"row": "am-03", "signal": "surface", "probabilities": {"network": 1.444978951737993e-07, "resource": 3.927860027015186e-07, "data": 8.5921671166865e-10, "logic": 0.9999994618568853}, "declared_mass": 0.9999999420969838}
+{"row": "am-03", "signal": "unreleased_resource", "probabilities": {"yes": 5.315785605539625e-08, "no": 0.999999946842144}, "declared_mass": 0.9999999339485772}
+{"row": "am-03", "signal": "self_inflicted_load", "probabilities": {"yes": 1.3440411372712085e-08, "no": 0.9999999865595888}, "declared_mass": 0.9999998942311346}
+{"row": "am-03", "signal": "invalid_value_sent", "probabilities": {"yes": 7.484623611103256e-05, "no": 0.9999251537638889}, "declared_mass": 0.9999822278699906}
+{"row": "am-03", "signal": "internal_inconsistency", "probabilities": {"yes": 7.991959892315218e-11, "no": 0.9999999999200804}, "declared_mass": 1.0000000000799196}
+{"row": "am-03", "signal": "repeated_work", "probabilities": {"yes": 4.5397857832164256e-05, "no": 0.9999546021421679}, "declared_mass": 0.9999998619765712}
+{"row": "am-03", "signal": "external_change", "probabilities": {"yes": 9.237449576640118e-09, "no": 0.9999999907625504}, "declared_mass": 1.0000000092374497}
+{"row": "am-03", "signal": "external_unavailable", "probabilities": {"yes": 0.9988304895616935, "no": 0.001169510438306388}, "declared_mass": 0.999998934476209}
+{"row": "am-03", "signal": "platform_intervention", "probabilities": {"yes": 0.0002611904346636726, "no": 0.9997388095653363}, "declared_mass": 0.9999994752063185}
+{"row": "am-04", "signal": "baseline", "probabilities": {"bug": 0.9999785550413585, "external": 2.1444958641491428e-05}, "declared_mass": 0.9999999877474806}
+{"row": "am-04", "signal": "surface", "probabilities": {"network": 8.764248495500923e-08, "resource": 2.0206839726699482e-11, "data": 0.9999999122888344, "logic": 4.8473688589532254e-11}, "declared_mass": 0.9999999685018873}
+{"row": "am-04", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-04", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-04", "signal": "invalid_value_sent", "probabilities": {"yes": 0.004070137157169107, "no": 0.995929862842831}, "declared_mass": 0.9996559750931112}
+{"row": "am-04", "signal": "internal_inconsistency", "probabilities": {"yes": 4.0586521248284276e-10, "no": 0.9999999995941349}, "declared_mass": 1.0000000004058651}
+{"row": "am-04", "signal": "repeated_work", "probabilities": {"yes": 7.433680672296929e-12, "no": 0.9999999999925664}, "declared_mass": 1.0000000000074336}
+{"row": "am-04", "signal": "external_change", "probabilities": {"yes": 1.1861120010657661e-08, "no": 0.99999998813888}, "declared_mass": 1.00000001186112}
+{"row": "am-04", "signal": "external_unavailable", "probabilities": {"yes": 1.370956879994792e-06, "no": 0.9999986290431199}, "declared_mass": 0.9999997020291747}
+{"row": "am-04", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-05", "signal": "baseline", "probabilities": {"bug": 1.3176514268359263e-10, "external": 0.999999999868235}, "declared_mass": 1.000000000131765}
+{"row": "am-05", "signal": "surface", "probabilities": {"network": 2.54366564737056e-13, "resource": 0.9999999999974984, "data": 7.835041785044789e-13, "logic": 1.4637785141222472e-12}, "declared_mass": 1.0000000000025016}
+{"row": "am-05", "signal": "unreleased_resource", "probabilities": {"yes": 0.9999999987498471, "no": 1.2501528648238603e-09}, "declared_mass": 1.0000000012501529}
+{"row": "am-05", "signal": "self_inflicted_load", "probabilities": {"yes": 7.05287985061473e-11, "no": 0.9999999999294713}, "declared_mass": 1.0000000000705287}
+{"row": "am-05", "signal": "invalid_value_sent", "probabilities": {"yes": 7.582560422162384e-10, "no": 0.9999999992417439}, "declared_mass": 1.0000000007582561}
+{"row": "am-05", "signal": "internal_inconsistency", "probabilities": {"yes": 2.3355930333443423e-09, "no": 0.999999997664407}, "declared_mass": 1.000000002335593}
+{"row": "am-05", "signal": "repeated_work", "probabilities": {"yes": 7.88926540739231e-06, "no": 0.9999921107345925}, "declared_mass": 0.999999902305965}
+{"row": "am-05", "signal": "external_change", "probabilities": {"yes": 5.4927883506529765e-11, "no": 0.9999999999450722}, "declared_mass": 1.0000000000549278}
+{"row": "am-05", "signal": "external_unavailable", "probabilities": {"yes": 4.5397857832164256e-05, "no": 0.9999546021421679}, "declared_mass": 0.9999998619765712}
+{"row": "am-05", "signal": "platform_intervention", "probabilities": {"yes": 9.056076988852742e-11, "no": 0.9999999999094393}, "declared_mass": 1.0000000000905607}
+{"row": "am-06", "signal": "baseline", "probabilities": {"bug": 0.9999832985701904, "external": 1.6701429809483402e-05}, "declared_mass": 1.000000012408805}
+{"row": "am-06", "signal": "surface", "probabilities": {"network": 5.675685213315904e-14, "resource": 0.9999999965965662, "data": 5.109089010674879e-12, "logic": 3.3982678079292915e-09}, "declared_mass": 1.0000000034034338}
+{"row": "am-06", "signal": "unreleased_resource", "probabilities": {"yes": 0.8807970654616711, "no": 0.11920293453832885}, "declared_mass": 0.9996081700545327}
+{"row": "am-06", "signal": "self_inflicted_load", "probabilities": {"yes": 2.5946094982091465e-11, "no": 0.9999999999740539}, "declared_mass": 1.0000000000259461}
+{"row": "am-06", "signal": "invalid_value_sent", "probabilities": {"yes": 3.224187017655921e-08, "no": 0.9999999677581298}, "declared_mass": 0.9999999130325921}
+{"row": "am-06", "signal": "internal_inconsistency", "probabilities": {"yes": 1.5737102106615244e-11, "no": 0.9999999999842628}, "declared_mass": 1.0000000000157372}
+{"row": "am-06", "signal": "repeated_work", "probabilities": {"yes": 7.05287985061473e-11, "no": 0.9999999999294713}, "declared_mass": 1.0000000000705287}
+{"row": "am-06", "signal": "external_change", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-06", "signal": "external_unavailable", "probabilities": {"yes": 0.11920291576401235, "no": 0.8807970842359877}, "declared_mass": 0.9999751772692378}
+{"row": "am-06", "signal": "platform_intervention", "probabilities": {"yes": 9.736200303530205e-10, "no": 0.9999999990263799}, "declared_mass": 1.00000000097362}
+{"row": "am-07", "signal": "baseline", "probabilities": {"bug": 1.2501528648238603e-09, "external": 0.9999999987498471}, "declared_mass": 1.0000000012501529}
+{"row": "am-07", "signal": "surface", "probabilities": {"network": 0.9999999999669762, "resource": 2.5946094981907828e-11, "data": 3.0988191386194906e-12, "logic": 3.978962535705839e-12}, "declared_mass": 1.0000000000330238}
+{"row": "am-07", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 0.9999996423722521}
+{"row": "am-07", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-07", "signal": "invalid_value_sent", "probabilities": {"yes": 0.9996646498487908, "no": 0.0003353501512092237}, "declared_mass": 0.9999967901417293}
+{"row": "am-07", "signal": "internal_inconsistency", "probabilities": {"yes": 5.3157849718487075e-08, "no": 0.9999999468421502}, "declared_mass": 1.0000000531578526}
+{"row": "am-07", "signal": "repeated_work", "probabilities": {"yes": 1.8189616842444243e-09, "no": 0.9999999981810384}, "declared_mass": 1.0000000018189616}
+{"row": "am-07", "signal": "external_change", "probabilities": {"yes": 0.0024726231864972796, "no": 0.9975273768135027}, "declared_mass": 0.9999918283367817}
+{"row": "am-07", "signal": "external_unavailable", "probabilities": {"yes": 0.9992903294486626, "no": 0.0007096705513373304}, "declared_mass": 0.9999858691105203}
+{"row": "am-07", "signal": "platform_intervention", "probabilities": {"yes": 7.194132978569833e-09, "no": 0.9999999928058669}, "declared_mass": 1.000000007194133}
+{"row": "am-08", "signal": "baseline", "probabilities": {"bug": 0.9999999995400946, "external": 4.599055376537186e-10}, "declared_mass": 1.0000000004599054}
+{"row": "am-08", "signal": "surface", "probabilities": {"network": 0.0, "resource": 1.1399918530390528e-12, "data": 3.5114221133601786e-12, "logic": 0.9999999999953486}, "declared_mass": 1.0000000000046514}
+{"row": "am-08", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 0.9999994039539004}
+{"row": "am-08", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-08", "signal": "invalid_value_sent", "probabilities": {"yes": 1.1253521571603582e-07, "no": 0.9999998874647842}, "declared_mass": 0.9999996356982439}
+{"row": "am-08", "signal": "internal_inconsistency", "probabilities": {"yes": 3.3982678079468468e-09, "no": 0.9999999966017321}, "declared_mass": 1.000000003398268}
+{"row": "am-08", "signal": "repeated_work", "probabilities": {"yes": 2.4133627718273893e-12, "no": 0.9999999999975866}, "declared_mass": 1.0000000000024134}
+{"row": "am-08", "signal": "external_change", "probabilities": {"yes": 1.65867835891148e-12, "no": 0.9999999999983413}, "declared_mass": 1.0000000000016587}
+{"row": "am-08", "signal": "external_unavailable", "probabilities": {"yes": 8.152020648014727e-09, "no": 0.9999999918479795}, "declared_mass": 1.0000000081520206}
+{"row": "am-08", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-09", "signal": "baseline", "probabilities": {"bug": 7.433680672296929e-12, "external": 0.9999999999925664}, "declared_mass": 1.0000000000074336}
+{"row": "am-09", "signal": "surface", "probabilities": {"network": 0.9999999998701852, "resource": 1.1628233028711453e-10, "data": 5.1090890274000894e-12, "logic": 8.423463753375156e-12}, "declared_mass": 1.0000000001298148}
+{"row": "am-09", "signal": "unreleased_resource", "probabilities": {"yes": 2.753569766795419e-05, "no": 0.999972464302332}, "declared_mass": 0.9999986878461204}
+{"row": "am-09", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0002034269494205953, "no": 0.9997965730505793}, "declared_mass": 0.9999956874415914}
+{"row": "am-09", "signal": "invalid_value_sent", "probabilities": {"yes": 0.0015011819386266825, "no": 0.9984988180613732}, "declared_mass": 0.9999756897812292}
+{"row": "am-09", "signal": "internal_inconsistency", "probabilities": {"yes": 3.3315445420554206e-11, "no": 0.9999999999666846}, "declared_mass": 1.0000000000333154}
+{"row": "am-09", "signal": "repeated_work", "probabilities": {"yes": 0.0003353502711678831, "no": 0.9996646497288322}, "declared_mass": 0.9999973861027137}
+{"row": "am-09", "signal": "external_change", "probabilities": {"yes": 1.4449802095675028e-07, "no": 0.9999998555019791}, "declared_mass": 1.0000000252887493}
+{"row": "am-09", "signal": "external_unavailable", "probabilities": {"yes": 0.8175744806385543, "no": 0.18242551936144574}, "declared_mass": 0.999916227915553}
+{"row": "am-09", "signal": "platform_intervention", "probabilities": {"yes": 6.144175334510455e-06, "no": 0.9999938558246655}, "declared_mass": 0.9999993492881094}
+{"row": "am-10", "signal": "baseline", "probabilities": {"bug": 0.9890130588772815, "external": 0.010986941122718492}, "declared_mass": 0.9999962272824747}
+{"row": "am-10", "signal": "surface", "probabilities": {"network": 8.592167033485285e-10, "resource": 0.9999996905918742, "data": 2.6465737665259435e-09, "logic": 3.0590233525232535e-07}, "declared_mass": 0.9999999517803629}
+{"row": "am-10", "signal": "unreleased_resource", "probabilities": {"yes": 9.736201464175726e-10, "no": 0.9999999990263799}, "declared_mass": 0.9999998817643447}
+{"row": "am-10", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-10", "signal": "invalid_value_sent", "probabilities": {"yes": 1.2501528648238603e-09, "no": 0.9999999987498471}, "declared_mass": 1.0000000012501529}
+{"row": "am-10", "signal": "internal_inconsistency", "probabilities": {"yes": 1.0815941557168708e-11, "no": 0.999999999989184}, "declared_mass": 1.000000000010816}
+{"row": "am-10", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-10", "signal": "external_change", "probabilities": {"yes": 7.991959892315218e-11, "no": 0.9999999999200804}, "declared_mass": 1.0000000000799196}
+{"row": "am-10", "signal": "external_unavailable", "probabilities": {"yes": 3.850741907939403e-09, "no": 0.999999996149258}, "declared_mass": 1.000000003850742}
+{"row": "am-10", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-11", "signal": "baseline", "probabilities": {"bug": 1.1399918530430558e-12, "external": 0.99999999999886}, "declared_mass": 1.00000000000114}
+{"row": "am-11", "signal": "surface", "probabilities": {"network": 0.9999999999914693, "resource": 5.109089028019741e-12, "data": 2.1297851709376167e-12, "logic": 1.2917800047749762e-12}, "declared_mass": 1.0000000000085307}
+{"row": "am-11", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-11", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-11", "signal": "invalid_value_sent", "probabilities": {"yes": 2.5109990926928157e-08, "no": 0.999999974890009}, "declared_mass": 1.0000000251099916}
+{"row": "am-11", "signal": "internal_inconsistency", "probabilities": {"yes": 7.582560422162384e-10, "no": 0.9999999992417439}, "declared_mass": 1.0000000007582561}
+{"row": "am-11", "signal": "repeated_work", "probabilities": {"yes": 5.789356328697135e-12, "no": 0.9999999999942106}, "declared_mass": 1.0000000000057894}
+{"row": "am-11", "signal": "external_change", "probabilities": {"yes": 4.1399375473943306e-08, "no": 0.9999999586006244}, "declared_mass": 1.0000000413993773}
+{"row": "am-11", "signal": "external_unavailable", "probabilities": {"yes": 0.9999998874648246, "no": 1.125351754703302e-07}, "declared_mass": 0.9999999933258994}
+{"row": "am-11", "signal": "platform_intervention", "probabilities": {"yes": 2.4616969512093895e-10, "no": 0.9999999997538302}, "declared_mass": 1.0000000002461698}
+{"row": "am-12", "signal": "baseline", "probabilities": {"bug": 1.1032560311263802e-09, "external": 0.9999999988967441}, "declared_mass": 1.000000001103256}
+{"row": "am-12", "signal": "surface", "probabilities": {"network": 0.9999999999864424, "resource": 1.225606744393332e-11, "data": 6.914400106846461e-13, "logic": 6.101936677522597e-13}, "declared_mass": 1.0000000000135576}
+{"row": "am-12", "signal": "unreleased_resource", "probabilities": {"yes": 4.599055376537186e-10, "no": 0.9999999995400946}, "declared_mass": 1.0000000004599054}
+{"row": "am-12", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-12", "signal": "invalid_value_sent", "probabilities": {"yes": 2.646573631904765e-09, "no": 0.9999999973534264}, "declared_mass": 1.0000000026465736}
+{"row": "am-12", "signal": "internal_inconsistency", "probabilities": {"yes": 4.847368706035286e-11, "no": 0.9999999999515263}, "declared_mass": 1.0000000000484737}
+{"row": "am-12", "signal": "repeated_work", "probabilities": {"yes": 2.2897348455931243e-11, "no": 0.9999999999771028}, "declared_mass": 1.0000000000228972}
+{"row": "am-12", "signal": "external_change", "probabilities": {"yes": 4.277787868786004e-11, "no": 0.9999999999572222}, "declared_mass": 1.0000000000427778}
+{"row": "am-12", "signal": "external_unavailable", "probabilities": {"yes": 0.9999898700126424, "no": 1.0129987357628251e-05}, "declared_mass": 0.9999999972999862}
+{"row": "am-12", "signal": "platform_intervention", "probabilities": {"yes": 1.2256067443949272e-11, "no": 0.999999999987744}, "declared_mass": 1.000000000012256}
+{"row": "am-13", "signal": "baseline", "probabilities": {"bug": 0.9997388096586981, "external": 0.0002611903413019073}, "declared_mass": 0.9999998326533658}
+{"row": "am-13", "signal": "surface", "probabilities": {"network": 2.087967911565213e-14, "resource": 0.99999999996134, "data": 8.878265478116425e-13, "logic": 3.7751345441331514e-11}, "declared_mass": 1.00000000003866}
+{"row": "am-13", "signal": "unreleased_resource", "probabilities": {"yes": 0.01406362992297213, "no": 0.9859363700770278}, "declared_mass": 0.999300006219062}
+{"row": "am-13", "signal": "self_inflicted_load", "probabilities": {"yes": 5.109089028037223e-12, "no": 0.999999999994891}, "declared_mass": 1.000000000005109}
+{"row": "am-13", "signal": "invalid_value_sent", "probabilities": {"yes": 5.315785605539625e-08, "no": 0.999999946842144}, "declared_mass": 0.9999999339485772}
+{"row": "am-13", "signal": "internal_inconsistency", "probabilities": {"yes": 6.69158608681505e-10, "no": 0.9999999993308415}, "declared_mass": 1.0000000006691585}
+{"row": "am-13", "signal": "repeated_work", "probabilities": {"yes": 4.785094494835719e-06, "no": 0.9999952149055051}, "declared_mass": 1.0000000167457301}
+{"row": "am-13", "signal": "external_change", "probabilities": {"yes": 2.5946094982091465e-11, "no": 0.9999999999740539}, "declared_mass": 1.0000000000259461}
+{"row": "am-13", "signal": "external_unavailable", "probabilities": {"yes": 0.006692851775614132, "no": 0.9933071482243858}, "declared_mass": 0.999993724726988}
+{"row": "am-13", "signal": "platform_intervention", "probabilities": {"yes": 8.764248496102857e-08, "no": 0.9999999123575151}, "declared_mass": 0.9999999684332068}
+{"row": "am-14", "signal": "baseline", "probabilities": {"bug": 0.9046505370289059, "external": 0.09534946297109421}, "declared_mass": 0.9999978198317776}
+{"row": "am-14", "signal": "surface", "probabilities": {"network": 1.5674293998842804e-10, "resource": 0.8175744526139184, "data": 2.0529273836758516e-08, "logic": 0.18242552670006482}, "declared_mass": 0.999999869099721}
+{"row": "am-14", "signal": "unreleased_resource", "probabilities": {"yes": 0.18242552380635632, "no": 0.8175744761936437}, "declared_mass": 0.999223776276901}
+{"row": "am-14", "signal": "self_inflicted_load", "probabilities": {"yes": 1.8795288165355504e-12, "no": 0.9999999999981204}, "declared_mass": 1.0000000000018796}
+{"row": "am-14", "signal": "invalid_value_sent", "probabilities": {"yes": 2.3355930333443423e-09, "no": 0.999999997664407}, "declared_mass": 1.000000002335593}
+{"row": "am-14", "signal": "internal_inconsistency", "probabilities": {"yes": 2.5946094982091465e-11, "no": 0.9999999999740539}, "declared_mass": 1.0000000000259461}
+{"row": "am-14", "signal": "repeated_work", "probabilities": {"yes": 7.582560422162384e-10, "no": 0.9999999992417439}, "declared_mass": 1.0000000007582561}
+{"row": "am-14", "signal": "external_change", "probabilities": {"yes": 7.83504178505825e-13, "no": 0.9999999999992164}, "declared_mass": 1.0000000000007836}
+{"row": "am-14", "signal": "external_unavailable", "probabilities": {"yes": 0.9859363703223857, "no": 0.01406362967761423}, "declared_mass": 0.9999830863460387}
+{"row": "am-14", "signal": "platform_intervention", "probabilities": {"yes": 4.277787868786004e-11, "no": 0.9999999999572222}, "declared_mass": 1.0000000000427778}
+{"row": "am-15", "signal": "baseline", "probabilities": {"bug": 1.7832472907828393e-11, "external": 0.9999999999821676}, "declared_mass": 1.0000000000178324}
+{"row": "am-15", "signal": "surface", "probabilities": {"network": 1.8189617667351499e-09, "resource": 0.9999999243222049, "data": 5.602796681435319e-09, "logic": 6.825603673463523e-08}, "declared_mass": 0.9999999564685166}
+{"row": "am-15", "signal": "unreleased_resource", "probabilities": {"yes": 4.5397879473452566e-05, "no": 0.9999546021205264}, "declared_mass": 0.9999974779283707}
+{"row": "am-15", "signal": "self_inflicted_load", "probabilities": {"yes": 3.5114221133641816e-12, "no": 0.9999999999964886}, "declared_mass": 1.0000000000035114}
+{"row": "am-15", "signal": "invalid_value_sent", "probabilities": {"yes": 2.5109990926928157e-08, "no": 0.999999974890009}, "declared_mass": 1.0000000251099916}
+{"row": "am-15", "signal": "internal_inconsistency", "probabilities": {"yes": 3.160881453314576e-10, "no": 0.999999999683912}, "declared_mass": 1.000000000316088}
+{"row": "am-15", "signal": "repeated_work", "probabilities": {"yes": 7.991959892315218e-11, "no": 0.9999999999200804}, "declared_mass": 1.0000000000799196}
+{"row": "am-15", "signal": "external_change", "probabilities": {"yes": 4.363462233903899e-09, "no": 0.9999999956365377}, "declared_mass": 1.0000000043634623}
+{"row": "am-15", "signal": "external_unavailable", "probabilities": {"yes": 0.0052201245546233815, "no": 0.9947798754453767}, "declared_mass": 0.9999830856902135}
+{"row": "am-15", "signal": "platform_intervention", "probabilities": {"yes": 5.3157849718487075e-08, "no": 0.9999999468421502}, "declared_mass": 1.0000000531578526}
+{"row": "am-16", "signal": "baseline", "probabilities": {"bug": 1.0129989772643068e-05, "external": 0.9999898700102272}, "declared_mass": 0.9999988052238619}
+{"row": "am-16", "signal": "surface", "probabilities": {"network": 0.9999999999929188, "resource": 5.789356328689656e-12, "data": 0.0, "logic": 1.2917800047768487e-12}, "declared_mass": 1.0000000000070812}
+{"row": "am-16", "signal": "unreleased_resource", "probabilities": {"yes": 8.764248496102857e-08, "no": 0.9999999123575151}, "declared_mass": 0.9999999684332068}
+{"row": "am-16", "signal": "self_inflicted_load", "probabilities": {"yes": 1.8553914607279394e-07, "no": 0.999999814460854}, "declared_mass": 0.999999947120614}
+{"row": "am-16", "signal": "invalid_value_sent", "probabilities": {"yes": 1.3007125364251828e-05, "no": 0.9999869928746359}, "declared_mass": 0.9999998942745146}
+{"row": "am-16", "signal": "internal_inconsistency", "probabilities": {"yes": 7.194132978569833e-09, "no": 0.9999999928058669}, "declared_mass": 1.000000007194133}
+{"row": "am-16", "signal": "repeated_work", "probabilities": {"yes": 6.144177531850823e-06, "no": 0.9999938558224681}, "declared_mass": 0.9999999453324516}
+{"row": "am-16", "signal": "external_change", "probabilities": {"yes": 3.775134544136581e-11, "no": 0.9999999999622486}, "declared_mass": 1.0000000000377514}
+{"row": "am-16", "signal": "external_unavailable", "probabilities": {"yes": 0.9999999677581336, "no": 3.2241866333029355e-08}, "declared_mass": 1.0000000322418674}
+{"row": "am-16", "signal": "platform_intervention", "probabilities": {"yes": 1.6052280526088547e-09, "no": 0.999999998394772}, "declared_mass": 1.000000001605228}
+{"row": "am-17", "signal": "baseline", "probabilities": {"bug": 0.9999999999515263, "external": 4.847368706035286e-11}, "declared_mass": 1.0000000000484737}
+{"row": "am-17", "signal": "surface", "probabilities": {"network": 1.6586783586883883e-12, "resource": 2.7346982912195225e-12, "data": 0.9999999998638416, "logic": 1.3176514268301373e-10}, "declared_mass": 1.0000000001361584}
+{"row": "am-17", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-17", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-17", "signal": "invalid_value_sent", "probabilities": {"yes": 0.4378234991142019, "no": 0.5621765008857981}, "declared_mass": 0.9950910722786775}
+{"row": "am-17", "signal": "internal_inconsistency", "probabilities": {"yes": 2.5109990926928157e-08, "no": 0.999999974890009}, "declared_mass": 1.0000000251099916}
+{"row": "am-17", "signal": "repeated_work", "probabilities": {"yes": 5.4927883506529765e-11, "no": 0.9999999999450722}, "declared_mass": 1.0000000000549278}
+{"row": "am-17", "signal": "external_change", "probabilities": {"yes": 1.125351754703302e-07, "no": 0.9999998874648246}, "declared_mass": 0.9999999933258994}
+{"row": "am-17", "signal": "external_unavailable", "probabilities": {"yes": 1.1253521571603582e-07, "no": 0.9999998874647842}, "declared_mass": 0.9999996356982439}
+{"row": "am-17", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "declared_mass": 1.0}
+{"row": "am-18", "signal": "baseline", "probabilities": {"bug": 0.9999999943972036, "external": 5.60279640614594e-09}, "declared_mass": 1.0000000056027964}
+{"row": "am-18", "signal": "surface", "probabilities": {"network": 1.0060392792702902e-12, "resource": 4.508755242236443e-12, "data": 7.433680672255933e-12, "logic": 0.9999999999870515}, "declared_mass": 1.0000000000129485}
+{"row": "am-18", "signal": "unreleased_resource", "probabilities": {"yes": 2.1724399346070676e-10, "no": 0.999999999782756}, "declared_mass": 1.000000000217244}
+{"row": "am-18", "signal": "self_inflicted_load", "probabilities": {"yes": 8.423463754397692e-12, "no": 0.9999999999915765}, "declared_mass": 1.0000000000084235}
+{"row": "am-18", "signal": "invalid_value_sent", "probabilities": {"yes": 0.8175744761936437, "no": 0.18242552380635632}, "declared_mass": 0.9999190643392745}
+{"row": "am-18", "signal": "internal_inconsistency", "probabilities": {"yes": 2.5109990926928157e-08, "no": 0.999999974890009}, "declared_mass": 1.0000000251099916}
+{"row": "am-18", "signal": "repeated_work", "probabilities": {"yes": 5.043476486929152e-07, "no": 0.9999994956523514}, "declared_mass": 1.0000000275107317}
+{"row": "am-18", "signal": "external_change", "probabilities": {"yes": 1.1628233028868813e-10, "no": 0.9999999998837177}, "declared_mass": 1.0000000001162823}
+{"row": "am-18", "signal": "external_unavailable", "probabilities": {"yes": 0.005220126225545113, "no": 0.9947798737744549}, "declared_mass": 0.9999989779188065}
+{"row": "am-18", "signal": "platform_intervention", "probabilities": {"yes": 6.224144622520382e-11, "no": 0.9999999999377585}, "declared_mass": 1.0000000000622415}

@@ -1,6 +1,6 @@
 # Findings
 
-Measurements from 2026-09-24, on a 32 row synthetic fixture: 10 `clear_bug`, 10 `clear_downstream`, 12 `ambiguous`. The label has since been renamed `external` and widened to cover a caller breaking the contract and the platform the service runs on, with an eighth signal (`platform_intervention`) and six more ambiguous rows for those cases; the raw files keep the names and rows as measured, and the new rows are not yet measured. Raw outputs and per-run metrics are in [../results/raw](../results/raw), and every figure here is reproducible from them.
+Measurements from 2026-09-24, on a 32 row synthetic fixture: 10 `clear_bug`, 10 `clear_downstream`, 12 `ambiguous`. The label has since been renamed `external` and widened to cover the platform the service runs on; the section on widening below has the measurements for that, and the raw files from this date keep the earlier names. Raw outputs and per-run metrics are in [../results/raw](../results/raw), and every figure here is reproducible from them.
 
 The question throughout is whether an open model reading typed option logits can decide if an error log is a defect in our own code or a failure in something we call, well enough and cheaply enough to gate a triage pipeline.
 
@@ -105,6 +105,27 @@ On the ambiguous band, restructuring the question was worth +41.6 points and mul
 **v2 to v3: skip questions with no evidence to answer them.** Clear-band rows carry no evidence field, so the signal questions answered off the stack trace and invented confident results: `unreleased_resource` at 1.00 on the words "pool exhausted", `repeated_work` at 1.00 on a throttling retry message. Rows with no evidence now route to the flat question, which is perfect on those rows.
 
 **Also in v2: arbitrate opposing signals.** One row had two correct signals firing at 1.00 on opposite sides and cancelling to 0.50. The rule: a value we sent counts against us only when the other side did not just change what it accepts.
+
+## Widening the decision to code versus external
+
+Measured 2026-09-25 after the second option was renamed from `downstream` to `external` and widened to cover the platform the service runs on, with an eighth signal (`platform_intervention`) and six new ambiguous rows: a memory limit halved by ops, a heap leak after a deploy, a disk filled by the host's log agent, a hypervisor network reset, a service that broke its own header contract, and a gateway that stopped validating a caller's payload. Raw outputs are the `*-v2-*` files.
+
+| run | clear_bug | clear_external | ambiguous, original 12 | ambiguous, new 6 | overall | ECE |
+|---|---:|---:|---:|---:|---:|---:|
+| **tree, evidence** | **10/10** | **10/10** | **10/12** | **5/6** | **92.1%** | **0.080** |
+| tree, no evidence | 10/10 | 10/10 | 4/12 | 4/6 | 73.7% | 0.260 |
+| flat, evidence | 10/10 | 10/10 | 6/12 | 5/6 | 81.6% | 0.182 |
+| flat, no evidence | 10/10 | 10/10 | 4/12 | 4/6 | 73.7% | 0.260 |
+
+The original twelve hold at 10/12 with the same two misses as before. Of the six new rows the tree gets five, and the miss (am-17, a header contract the service itself broke by deploy) is the model answering `external_change: yes` to the service's own deploy despite the derived sentence saying the deploy was of this service, one minute before the errors.
+
+Three things the first run of the widened tree got wrong, all fixed in code rather than in the model:
+
+- **The baseline wording decides the trace-only path.** A first version named "a caller violating the documented contract" as external, and the flat readout then sent `KeyError` and `Sequence contains no elements` rows to external, including the demo service's own `KeyError` in production. Production runs the trace-only path, so that wording cost more than it bought. The caller clause came out; a bug now explicitly includes input the service failed to validate or handle, and the gateway case is carried by `external_change`.
+- **A deploy of the service itself read as an external change.** `derived` now states whether the last deploy described is of this service and how long before the errors it happened, and says nothing when the deploy is undated against the error, since a first version that named a month-old deploy flipped am-04 the other way.
+- **A limit lowered by the platform read as an internal inconsistency** and cancelled the platform signal to 0.49. `internal_inconsistency` is now dampened by `platform_intervention`, the same arbitration `invalid_value_sent` already has against `external_change`.
+
+Rows still at 0.50 (am-06, am-15, and three of the original bug rows) are cancellations: one correct signal on each side with nothing to arbitrate between them. That is the tree's remaining failure shape, and a threshold cannot fix it.
 
 ## Division of labour
 
