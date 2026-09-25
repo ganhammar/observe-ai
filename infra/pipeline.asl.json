@@ -19,13 +19,13 @@
           "ErrorEquals": [
             "States.TaskFailed"
           ],
-          "IntervalSeconds": 5,
-          "MaxAttempts": 2,
-          "BackoffRate": 2
+          "IntervalSeconds": 15,
+          "MaxAttempts": 6,
+          "BackoffRate": 1.5
         }
       ],
       "Next": "Confident it is ours?",
-      "Comment": "id, state.service and state.stack_trace are exactly what the Kinesis consumer already computed; a row where every sub-question fails throws instead of returning an errored result, so a Bedrock outage lands here as a retry rather than a fingerprint wrongly marked decided."
+      "Comment": "id, state.service and state.stack_trace are exactly what the Kinesis consumer already computed; a row where every sub-question fails throws instead of returning an errored result, so a Bedrock outage lands here as a retry rather than a fingerprint wrongly marked decided. The retry spans about five minutes because an imported model copy that has scaled to zero answers ModelNotReady and then container errors for the first half minute or more, and the first log after a quiet spell is exactly the one that meets it."
     },
     "Confident it is ours?": {
       "Type": "Choice",
