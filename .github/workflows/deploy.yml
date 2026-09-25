@@ -28,9 +28,10 @@ jobs:
           python-version: '3.12'
 
       - name: Run Python eval tests
-        # The Python package is the evaluation implementation, not the deployed
-        # one. Its tests still run because tests/vectors/combine.json is
-        # generated from it and the C# combining rule is checked against it.
+        # The Python package holds the evaluation implementation; the deployed
+        # implementation is in C#. Its tests run here because
+        # tests/vectors/combine.json is generated from this package, and the
+        # C# combining rule is checked against that file.
         run: |
           pip install -e ".[test]"
           pytest -q
@@ -105,9 +106,9 @@ jobs:
 
       - name: Check glibc requirement
         # provided.al2023 carries glibc 2.34. NativeAOT links against whatever
-        # the builder has, so a runner image upgrade can raise this silently and
-        # the failure would surface as a Lambda that cannot start. Fail here
-        # instead.
+        # the builder has, so a runner image upgrade can raise the required
+        # glibc version, and the failure would surface as a Lambda that cannot
+        # start. This check fails the build first, with a clear message.
         run: |
           BIN=.aws-sam/build/TriageFunction/bootstrap
           if [ ! -f "$BIN" ]; then
@@ -126,12 +127,11 @@ jobs:
           fi
 
       - name: Resolve imported model
-        # Bedrock Custom Model Import is not a CloudFormation resource, so the
+        # Bedrock Custom Model Import is not a CloudFormation resource. The
         # model is created out of band by the Import Model workflow and looked
-        # up here by name. Resolving it at deploy time rather than reading a
-        # stored variable means the stack cannot point at a model that no
-        # longer exists, and a missing model fails here with a clear message
-        # instead of further down inside the CLI.
+        # up here by name. Resolving it at deploy time means the stack cannot
+        # point at a deleted model; a missing model fails here with a clear
+        # message before the CLI call runs.
         env:
           MODEL_NAME: ${{ vars.MODEL_NAME || 'observe-ai' }}
         run: |

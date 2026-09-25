@@ -5,10 +5,8 @@ using System.Text.Json;
 namespace ObserveAi;
 
 /// <summary>
-/// Hashes a JSON value's keys and coarse shape rather than its values, so a
-/// repeat occurrence with a different request id or a slightly larger count
-/// still matches, while a genuinely different set of signals produces a new
-/// hash. Feeds SeenStore.RecordAsync's evidenceSignature.
+/// Hashes a JSON value's keys and coarse shape, ignoring values, so a repeat with a new request id or a
+/// larger count still matches and a different set of signals does not. Feeds SeenStore.RecordAsync.
 /// </summary>
 public static class EvidenceSignature
 {
@@ -34,8 +32,7 @@ public static class EvidenceSignature
                 }
                 shape.Append('}');
                 break;
-            // An array's length tracks how long an incident has run, not what
-            // kind of signal this is, so only one element's shape counts.
+            // Array length tracks how long an incident has run, so only the first element's shape counts.
             case JsonValueKind.Array:
                 shape.Append("array<");
                 if (element.GetArrayLength() > 0)

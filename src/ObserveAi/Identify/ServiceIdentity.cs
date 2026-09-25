@@ -1,24 +1,21 @@
 namespace ObserveAi;
 
-/// <summary>The AWS compute shape a log group name identifies, enough to know what kind of resource owns its tags.</summary>
+/// <summary>The kind of AWS compute resource a log group name identifies.</summary>
 public enum LogGroupKind { Lambda, Ecs, Eks }
 
-/// <summary>A log group name reduced to what a tag lookup needs: the resource's kind and its own name.</summary>
+/// <summary>A log group name reduced to the owning resource's kind and name.</summary>
 public sealed record ParsedLogGroup(LogGroupKind Kind, string ResourceName);
 
 /// <summary>
-/// Turns AWS-owned identifiers, a log group name and a parsed stack trace, into
-/// what the pipeline needs to find a repository, without making an AWS call
-/// itself. One deployment watches every log group in the account, so nothing here
-/// can be a lookup table of known services; it only recognises shapes that AWS
-/// itself imposes on log group names and stack frames.
+/// Turns a log group name and a parsed stack trace into what the pipeline needs to find a repository,
+/// without an AWS call. One deployment watches every log group in the account, so this recognises only
+/// the shapes AWS imposes on log group names and stack frames and holds no table of known services.
 /// </summary>
 public static class ServiceIdentity
 {
     /// <summary>
-    /// Recognises the log group naming conventions of Lambda, ECS and EKS. Returns
-    /// null for anything else, including a recognised prefix with no name after it,
-    /// since ConventionalRepo has no resource name to build a repository from either way.
+    /// Recognises the Lambda, ECS and EKS log group conventions. Returns null for anything else, including a
+    /// recognised prefix with no resource name after it.
     /// </summary>
     public static ParsedLogGroup? ParseLogGroup(string logGroupName)
     {
@@ -38,19 +35,9 @@ public static class ServiceIdentity
     }
 
     /// <summary>
-    /// The repository owning a log event, by convention: the GitHub
-    /// organisation plus the resource name the log group already names
-    /// (/aws/lambda/billing-sync -> {org}/billing-sync). Returns null when
-    /// the log group does not match a known shape, so the caller falls
-    /// through to the state machine's UnknownRepo stop instead of guessing.
-    ///
-    /// This breaks the moment a service's name and its repository name
-    /// diverge. The improvement path, cheapest to most capable: a resource
-    /// tag (observe-ai:repo) is exact but has to be applied to every
-    /// resource; a cache keyed on NamespacePrefix's result learns a
-    /// namespace's repository once, after one correction, rather than
-    /// guessing it forever; and a model call on a cache miss covers
-    /// whatever neither of those has seen yet.
+    /// The owning repository by convention: the GitHub organisation plus the log group's resource name
+    /// (/aws/lambda/billing-sync -> {org}/billing-sync). Returns null for an unrecognised log group, so the
+    /// state machine stops at UnknownRepo. The result is wrong for a service named differently from its repository.
     /// </summary>
     public static string? ConventionalRepo(string logGroupName, string githubOrg)
     {
@@ -70,14 +57,8 @@ public static class ServiceIdentity
     }
 
     /// <summary>
-    /// The namespace owning the top in-app frame: everything up to and including
-    /// the last dot before the final two segments (the class and the method
-    /// itself). A method with fewer than three segments has nothing to report,
-    /// which is the ordinary case for node, python, and often go, none of which
-    /// carry an organisation-style dotted namespace on every frame.
-    ///
-    /// Frames are taken exactly as TraceParser produced them: this only reads
-    /// InApp, it does not decide it.
+    /// The namespace of the top in-app frame: everything through the last dot before the class and method
+    /// segments. Null for a method with fewer than three segments, the usual case for node, python and go.
     /// </summary>
     public static string? NamespacePrefix(ParsedTrace trace)
     {

@@ -19,7 +19,7 @@ Input formats:
   --json out.json: (optional) Dump metrics as JSON
 
 Handles degenerate cases without crashing: empty inputs, bands with zero rows,
-classes with zero true instances (reports n/a rather than dividing by zero),
+classes with zero true instances (reports n/a, avoiding a division by zero),
 result rows that failed scoring (skipped, counted, and reported separately),
 and abstentions where every declared option's letter was missing from the
 model's output (excluded from accuracy-style metrics, counted separately).
@@ -69,10 +69,9 @@ def load_labels(path: str) -> Dict[str, LabelInfo]:
 def load_results(path: str) -> Tuple[List[PredictionResult], int]:
     """Load prediction results from JSONL file.
 
-    Returns the parsed results together with a count of rows skipped because
-    they carry an "error" key instead of a scored prediction. The runner
-    writes those for rows that failed scoring, and a partial results file is
-    still expected to score correctly.
+    Returns the parsed results together with a count of rows skipped for
+    carrying an "error" key. The runner writes that key for rows that failed
+    scoring, and a partial results file still scores correctly.
     """
     results = []
     skipped_errors = 0
@@ -111,8 +110,8 @@ def is_abstention(result: PredictionResult) -> bool:
 
     This happens when every option letter is missing from the model's top
     logprobs: probabilities are all zero, or missing_options covers every
-    option id. Argmax over an all-zero vector would otherwise silently pick
-    index 0 and score it as a real prediction.
+    option id. Argmax over an all-zero vector would otherwise pick index 0
+    and score it as a real prediction.
     """
     if result.probabilities and all(probability == 0.0 for probability in result.probabilities):
         return True
@@ -271,11 +270,10 @@ def find_highest_threshold_for_recall(sweep_results: List[Dict], target_recall: 
     Recall is monotonically non-increasing as the threshold rises, so the
     lowest qualifying threshold is always the lowest threshold in the sweep,
     which forwards everything and is useless as an operating point. The
-    highest qualifying threshold is the one that filters the most rows while
-    still meeting the recall target, so this scans from the top down and
-    returns the first match. A NaN recall (no rows forwarded at that
-    threshold) never qualifies; that is checked explicitly rather than
-    relying on a NaN comparison already being False.
+    highest qualifying threshold filters the most rows while still meeting
+    the recall target, so this scans from the top down and returns the first
+    match. A NaN recall (no rows forwarded at that threshold) never
+    qualifies, checked explicitly with math.isnan.
     """
     for result in reversed(sweep_results):
         recall = result["recall"]
@@ -346,8 +344,8 @@ def main():
     all_matched_results = [result_map[rid] for rid in sorted_matched_ids]
 
     # Abstentions (no declared option letter recovered) are excluded from every
-    # accuracy-style metric below; scoring them would silently argmax an
-    # all-zero probability vector into index 0.
+    # accuracy-style metric below; scoring them would argmax an all-zero
+    # probability vector into index 0, a meaningless prediction.
     abstained_ids = {rid for rid in sorted_matched_ids if is_abstention(result_map[rid])}
     abstained_count = len(abstained_ids)
     scored_ids = [rid for rid in sorted_matched_ids if rid not in abstained_ids]
@@ -377,9 +375,9 @@ def main():
     bug_recall = compute_per_class_recall(true_labels, pred_labels, "bug")
     downstream_recall = compute_per_class_recall(true_labels, pred_labels, "downstream")
 
-    # Average only the classes with a defined (finite) value; a class with no
-    # true instances contributes nothing rather than dragging the average
-    # toward zero. n/a (NaN) when neither class has one.
+    # Average only the classes with a defined (finite) value. A class with no
+    # true instances is excluded, so it does not drag the average toward
+    # zero. Reports n/a (NaN) when neither class has one.
     finite_precisions = [p for p in (bug_precision, downstream_precision) if not math.isnan(p)]
     macro_precision = compute_mean(finite_precisions) if finite_precisions else float("nan")
     finite_recalls = [r for r in (bug_recall, downstream_recall) if not math.isnan(r)]
@@ -403,7 +401,8 @@ def main():
             bal_acc = compute_balanced_accuracy(data["true"], data["pred"])
             band_metrics[band] = {"accuracy": acc, "balanced_accuracy": bal_acc, "count": len(data["true"])}
         else:
-            # No scored rows in this band: report n/a rather than a false 0.0%.
+            # No scored rows in this band: reports n/a. A 0.0% would
+            # misleadingly imply the band was scored.
             band_metrics[band] = {"accuracy": None, "balanced_accuracy": None, "count": 0}
 
     # Per-runtime metrics (scored rows only; abstentions are excluded above)
@@ -427,7 +426,7 @@ def main():
     ece, bin_stats = compute_ece(true_labels, pred_probs_bug)
 
     # Declared mass (all matched rows, including abstentions: a low or zero
-    # declared mass is exactly the signal that a row abstained)
+    # declared mass is the signal that a row abstained)
     declared_masses = [r.declared_mass for r in all_matched_results if r.declared_mass is not None]
     declared_mass_stats = None
     if declared_masses:

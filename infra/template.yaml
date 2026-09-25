@@ -51,8 +51,8 @@ Parameters:
     Default: 5
     Description: >
       Caps.TryConsumeAsync's per-repository hourly limit on filed issues.
-      Occurrences past this roll into one incident issue instead of each
-      opening their own.
+      Occurrences past this roll into one incident issue; none of them opens
+      its own.
   IssuesPerHour:
     Type: Number
     Default: 20
@@ -65,10 +65,10 @@ Parameters:
     Default: ''
     Description: >
       ARN of the ingest stack's Kinesis stream (infra/ingest.yaml's
-      LogStreamArn output). Taken as a parameter rather than imported since
-      the ingest and application stacks deploy independently. Empty when the
-      ingest stack does not exist yet, in which case the function deploys
-      without the Kinesis trigger rather than failing.
+      LogStreamArn output). The ingest and application stacks deploy
+      independently, so this is a parameter, not a stack import. Empty when
+      the ingest stack does not exist yet; the function then deploys without
+      the Kinesis trigger.
     AllowedPattern: '^$|^arn:aws:kinesis:[a-z0-9-]+:[0-9]{12}:stream/.+$'
     ConstraintDescription: Must be empty or a Kinesis stream ARN.
   GitHubOrg:
@@ -91,11 +91,10 @@ Resources:
       BuildMethod: makefile
     Properties:
       CodeUri: ../src/ObserveAi
-      # Explicit rather than SAM-generated, so the log group this function
-      # writes to (named from it below) is known at template-authoring time
-      # instead of only after deploy. infra/ingest.yaml's account capture
-      # policy excludes that log group by exact name, which only works if
-      # the name is predictable.
+      # FunctionName is explicit, so the log group this function writes to
+      # (named from it below) is known at template-authoring time.
+      # infra/ingest.yaml's account capture policy excludes that log group
+      # by exact name, which requires the name to be predictable.
       FunctionName: !Sub ${AWS::StackName}-TriageFunction
       # provided.al2023 ignores Handler and runs the bootstrap binary, but
       # CloudFormation still requires the property to be present.
@@ -129,20 +128,20 @@ Resources:
           RATE_TABLE: !Ref RateTable
           ISSUES_PER_REPO_PER_HOUR: !Ref IssuesPerRepoPerHour
           ISSUES_PER_HOUR: !Ref IssuesPerHour
-          # Built rather than !Ref TriagePipeline: the pipeline's own definition
-          # already takes a hard dependency on this function's ARN (as the Task
-          # resource for every step), so a Ref back the other way would make the
-          # two resources circular. TriagePipeline's explicit Name below is what
-          # makes this ARN predictable without one.
+          # PIPELINE_ARN is built with Fn::Sub because a !Ref to TriagePipeline
+          # would make the two resources circular: the pipeline's own definition
+          # already depends on this function's ARN as the Task resource for
+          # every step. TriagePipeline's explicit Name below makes this ARN
+          # predictable.
           PIPELINE_ARN: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-TriagePipeline
           GITHUB_TOKEN_SECRET_ARN: !Ref GitHubToken
-      # No Events here: SAM's Events sugar only makes an event source
-      # conditional by way of the function resource's own Condition, not a
-      # Condition on the individual event, so it cannot express "this
-      # function always exists, but its Kinesis trigger only exists when a
-      # stream is configured". TriageFunctionLogStreamMapping below is that
-      # trigger, written as a plain CloudFormation resource so its own
-      # Condition applies to it directly.
+      # No Events here. SAM's Events sugar can make an event source
+      # conditional only through the function resource's own Condition, not
+      # through a Condition on the individual event, so it cannot express a
+      # function that always exists with a Kinesis trigger that exists only
+      # when a stream is configured. TriageFunctionLogStreamMapping below is
+      # that trigger, written as a plain CloudFormation resource so its
+      # Condition applies directly to it.
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -180,8 +179,8 @@ Resources:
                 - dynamodb:UpdateItem
               Resource: !GetAtt RateTable.Arn
             # Held by the Kinesis-triggered consumer, which starts one execution
-            # per unpacked log event rather than running the pipeline inline.
-            # Same built ARN as PIPELINE_ARN above, for the same reason.
+            # per unpacked log event. Uses the same built ARN as PIPELINE_ARN
+            # above, for the same reason.
             - Sid: StartTriagePipelineOnly
               Effect: Allow
               Action:
@@ -189,8 +188,8 @@ Resources:
               Resource: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-TriagePipeline
       # Beyond the Kinesis trigger (TriageFunctionLogStreamMapping below), the
       # only other caller is the state machine invoking this function directly
-      # through the Invoke API, not a public HTTP endpoint. Add a key under
-      # Events above only if that stops being true, for example:
+      # through the Invoke API; there is no public HTTP endpoint. Add a key
+      # under Events above only if that changes, for example:
       #
       # TriageApi:
       #   Type: Api
@@ -198,20 +197,19 @@ Resources:
       #     Path: /triage
       #     Method: post
       #
-      # A function URL is the lighter-weight alternative to a full API
-      # Gateway when the caller is still inside AWS (e.g. same account,
-      # or with IAM SigV4 signing) and does not need routing, throttling
-      # plans, or a custom domain:
+      # A function URL is a lighter-weight option than a full API Gateway
+      # when the caller is inside AWS (e.g. same account, or with IAM SigV4
+      # signing) and does not need routing, throttling plans, or a custom
+      # domain:
       #
       # FunctionUrlConfig:
       #   AuthType: AWS_IAM
 
-  # CloudWatch Logs delivers into this stream account-wide (infra/ingest.yaml);
-  # each record can batch many log events, and LogEnvelope.Unpack turns each
+  # CloudWatch Logs delivers into this stream account-wide (infra/ingest.yaml).
+  # Each record can batch many log events, and LogEnvelope.Unpack turns each
   # into one pipeline execution. A poisonous record bisects out of its batch
-  # and is retried at most twice, rather than blocking everything behind it on
-  # the shard. Absent, rather than deploy failing, when no stream is
-  # configured yet.
+  # and retries at most twice without blocking the shard behind it. This
+  # mapping is absent, not a deploy failure, when no stream is configured yet.
   TriageFunctionLogStreamMapping:
     Type: AWS::Lambda::EventSourceMapping
     Condition: HasLogStream
@@ -223,11 +221,11 @@ Resources:
       BisectBatchOnFunctionError: true
       MaximumRetryAttempts: 2
 
-  # The permissions a polling Kinesis event source mapping needs to read the
-  # stream, scoped to it rather than the AWSLambdaKinesisExecutionRole managed
-  # policy's "*" resource. Its own resource, conditioned the same way as the
-  # mapping above, for the same reason a Policies statement cannot carry a
-  # Condition by itself.
+  # Grants a polling Kinesis event source mapping only the permissions needed
+  # to read this stream, scoped to its ARN; the AWSLambdaKinesisExecutionRole
+  # managed policy scopes the same actions to "*". This is its own resource,
+  # conditioned the same way as the mapping above, because a Policies
+  # statement cannot carry a Condition by itself.
   TriageFunctionKinesisPolicy:
     Type: AWS::IAM::Policy
     Condition: HasLogStream
@@ -273,8 +271,8 @@ Resources:
 
   # Two hourly rate counters share this table under one partition key: a
   # per-repository budget and, across the same hour, a global one covering
-  # every repository. An hour bucket has no value the next day, so it expires
-  # by then rather than accumulating forever.
+  # every repository. An hour bucket has no value the next day, so it
+  # expires by then.
   RateTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -298,8 +296,7 @@ Resources:
   # The GitHub token IssueFiler files with and SourceFetch reads with. The
   # stack creates the secret with no value; the Deploy workflow writes the
   # token into it from the repository secret GH_ISSUES_TOKEN. With no value
-  # stored, reading it fails and filing fails with that error, which is the
-  # honest outcome when nobody has configured a token.
+  # stored, reading it fails and filing fails with that error.
   GitHubToken:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -307,19 +304,19 @@ Resources:
       Description: Fine-grained GitHub token with Contents read and Issues write on the repositories this pipeline files against.
 
   # Drives one log event from ingest to an issue, or to a stop with a reason
-  # (infra/pipeline.asl.json). STANDARD, not EXPRESS, because the execution
-  # history is the audit trail for why a log did or did not become an issue,
-  # and that history is only kept for standard executions. ALL-level logging
-  # to CloudWatch Logs is the same audit trail for the states a completed
-  # execution passed through, without having to open the execution in the
-  # console. The machine calls DynamoDB directly for CountOccurrence, so its
-  # role needs dynamodb:UpdateItem on SeenTable in addition to permission to
+  # (infra/pipeline.asl.json). This is a STANDARD state machine: standard
+  # executions keep execution history, which is the audit trail for whether
+  # a log became an issue; EXPRESS executions do not keep it. ALL-level
+  # logging to CloudWatch Logs records the states a completed execution
+  # passed through, without needing to open the execution in the console.
+  # The machine calls DynamoDB directly for CountOccurrence, so its role
+  # needs dynamodb:UpdateItem on SeenTable in addition to permission to
   # invoke TriageFunction for every other step.
   TriagePipeline:
     Type: AWS::Serverless::StateMachine
     Properties:
       # Named explicitly so TriageFunction can build this machine's ARN with
-      # Fn::Sub instead of a Ref, which would make the two resources circular.
+      # Fn::Sub. A Ref here would make the two resources circular.
       Name: !Sub ${AWS::StackName}-TriagePipeline
       Type: STANDARD
       DefinitionUri: pipeline.asl.json
@@ -327,11 +324,11 @@ Resources:
         TriageFunctionArn: !GetAtt TriageFunction.Arn
       Logging:
         Level: ALL
-        # Off deliberately: the execution input is the log line that started
-        # this execution, and logging it back out is what closes the
-        # self-ingestion loop even with the account policy's exclusions in
-        # place. State transitions are still recorded at ALL level; only the
-        # payload carried between them is not.
+        # IncludeExecutionData is false: the execution input is the log line
+        # that started this execution, and logging it back out would close
+        # the self-ingestion loop even with the account policy's exclusions
+        # in place. State transitions are still recorded at ALL level; only
+        # the payload carried between them is not.
         IncludeExecutionData: false
         Destinations:
           - CloudWatchLogsLogGroup:
@@ -350,9 +347,9 @@ Resources:
                 - dynamodb:UpdateItem
               Resource: !GetAtt SeenTable.Arn
             # Step Functions delivers execution history to CloudWatch Logs through
-            # the account's log delivery configuration rather than a plain
-            # logs:PutLogEvents call, and that delivery API only accepts '*' as a
-            # resource; this is the AWS-documented policy shape for it.
+            # the account's log delivery configuration. This delivery API accepts
+            # only '*' as the resource; this is the AWS-documented policy shape
+            # required for it.
             - Sid: DeliverExecutionHistoryToCloudWatchLogs
               Effect: Allow
               Action:

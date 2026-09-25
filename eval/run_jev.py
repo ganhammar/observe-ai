@@ -2,8 +2,8 @@
 
 Jev takes the option descriptions directly as named criteria and returns a
 probability per option, so there is no letter slot and no renormalisation.
-That makes it a reference point for the readout rather than a like for like
-runner: the prompt is theirs, not the frozen prompt the Bedrock path sends.
+This is a reference point for the readout: the prompt sent to Jev is its
+own, different from the frozen prompt the Bedrock path sends.
 
 The API key is read from TYPESAFE_API_KEY. It is never written to the output.
 """

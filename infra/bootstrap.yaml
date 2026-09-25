@@ -2,9 +2,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   observe-ai bootstrap. Creates the S3 bucket that model weights are staged in
   and the role Bedrock assumes to read them. Deployed by the Import Model
-  workflow before the import runs. Kept separate from the application stack
-  because it has to exist before an imported model does, and the application
-  stack cannot deploy until that model exists.
+  workflow before the import runs. This stack is separate from the
+  application stack: it must exist before an imported model does, and the
+  application stack cannot deploy until that model exists.
 
 Parameters:
   StagingExpirationDays:
@@ -19,8 +19,8 @@ Parameters:
 Resources:
   StagingBucket:
     Type: AWS::S3::Bucket
-    # Retained so that deleting this stack cannot silently discard staged
-    # weights while an import job is still reading them.
+    # Retained so that deleting this stack cannot discard staged weights
+    # while an import job is still reading them.
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:

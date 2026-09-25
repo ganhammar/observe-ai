@@ -13,10 +13,9 @@ public sealed record TreeSignal(
 public sealed record CombineResult(double Bug, double Downstream, bool Fallback);
 
 /// <summary>
-/// The shared question and signal definitions from tree.json, and the combining
-/// rule that turns the tree's typed answers into a bug-versus-downstream
-/// probability. Mirrors eval/tree.py's BASELINE, SURFACE, BUG_SIGNALS,
-/// DOWNSTREAM_SIGNALS, PRIOR, and combine() exactly.
+/// The question and signal definitions from tree.json and the rule combining their answers into a
+/// bug-versus-downstream probability. Mirrors eval/tree.py's BASELINE, SURFACE, BUG_SIGNALS,
+/// DOWNSTREAM_SIGNALS, PRIOR and combine().
 /// </summary>
 public sealed class QuestionTree
 {
@@ -35,7 +34,6 @@ public sealed class QuestionTree
         Signals = signals;
     }
 
-    /// <summary>Loads tree.json from the assembly's embedded resources.</summary>
     public static QuestionTree LoadEmbedded()
     {
         var assembly = typeof(QuestionTree).Assembly;
@@ -56,25 +54,17 @@ public sealed class QuestionTree
     }
 
     /// <summary>
-    /// Turns the tree's typed answers into a bug-versus-downstream probability.
-    ///
-    /// answers maps a question key to a mapping of option id to probability, the
-    /// same shape the direct-decision readout produces (option_ids paired with
-    /// probabilities). A noisy-OR over each side treats the signals as independent
-    /// evidence, so one confident signal decides while several weak ones
-    /// accumulate. Prior is added to both sides before normalising: without it a
-    /// single signal at 0.92 against nothing on the other side normalises to
-    /// exactly 1.0, which reproduces the saturation the single-question readout
-    /// already suffers from.
+    /// Combines typed answers, keyed by question then option id, into a bug-versus-downstream probability.
+    /// A noisy-OR per side treats signals as independent, so one confident signal decides and weak ones
+    /// accumulate. Prior is added to both sides before normalising; without it a lone 0.92 signal
+    /// normalises to 1.0.
     /// </summary>
     public CombineResult Combine(
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, double>> answers, bool evidencePresent = true)
     {
         if (!evidencePresent)
         {
-            // Nothing for the signal questions to read. Anything they report is
-            // drawn from the stack trace, which the flat question already reads
-            // better, so defer to it rather than let a signal fire on nothing.
+            // With no evidence, signals can only echo the stack trace, which the baseline reads better.
             var bugP = GetAnswerValue(answers, Baseline.Key, "bug", 0.5);
             return new CombineResult(bugP, 1.0 - bugP, true);
         }
@@ -86,10 +76,7 @@ public sealed class QuestionTree
             var value = Yes(answers, signal.Key);
             if (signal.DampenedBy is { } dampener)
             {
-                // Sending a value the other side rejects is only ours when the
-                // other side did not just change what it accepts. Without this
-                // the two signals both fire on a contract change and cancel
-                // each other.
+                // Sending a value the other side rejects is ours only if the other side's contract did not just change.
                 value *= 1.0 - Yes(answers, dampener);
             }
             bugValues.Add(value);
@@ -100,9 +87,7 @@ public sealed class QuestionTree
         var total = bug + downstream;
         if (total == 0.0)
         {
-            // Nothing fired either way. Fall back to the surface reading: a
-            // failure that surfaced on a call out is more often the other
-            // side's, anything else more often ours.
+            // Nothing fired: a failure surfacing on a call out is more often the other side's.
             var network = GetAnswerValue(answers, Surface.Key, "network", 0.0);
             return new CombineResult(1.0 - network, network, true);
         }
@@ -113,7 +98,7 @@ public sealed class QuestionTree
             false);
     }
 
-    /// <summary>True when the row carries evidence the stage 2 questions can actually read.</summary>
+    /// <summary>True when the state has evidence or derived_facts for the signal questions to read.</summary>
     public static bool HasEvidence(JsonElement state) =>
         (state.TryGetProperty("evidence", out var evidence)
             && evidence.ValueKind == JsonValueKind.Object && evidence.EnumerateObject().Any())

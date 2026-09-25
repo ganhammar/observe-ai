@@ -1,9 +1,9 @@
 version = 0.1
 
-# template_file is scoped to build only. Setting it globally makes sam deploy
-# read the source template and package CodeUri verbatim, which skips the build
-# output entirely. With it here, deploy picks up .aws-sam/build/template.yaml
-# and ships what was actually built.
+# template_file is scoped to build only. Setting it globally would make sam
+# deploy read the source template and package CodeUri verbatim, skipping the
+# build output. Scoped here, deploy picks up .aws-sam/build/template.yaml and
+# ships the built artifact.
 [default.build.parameters]
 template_file = "infra/template.yaml"
 

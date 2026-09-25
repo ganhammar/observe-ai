@@ -1,25 +1,25 @@
-"""Decomposed triage: several grounded questions instead of one causal leap.
+"""Decomposed triage: several grounded questions replace one causal leap.
 
 The single-question baseline scored 100% on both clear bands and 41.7% on the
 ambiguous band, with identical answers whether or not the evidence was present.
-The model reads the trace well and does not make the jump from trace to cause.
+The model reads the trace well but does not make the jump from trace to cause.
 
-So the jump is removed. Each question below asks the model something it can
-read off the evidence, and the attribution is done in combine(), in code. The
-division is deliberate: the model decides what the text means, arithmetic and
-causal composition stay somewhere deterministic and testable.
+Each question below asks the model something it can read off the evidence;
+the attribution is done in combine(), in code. The model decides what the
+text means, while arithmetic and causal composition stay deterministic and
+testable.
 
-Stage 2 questions are independent rather than chained, so one wrong answer
-degrades the result instead of derailing the rest of the tree.
+Stage 2 questions are independent, not chained, so one wrong answer degrades
+the result without derailing the rest of the tree.
 """
 
 import json
 from pathlib import Path
 
 # The definitions live in src/ObserveAi/Decide/tree.json so the C# runtime can
-# embed the same bytes it is deployed with. Loading rather than duplicating
-# them is what stops the two implementations drifting; tests/vectors/combine.json
-# guards the combining rule on top of that.
+# embed the same bytes it is deployed with. Loading them here keeps the two
+# implementations from drifting; tests/vectors/combine.json guards the
+# combining rule on top of that.
 _DEFINITION = json.loads((Path(__file__).resolve().parents[1]
                           / "src" / "ObserveAi" / "Decide" / "tree.json").read_text())
 
@@ -70,7 +70,7 @@ def _noisy_or(values: list[float]) -> float:
 
 
 def has_evidence(state: dict) -> bool:
-    """True when the row carries signals the stage 2 questions can actually read."""
+    """True when the row carries signals the stage 2 questions can read."""
     return bool(state.get("evidence")) or bool(state.get("derived_facts"))
 
 
@@ -80,17 +80,17 @@ def combine(answers: dict, evidence_present: bool = True) -> dict:
     A noisy-OR over each side treats the signals as independent evidence, so
     one confident signal decides while several weak ones accumulate.
 
-    PRIOR is added to both sides before normalising. Without it a single signal
-    at 0.92 against nothing on the other side normalises to exactly 1.0, which
-    reproduces the saturation the single-question readout already suffers from.
-    With it, confidence tracks how much evidence actually fired: one strong
+    PRIOR is added to both sides before normalising. Without it, a single
+    signal at 0.92 against nothing on the other side normalises to 1.0,
+    reproducing the saturation the single-question readout already suffers
+    from. With PRIOR, confidence tracks how much evidence fired: one strong
     signal lands near 0.88, two opposing mid signals stay near the middle, and
     the output remains something a threshold can be set against.
     """
     if not evidence_present:
-        # Nothing for the signal questions to read. Anything they report is
-        # drawn from the stack trace, which the flat question already reads
-        # better, so defer to it rather than let a signal fire on nothing.
+        # Nothing for the signal questions to read here. Anything they report
+        # would be drawn from the stack trace, which the flat question
+        # already reads better, so the flat answer is used directly.
         flat = answers.get(BASELINE["key"], {})
         bug_p = float(flat.get("bug", 0.5))
         return {"bug": bug_p, "downstream": 1.0 - bug_p, "fallback": True}

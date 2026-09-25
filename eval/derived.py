@@ -1,18 +1,17 @@
 """State the numeric comparisons in the evidence so the model does not have to.
 
-The model reliably answers what a piece of evidence means and reliably fails to
-compare two numbers. Asked directly whether 3600 is larger than 900, or whether
-8400 is more than ten times 210, it answers no. Those are the rows the tree
-misses.
+The model reliably answers what a piece of evidence means, but reliably fails
+to compare two numbers: asked directly whether 3600 is larger than 900, or
+whether 8400 is more than ten times 210, it answers no. Those are the rows
+the tree misses.
 
-So the arithmetic moves here. This walks the evidence, finds numeric relations
-worth naming, and renders each as a plain sentence appended to the state. The
-model is then asked what the stated comparison means, which is the kind of
-question it answers well.
+This module walks the evidence, finds numeric relations worth naming, and
+renders each as a plain sentence appended to the state. The model is then
+asked what the stated comparison means, a question it answers well.
 
-Pairing is by field-name convention, which is what a log pipeline with a fixed
-schema can rely on. Nothing here decides bug versus downstream; it only makes
-the magnitudes legible.
+Pairing is by field-name convention, which a log pipeline with a fixed schema
+can rely on. Nothing here decides bug versus downstream; it only makes the
+magnitudes legible.
 """
 
 from __future__ import annotations

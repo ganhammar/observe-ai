@@ -1,9 +1,9 @@
 """Direct-decision readout sourced from Bedrock Custom Model Import log probabilities.
 
 Mirrors the upstream native-logits backend (src/semif_phase1/direct.py in
-SemIf) but reads the next-token distribution from a Bedrock invoke_model
-response instead of a local forward pass: the model's logits never leave
-Bedrock, only the top_logprobs it chooses to report.
+SemIf). It reads the next-token distribution from a Bedrock invoke_model
+response; a local forward pass never runs here, and the model's logits never
+leave Bedrock, only the top_logprobs it chooses to report.
 """
 
 from __future__ import annotations
@@ -35,39 +35,38 @@ def score(client, model_arn: str, row: dict, *, top_logprobs: int = 20, constrai
     answer slots.
 
     A letter that does not appear anywhere in top_logprobs carries negligible
-    probability mass; it is recorded in missing_options and treated as -inf
-    (probability 0) rather than raising, since one crowded-out option should
-    not fail the whole row.
+    probability mass. It is recorded in missing_options and treated as -inf
+    (probability 0); one crowded-out option does not fail the whole row.
 
     abstained is True when every option letter is missing from top_logprobs, so
     declared_mass is 0 and probabilities are all zero; it is False otherwise.
-    This spares a consumer from having to infer abstention from an all-zero
-    probability vector, which an unguarded argmax would otherwise silently
-    score as a confident prediction for the first option.
+    This spares a consumer from inferring abstention from an all-zero
+    probability vector: an unguarded argmax would score that vector as a
+    confident prediction for the first option.
 
     declared_mass is the sum of exp(logprob) over the option letters, taken
-    before renormalisation into probabilities. It answers a different question
-    than probabilities does: not "which option is favoured", but "how much of
-    the model's total next-token probability actually landed on one of the
-    declared options at all". A low declared_mass means the renormalised
-    probabilities are a ratio of two small, noisy numbers and should not be
-    trusted as calibrated confidence. With constrain=True the request already
-    restricts sampling to the option letters via structured_outputs, so the
-    logprobs Bedrock returns are post-mask and declared_mass will read close
-    to 1.0 regardless of what the model would have preferred unconstrained;
-    that makes it uninformative in that mode. Call with constrain=False to
-    get a declared_mass that actually reflects the model's free choice.
+    before renormalisation into probabilities. probabilities answers which
+    option is favoured; declared_mass answers how much of the model's total
+    next-token probability landed on one of the declared options at all. A
+    low declared_mass means the renormalised probabilities are a ratio of two
+    small, noisy numbers and should not be trusted as calibrated confidence.
+    With constrain=True, the request already restricts sampling to the option
+    letters via structured_outputs, so the logprobs Bedrock returns are
+    post-mask and declared_mass reads close to 1.0 regardless of the model's
+    unconstrained preference; it is uninformative in that mode. Call with
+    constrain=False to get a declared_mass that reflects the model's free
+    choice.
 
     api selects which Bedrock request shape to send. "completion" renders the
     Qwen3 ChatML prompt here and sends it as a raw prompt string; "chat" sends
     the messages and lets Bedrock apply the model's packaged chat template.
     The default is "completion" because Qwen3's packaged template ends the
-    prompt at the assistant turn without closing a reasoning block, so under
-    "chat" the first sampled position carries the distribution over <think>
-    rather than over the answer letters, and every option letter reads as
-    near-zero mass. Constrained sampling hides that failure instead of
-    surfacing it, because masking to the letters still yields a confident
-    looking letter drawn from a renormalised tail.
+    prompt at the assistant turn without closing a reasoning block. Under
+    "chat" the first sampled position then carries the distribution over
+    <think>, not the answer letters, and every option letter reads as
+    near-zero mass. Constrained sampling hides that failure: masking to the
+    letters still yields a confident-looking letter drawn from a renormalised
+    tail.
 
     prompt_sha256 hashes the exact prompt sent. Under "completion" that is the
     rendered ChatML string, which is byte-identical to upstream's

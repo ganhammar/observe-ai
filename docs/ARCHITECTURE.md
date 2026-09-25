@@ -1,8 +1,6 @@
 # Architecture
 
-One deployment per AWS account. It captures every log group, resolves which repository each failure belongs to, decides whether the failure is ours, and opens an issue when it is confident enough to be worth someone's attention.
-
-Deterministic code is the skeleton. A 4B model is called at the points where the answer needs reading rather than computing.
+One deployment per AWS account captures every log group, resolves the repository each failure belongs to, decides whether the failure is ours, and opens an issue when confident enough. Deterministic code calls a 4B model where an answer needs reading rather than computing.
 
 ## Flow
 
@@ -51,13 +49,13 @@ flowchart TB
     class REPO,TREE,VERIFY,DRAFT model
 ```
 
-Shaded steps call a model. Everything else is ordinary code.
+Shaded steps call a model.
 
 ## Where the 4B is used, and why there
 
-Every model call but one is the 4B readout. The exception is the root cause paragraph in a filed issue, which is the one generative call in the pipeline: `Diagnosis.DiagnoseAsync` sends the trace and the fetched files to a managed Bedrock model (`DiagnosisModelId`, defaulting to Nova 2 Lite through the `eu.` inference profile) once per issue, after the tree has said ours and the caps have said file. That ordering is what keeps the expensive call rare.
+Every model call but one is the 4B readout. The exception is the root cause paragraph of a filed issue: `Diagnosis.DiagnoseAsync` sends the trace and the fetched files to a managed Bedrock model (`DiagnosisModelId`, defaulting to Nova 2 Lite through the `eu.` inference profile) once per issue, after the tree has said ours and the caps have said file. That ordering keeps this expensive generative call rare.
 
-Today's measurements set the rule: the model is reliable at "does this text have property P" and "do these two mean the same", and unreliable at arithmetic and multi-hop attribution. Every use below is the first kind.
+As measured, the model is reliable at "does this text have property P" and "do these two mean the same", and unreliable at arithmetic and multi-hop attribution. Every use below is of the first kind.
 
 | Step | Question | Why not code |
 |---|---|---|
@@ -67,38 +65,36 @@ Today's measurements set the rule: the model is reliable at "does this text have
 | Triage tree | 7 grounded signals over the evidence | The measured core. See [FINDINGS.md](FINDINGS.md). |
 | Verify source | Could this code throw this exception here? | Detects a stale checkout without resolving a commit. |
 
-Language detection is deliberately absent: stack trace formats are distinctive enough that a regex is exact and free.
+Stack trace formats are distinctive enough for a regex to identify the runtime, so there is no language detection step.
 
-## Two loops that must not close
+## Self-ingestion and blast radius
 
-**Self-ingestion.** The pipeline writes logs. If the account policy captured them, triaging would generate logs that trigger triage. AWS documents this as a recursion that runs up ingestion billing.
+**Self-ingestion.** If the account policy captured the pipeline's own logs, triage would generate logs that trigger more triage, a recursion AWS documents as running up ingestion billing.
 
-Both log groups this pipeline writes to are named predictably from the stack name (the triage function's `FunctionName` and the state machine's `Name`) and excluded from the account policy by exact name, through `SelectionCriteria`'s `NOT IN` list (`infra/ingest.yaml`'s `ExcludedLogGroupNames` parameter). The state machine's own logging additionally runs with `IncludeExecutionData` off: the execution input is the log line that started it, so logging that input back out is what closes the loop even with the exclusions in place, and losing it is the right trade against a billing incident. State transitions are still recorded.
+Both log groups the pipeline writes to are named from the stack name (the triage function's `FunctionName` and the state machine's `Name`) and excluded from the account policy by exact name through `SelectionCriteria`'s `NOT IN` list (the `ExcludedLogGroupNames` parameter in `infra/ingest.yaml`). The state machine logs with `IncludeExecutionData` off: its execution input is the log line that started it, and logging that input would close the loop despite the exclusions. State transitions are still recorded, and losing the input is the right trade against a billing incident.
 
-**Blast radius.** A bad deploy breaks fifty services at once. Unchecked, that is fifty issues and thousands of model calls while nobody is watching. Three brakes:
+**Blast radius.** A bad deploy can break fifty services at once, which unchecked means fifty issues and thousands of model calls with nobody watching. Three brakes:
 
-- Fingerprint counters. The ten-thousandth occurrence increments a number rather than re-triaging, which is deduplication doing double duty as a rate limiter.
+- Fingerprint counters. The ten-thousandth occurrence increments a number instead of re-triaging, so deduplication doubles as a rate limiter.
 - A cap per repository per hour, with the overflow rolled into one incident issue rather than dropped.
 - A global circuit breaker that trips and notifies instead of filing.
 
 ## Which commit was running
 
-The escalation reads source, so it has to read the right version.
+Escalation reads source, so it needs the version that ran. The design covers, in order of fidelity: the commit injected into the build and emitted with every error; OpenTelemetry `service.version`; a deployment registry mapping service and time window to a commit; and the timestamp against that registry.
 
-Designed for, in order of fidelity: the commit injected into the build and emitted with every error; OpenTelemetry `service.version`; a deployment registry mapping service and time window to a commit; and finally the timestamp against that registry.
-
-None of it is certain, so the pipeline **verifies instead of assuming**. After checking out the frame paths it asks whether the code at those frames could produce this exception, matching on the method being present and capable of the throw rather than on exact line numbers, since line drift is normal even at the right commit. A drafted issue states what it read and whether verification passed:
+None of these is certain, so the pipeline verifies rather than assumes. After checking out the frame paths it asks whether the code at those frames could produce this exception, matching on the method being present and able to throw rather than on line numbers, which drift even at the right commit. A drafted issue states what it read and whether verification passed:
 
 > Analysed against `main@abc1234`. Frame verification: 1 of 3 matched, so this may not be the code that ran.
 
 ## Choices made
 
-**Step Functions, not one big handler.** The pipeline branches, retries per step, and fans out seven parallel calls. The execution history is also the audit trail for why a log did or did not become an issue, which matters the first time it files something wrong.
+**Step Functions rather than one handler.** The pipeline branches, retries per step and fans out seven parallel calls. The execution history is the audit trail for why a log did or did not become an issue.
 
-**Filtering happens at capture, not in the pipeline.** The account subscription's filter pattern keeps only lines mentioning an error, exception, traceback or panic. Everything else never reaches Kinesis, is never billed as a stream record and never wakes a consumer. Volume reduction is cheapest at the earliest available point, and this is that point.
+**Filtering at capture.** The account subscription's filter pattern keeps only lines mentioning an error, exception, traceback or panic. Capture is the earliest and cheapest point to cut volume: other lines never reach Kinesis, are not billed as stream records and do not wake a consumer.
 
-**Kinesis from the start, not subscription straight to Lambda.** A service that starts log-spamming would otherwise exhaust account concurrency.
+**Kinesis from the start.** Without it between the subscription and Lambda, a service that starts log-spamming would exhaust account concurrency.
 
-**Lambda, not AgentCore.** AgentCore solves session duration beyond 15 minutes and per-session isolation. Reading source named by a stack trace is targeted retrieval plus one model call, bounded in seconds. If following references beyond one hop turns out to be routinely necessary, that is the signal to revisit.
+**Lambda rather than AgentCore.** AgentCore addresses sessions longer than 15 minutes and per-session isolation. Reading source named by a stack trace is targeted retrieval plus one model call, bounded in seconds. Routinely needing to follow references beyond one hop would be the reason to revisit this.
 
-**NativeAOT on `provided.al2023`.** Init duration is 92 ms against a Python cold start spent importing an SDK.
+**NativeAOT on `provided.al2023`.** Init takes 92 ms, against a Python cold start spent importing an SDK.

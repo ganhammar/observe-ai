@@ -5,17 +5,13 @@ namespace ObserveAi;
 /// <summary>Whether the checked-out source could have produced this frame's throw.</summary>
 public sealed record FrameVerdict(Frame Frame, bool Matched);
 
-/// <summary>The reduced verdict for a whole trace: how many frames matched, and the sentence a drafted issue states about it.</summary>
+/// <summary>A whole trace's verification: frames matched, frames checked, and the sentence the issue states.</summary>
 public sealed record VerificationSummary(int Matched, int Total, string Sentence);
 
 /// <summary>
-/// Builds the "could this code throw here" question for one frame, and reduces
-/// the answers into the sentence a drafted issue states about its own
-/// confidence in the checkout it read.
-///
-/// This is judgment over one already-named span of one already-named file, not
-/// exploration, so it is a single SemIf row per frame rather than a tool loop:
-/// the frame tells us exactly what to ask about before the question is built.
+/// Builds the "could this code throw here" question for one frame and reduces the answers to the sentence
+/// an issue states about its checkout. Each frame is one SemIf row, since the frame already names the
+/// file and method to ask about.
 /// </summary>
 public static class SourceVerification
 {
@@ -23,10 +19,8 @@ public static class SourceVerification
     private const string No = "no";
 
     /// <summary>
-    /// The SemIf row for one frame. The state carries the method, the exception
-    /// type, and the span of the file around where the trace says it happened;
-    /// the question is deliberately about capability, not certainty, because the
-    /// checkout may be a different commit than the one that actually ran.
+    /// The SemIf row for one frame: the method, the exception type and the file span. The question asks
+    /// whether the code could throw, since the checkout may be a different commit from the one that ran.
     /// </summary>
     public static JsonElement BuildRow(string rowId, Frame frame, string exceptionType, string fileSpan)
     {
@@ -50,19 +44,15 @@ public static class SourceVerification
     }
 
     /// <summary>
-    /// True when the model favours "yes". This reads as the method being present
-    /// and capable of the throw, not as an exact line-number match: line numbers
-    /// drift between commits even when the checkout is exactly right, so a
-    /// missing method is the real signal, not a moved one.
+    /// True when the model favours "yes", meaning the method is present and could throw. Line numbers drift
+    /// between commits, so only a missing method counts against the checkout.
     /// </summary>
     public static bool Matched(IReadOnlyDictionary<string, double> probabilities) =>
         probabilities.GetValueOrDefault(Yes, 0.0) >= probabilities.GetValueOrDefault(No, 0.0);
 
     /// <summary>
-    /// Reduces the per-frame verdicts to a match count and the exact sentence a
-    /// drafted issue states about them. The wording carries the system's own
-    /// uncertainty, so a reader without any other context still knows how much
-    /// to trust the checkout the root cause below was read from.
+    /// Reduces the per-frame verdicts to a match count and the sentence an issue states about them. The
+    /// sentence carries its own caveat, so a reader knows how far to trust the checkout the root cause came from.
     /// </summary>
     public static VerificationSummary Summarise(string commitLabel, IReadOnlyList<bool> frameMatches)
     {

@@ -3,13 +3,9 @@ using System.Globalization;
 namespace ObserveAi;
 
 /// <summary>
-/// Formats a double the way Python's f"{value:g}" and f"{value:.0f}" do, so the
-/// derived-fact sentences built from these numbers stay byte-identical to
-/// eval/derived.py's output, which is what was measured.
-///
-/// .NET's own "G6" format picks a different threshold for switching to
-/// scientific notation and a different exponent width, so it cannot be used
-/// as a drop-in replacement.
+/// Formats a double as Python's f"{value:g}" and f"{value:.0f}" do, so derived-fact sentences stay
+/// byte-identical to the measured output of eval/derived.py. .NET's "G6" uses a different threshold for
+/// scientific notation and a different exponent width.
 /// </summary>
 internal static class PythonFloat
 {
@@ -24,8 +20,7 @@ internal static class PythonFloat
         }
 
         var negative = value < 0;
-        // .NET's "E5" gives 6 significant digits (1 before the decimal point, 5
-        // after), correctly rounded, which is exactly what :g rounds to first.
+        // "E5" gives 6 correctly rounded significant digits, which is what :g rounds to first.
         var scientific = Math.Abs(value).ToString("E" + (Precision - 1), CultureInfo.InvariantCulture);
         var parts = scientific.Split('E');
         var digits = parts[0].Replace(".", "");
@@ -36,7 +31,7 @@ internal static class PythonFloat
         return negative ? "-" + body : body;
     }
 
-    /// <summary>Python's f"{value:.0f}": round to the nearest whole number.</summary>
+    /// <summary>Python's f"{value:.0f}": rounds half to even.</summary>
     public static string FormatCount(double value) =>
         Math.Round(value, MidpointRounding.ToEven).ToString("F0", CultureInfo.InvariantCulture);
 

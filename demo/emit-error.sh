@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Writes one unhandled-exception event into /aws/lambda/pricing-demo, in the
-# exact shape the Python Lambda runtime logs, so the pipeline can be exercised
+# same shape the Python Lambda runtime logs, so the pipeline can be exercised
 # without deploying the demo function. Line numbers match handler.py.
 #
 # Usage: demo/emit-error.sh [tier]   (default: enterprise)

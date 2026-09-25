@@ -13,17 +13,9 @@ public enum FilingOutcome { Created, Commented }
 public sealed record FilingResult(FilingOutcome Outcome, long IssueNumber);
 
 /// <summary>
-/// Files a drafted issue against a repository's tracker, or, when an open
-/// issue with the same title is already there, comments on it instead: the
-/// same defect firing again after a fix has landed is a reopen of that
-/// defect, not a fresh one, and IssueDraft.Build keeps a title stable across
-/// occurrences for exactly this comparison.
-///
-/// Every GitHub call goes through one delegate so nothing here touches the
-/// network or holds a token: an empty jsonBody means GET, anything else
-/// means POST with that body. The delegate returns the raw response text,
-/// which this reads only far enough to find a title match or an issue
-/// number.
+/// Files a drafted issue, or comments on an open issue with the same title; IssueDraft.Build keeps titles
+/// stable across occurrences for this match. Every GitHub call goes through one delegate that returns the
+/// raw response text: an empty jsonBody means GET, anything else a POST with that body.
 /// </summary>
 public static class IssueFiler
 {
@@ -31,7 +23,7 @@ public static class IssueFiler
 
     private static readonly Regex RepoPattern = new(@"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.Compiled);
 
-    /// <summary>The real CallGitHub: an empty jsonBody is a bearer-token GET, anything else a bearer-token POST.</summary>
+    /// <summary>CallGitHub over HTTP with a bearer token.</summary>
     public static CallGitHub Against(HttpClient http, string token) => async (url, jsonBody, cancellationToken) =>
     {
         using var request = new HttpRequestMessage(jsonBody.Length == 0 ? HttpMethod.Get : HttpMethod.Post, url);
@@ -47,7 +39,7 @@ public static class IssueFiler
         return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
     };
 
-    /// <summary>repo must be "owner/name"; anything else, including a full URL, is rejected before it reaches a request.</summary>
+    /// <summary>repo must be "owner/name"; anything else, including a full URL, is rejected before any request is built.</summary>
     public static async Task<FilingResult> FileAsync(
         CallGitHub callGitHub, string repo, Draft draft, CancellationToken cancellationToken = default)
     {
@@ -77,7 +69,6 @@ public static class IssueFiler
         return new FilingResult(FilingOutcome.Created, created.RootElement.GetProperty("number").GetInt64());
     }
 
-    /// <summary>The first open issue whose title matches exactly, or null when none does.</summary>
     private static long? FindByTitle(string searchResponse, string title)
     {
         using var document = JsonDocument.Parse(searchResponse);

@@ -5,8 +5,8 @@ Copyright (c) 2026 TheoLeeCJ, MIT License (see upstream LICENSE). LETTERS,
 DIRECT_SYSTEM, validate_row, direct_messages, softmax, and digest are copied
 verbatim from src/semif_phase1/core.py so the prompt text stays byte-identical
 and prompt_sha256 values stay comparable with that project's published
-results. The GPU model-loading helpers in the upstream module are left out;
-Bedrock Custom Model Import serves the model instead.
+results. The GPU model-loading helpers in the upstream module are not
+included; Bedrock Custom Model Import serves the model.
 """
 
 from __future__ import annotations
@@ -76,14 +76,14 @@ def digest(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-# Qwen3 ChatML control tokens. Rendering the prompt here rather than letting
-# Bedrock apply the model's packaged chat template is deliberate: Qwen3's
-# default template ends the prompt at "<|im_start|>assistant\n", which leaves
-# the model free to open a reasoning block, so the first sampled position holds
-# the distribution over <think> rather than over the answer letters. The
-# thinking-suppressed form closes an empty reasoning block in the prompt itself,
-# which puts the answer letter at the first sampled position. Upstream SemIf
-# reaches the same string through apply_chat_template(enable_thinking=False).
+# Qwen3 ChatML control tokens, used to render the prompt directly. Bedrock's
+# packaged chat template for Qwen3 ends the prompt at
+# "<|im_start|>assistant\n" without closing a reasoning block, so the first
+# sampled position holds the distribution over <think>, not the answer
+# letters. Rendering the prompt here closes an empty reasoning block in the
+# prompt itself, putting the answer letter at the first sampled position.
+# Upstream SemIf reaches the same string through
+# apply_chat_template(enable_thinking=False).
 QWEN3_THINK_SUPPRESSED_SUFFIX = "<|im_start|>assistant\n<think>\n\n</think>\n\n"
 
 

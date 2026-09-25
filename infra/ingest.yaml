@@ -16,12 +16,12 @@ Parameters:
     Type: CommaDelimitedList
     Default: /aws/lambda/observe-ai-TriageFunction,/aws/vendedlogs/states/observe-ai-TriagePipeline
     Description: >
-      Exact log group names not captured. This is the recursion guard. It is a
-      parameter, rather than a prefix computed here, because this stack does
-      not know the application stack's resource names; the default is what
-      infra/template.yaml's TriageFunction and TriagePipeline create under the
-      default stack name observe-ai, and it must be overridden to match if
-      either is deployed under a different stack name.
+      Exact log group names not captured; this is the recursion guard. This
+      stack does not know the application stack's resource names, so the
+      exclusion list is a parameter, not a computed prefix. The default
+      matches what infra/template.yaml's TriageFunction and TriagePipeline
+      create under the default stack name observe-ai; override it to match
+      if either is deployed under a different stack name.
   RetentionHours:
     Type: Number
     Default: 24
@@ -66,14 +66,13 @@ Resources:
                 Resource: !GetAtt LogStream.Arn
 
   # One policy captures every log group in the account, including ones created
-  # after this deploys, which is what makes the service work without being told
-  # about each service.
+  # after this deploys, so the service works without being told about each
+  # new service.
   #
-  # The exclusion is the important part. This pipeline writes logs of its own:
-  # the triage Lambda's own log group, and the state machine's execution log
-  # group. Capturing either would mean triaging a log produces a log that
-  # triggers triage, which AWS documents as a way to run up ingestion billing.
-  # Both are excluded here by exact name.
+  # This pipeline writes logs of its own: the triage Lambda's own log group,
+  # and the state machine's execution log group. Capturing either would make
+  # triaging a log produce a log that triggers triage, which AWS documents as
+  # a way to run up ingestion billing. Both are excluded here by exact name.
   CaptureAllLogGroups:
     Type: AWS::Logs::AccountPolicy
     Properties:

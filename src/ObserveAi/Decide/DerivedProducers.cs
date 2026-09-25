@@ -3,13 +3,9 @@ using System.Text.RegularExpressions;
 namespace ObserveAi;
 
 /// <summary>
-/// The four producers behind Derived.Derive, each looking for one shape of numeric
-/// relation by field-name convention: a resource acquired far more than it is
-/// released, a current reading far from its own baseline, work repeated within one
-/// operation, and an interval that outlasts the lifetime it should stay inside.
-///
-/// Pairing is by field-name convention, which is what a log pipeline with a fixed
-/// schema can rely on. Mirrors eval/derived.py's four private functions exactly.
+/// The four producers behind Derived.Derive, each pairing fields by name convention: acquired far more
+/// than released, a reading far from its baseline, work repeated within one operation, and an interval
+/// longer than the lifetime it should stay inside. Mirrors eval/derived.py's four private functions.
 /// </summary>
 internal static class DerivedProducers
 {
@@ -59,9 +55,7 @@ internal static class DerivedProducers
             }
             foreach (var name in readingKeys)
             {
-                // A reading matches its baseline when one name contains the other's
-                // stem, which survives prefix markers such as prior_ and suffix ones
-                // such as _7d_avg appearing in either order.
+                // A reading matches a baseline when either name contains the other's stem, wherever the markers sit.
                 if (!name.Contains(stem) && !stem.Contains(StripMarkers(name)))
                 {
                     continue;

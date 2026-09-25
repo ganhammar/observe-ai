@@ -3,23 +3,12 @@ using System.Text.Json;
 namespace ObserveAi;
 
 /// <summary>
-/// States the numeric comparisons in the evidence so the model does not have to.
-///
-/// The model reliably answers what a piece of evidence means and reliably fails to
-/// compare two numbers: asked directly whether 3600 is larger than 900, it answers
-/// no. So the arithmetic happens here instead. This walks the evidence, finds
-/// numeric relations worth naming, and renders each as a plain sentence added to
-/// the state as derived_facts. The model is then asked what the stated comparison
-/// means, which is the kind of question it answers well.
-///
-/// The four producers that find those relations live in DerivedProducers.cs.
-/// Nothing here decides bug versus downstream; it only makes the magnitudes
-/// legible. Mirrors eval/derived.py exactly, including its sentence wording,
-/// since the wording is part of what was measured.
+/// States the numeric comparisons in the evidence as sentences under derived_facts, so the model never
+/// compares two numbers itself. Asked directly whether 3600 is larger than 900, the model answers no.
+/// Mirrors eval/derived.py, including its sentence wording, which is part of what was measured.
 /// </summary>
 public static class Derived
 {
-    /// <summary>Returns the plain-sentence statements of the numeric relations in the evidence.</summary>
     public static IReadOnlyList<string> Derive(JsonElement state)
     {
         if (!state.TryGetProperty("evidence", out var evidence) || evidence.ValueKind != JsonValueKind.Object)
@@ -42,7 +31,7 @@ public static class Derived
         return facts;
     }
 
-    /// <summary>Copies the state with a derived_facts array added when anything was found.</summary>
+    /// <summary>Returns state with derived_facts appended, or state unchanged when there are none.</summary>
     public static JsonElement WithDerived(JsonElement state)
     {
         var facts = Derive(state);

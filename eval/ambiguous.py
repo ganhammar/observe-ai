@@ -3,8 +3,8 @@
 Each row carries `evidence`, which holds the surrounding signals a real log
 pipeline already has: adjacent log lines, response metadata, dependency
 status, recent deploys. The evidence never names a cause and never uses the
-words bug, defect, downstream or dependency. Deciding still requires relating
-the frames to the signals, which is the thing under test.
+words bug, defect, downstream or dependency. Deciding requires relating the
+frames to the signals.
 
 `fixture.py` can emit these rows with or without the evidence field, so the
 same twelve cases measure two different questions: whether the model can

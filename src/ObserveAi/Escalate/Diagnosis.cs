@@ -5,20 +5,15 @@ using Amazon.BedrockRuntime.Model;
 namespace ObserveAi;
 
 /// <summary>
-/// The one generative call in the pipeline: given a trace and the source files
-/// it names, write the root cause a human reads first in the filed issue.
-///
-/// This runs only after the tree has decided the failure is ours and the rate
-/// caps have allowed a filing, so it is the expensive step and the rare one.
-/// The model is a managed Bedrock model reached through Converse, which is why
-/// it is a separate delegate from the logit readout: the readout needs raw
-/// InvokeModel bytes from an imported model, this needs text from a chat model.
+/// The pipeline's one generative call: from a trace and the source files it names, write the root cause
+/// that opens the filed issue. It runs only after triage and the rate caps allow a filing. It uses Converse
+/// on a managed chat model, separate from the readout, which needs raw InvokeModel bytes from an imported model.
 /// </summary>
 public static class Diagnosis
 {
     public delegate Task<string> Converse(string modelId, string system, string user, CancellationToken cancellationToken);
 
-    /// <summary>Per-file cap on what is sent, since a trace can name a generated file of any size.</summary>
+    /// <summary>Per-file character cap, since a trace can name a generated file of any size.</summary>
     public const int MaxCharsPerFile = 40_000;
 
     private const int MaxOutputTokens = 600;
@@ -30,7 +25,7 @@ public static class Diagnosis
         "handle that input. Quote the offending line. If the source does not show the cause, say what " +
         "it does show and what is missing. No fixes, no restating the trace, no headings, no lists.";
 
-    /// <summary>The real Converse against a Bedrock runtime client, at temperature zero so the same defect reads the same way twice.</summary>
+    /// <summary>Converse against a Bedrock runtime client at temperature zero, so one defect reads the same way twice.</summary>
     public static Converse Against(IAmazonBedrockRuntime client) => async (modelId, system, user, cancellationToken) =>
     {
         var request = new ConverseRequest
@@ -45,10 +40,8 @@ public static class Diagnosis
     };
 
     /// <summary>
-    /// The user turn: the raw trace, then each fetched file in full under its
-    /// path. Files are sent whole rather than as a span around the failing line,
-    /// because the cause is usually a few lines above the throw, outside any
-    /// window chosen in advance.
+    /// The user turn: the raw trace, then each fetched file in full under its path. Whole files are sent
+    /// because the cause usually sits a few lines above the throw.
     /// </summary>
     public static string Prompt(string rawTrace, IReadOnlyDictionary<string, string> sources)
     {

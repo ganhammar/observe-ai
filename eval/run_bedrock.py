@@ -5,9 +5,9 @@ recorded with an `error` field and do not stop the run, so a partial fixture
 still produces a scoreable results file.
 
 Run with --unconstrained at least once. Constrained decoding masks the sampler
-to the option letters, which can make `declared_mass` read close to 1.0 whether
-or not the model genuinely favoured those options. The unconstrained pass is
-the one that shows how much mass the declared options actually hold.
+to the option letters, which can make `declared_mass` read close to 1.0
+regardless of whether the model favoured those options. The unconstrained
+pass shows how much mass the declared options hold without that mask.
 """
 
 from __future__ import annotations

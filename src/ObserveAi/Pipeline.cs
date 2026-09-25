@@ -11,11 +11,7 @@ public sealed record IdentifyResult(
     string? NamespacePrefix, LogGroupKind? ResourceKind, string? ResourceName,
     IReadOnlyList<Frame>? Frames, string? Error);
 
-/// <summary>
-/// What starts one triage execution: everything the Kinesis consumer already
-/// worked out (identify, repo resolution, the occurrence count), so the state
-/// machine itself never redoes any of it.
-/// </summary>
+/// <summary>Input for one triage execution: what the Kinesis consumer already computed, so the state machine never repeats it.</summary>
 public sealed record ExecutionInput(
     [property: JsonPropertyName("repo")] string Repo,
     [property: JsonPropertyName("fingerprint")] string Fingerprint,
@@ -26,32 +22,24 @@ public sealed record ExecutionInput(
     [property: JsonPropertyName("exceptionType")] string ExceptionType,
     [property: JsonPropertyName("frames")] IReadOnlyList<Frame> Frames);
 
-/// <summary>
-/// What escalate needs. Sources holds the fetched files by repository-relative
-/// path, the same paths SourceFetch.PathsFor names for the trace; nothing here
-/// calls GitHub, so every field is data the caller already has.
-/// </summary>
+/// <summary>Escalate's input. Sources maps each path SourceFetch.PathsFor names to its fetched contents.</summary>
 public sealed record EscalateRequest(
     string Repo, string Commitish, ParsedTrace Trace, string RawTrace, IReadOnlyDictionary<string, string> Sources,
     CombineResult Verdict, long Occurrences, DateTimeOffset FirstSeen);
 
-/// <summary>Escalate's outcome: what was asked for, whether the fetched source verified per frame, and the issue drafted from both.</summary>
+/// <summary>Escalate's outcome: the fetch requests, a verdict per frame, and the drafted issue.</summary>
 public sealed record EscalateResult(
     IReadOnlyList<SourceFetchRequest> FetchRequests, IReadOnlyList<FrameVerdict> FrameVerdicts, Draft Draft);
 
 /// <summary>
-/// The pipeline stages a Step Functions state machine drives this Lambda
-/// through: identify, resolve-repo, triage, check-rate, escalate, and
-/// file-issue. Each is a plain function over the components it needs; the
-/// state machine owns the flow between them and everything with a real side
-/// effect.
+/// The pipeline stages as functions over the components they are given. None of them writes anywhere;
+/// the state machine owns the flow between stages.
 /// </summary>
 public static class Pipeline
 {
     /// <summary>
-    /// Parses one raw log event into fingerprintable facts. Returns a result
-    /// saying parsing failed rather than throwing: a line with no stack trace
-    /// in it is routine, not exceptional, and the state machine routes it.
+    /// Parses one raw log event into fingerprintable facts. A message with no stack trace returns
+    /// Parsed = false for the state machine to route.
     /// </summary>
     public static IdentifyResult Identify(string logGroupName, string message, IReadOnlyList<string> appPrefixes)
     {
@@ -70,20 +58,15 @@ public static class Pipeline
     }
 
     /// <summary>
-    /// Resolves the repository owning one log event by convention: the
-    /// GitHub organisation configured for the deployment, plus the resource
-    /// name the log group already names. Returns null when the log group
-    /// does not match a known shape, so the state machine reaches its
-    /// UnknownRepo stop rather than failing.
+    /// Resolves the repository by convention (see ServiceIdentity.ConventionalRepo). Returns null for an
+    /// unrecognised log group, which the state machine routes to its UnknownRepo stop.
     /// </summary>
     public static string? ResolveRepo(string logGroupName, string githubOrg) =>
         ServiceIdentity.ConventionalRepo(logGroupName, githubOrg);
 
     /// <summary>
-    /// The tree/flat scoring path for one row. Only the flat path catches a
-    /// rejected row here: tree mode lets a total scoring failure reach the
-    /// caller uncaught, so Step Functions retries the triage state instead of
-    /// treating the fingerprint as decided.
+    /// Scores one row in tree or flat mode. Only flat mode catches a rejected row. In tree mode a total
+    /// scoring failure propagates, so Step Functions retries the Triage state and the fingerprint stays undecided.
     /// </summary>
     public static async Task<RowResultDto> TriageRowAsync(
         JsonElement row, IBedrockInvoker client, string modelArn, string mode,
@@ -134,10 +117,9 @@ public static class Pipeline
     };
 
     /// <summary>
-    /// Verifies the fetched source frame by frame, has the diagnosis model read
-    /// it, and drafts the issue. The per-frame "could this code throw here"
-    /// questions go to the readout model; the root cause paragraph is the one
-    /// generative call. Never calls GitHub itself.
+    /// Verifies the fetched source frame by frame, asks the diagnosis model for a root cause, and drafts the
+    /// issue. The per-frame "could this code throw here" questions go to the readout model; the root cause
+    /// paragraph is the only generative call. Never calls GitHub.
     /// </summary>
     public static async Task<EscalateResult> EscalateAsync(
         IBedrockInvoker client, string modelArn, Diagnosis.Converse converse, string diagnosisModelId,

@@ -1,8 +1,8 @@
 """Synthetic log-triage fixture: stack traces labelled bug vs downstream.
 
 Three bands. `clear_*` rows are solvable by an exception-type lookup table and
-exist as a floor check. `ambiguous` rows are the ones that decide whether a
-model earns its place: the exception type points one way and the causal story
+exist as a floor check. `ambiguous` rows test whether a model can separate
+cause from symptom: the exception type points one way and the causal story
 points the other.
 """
 

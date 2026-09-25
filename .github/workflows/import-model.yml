@@ -1,16 +1,16 @@
 name: Import Model
 
 # One-time bootstrap. Bedrock Custom Model Import is not supported by
-# CloudFormation, so the imported model cannot be a stack resource and is
-# created here instead. Everything around it is: this workflow deploys the
-# bootstrap stack (staging bucket and Bedrock import role) and reads the
-# bucket and role straight off its outputs, so there is nothing to create
-# by hand and nothing to paste between steps.
+# CloudFormation, so the imported model itself cannot be a stack resource; it
+# is created here directly. This workflow deploys the bootstrap stack
+# (staging bucket and Bedrock import role) and reads the bucket and role from
+# its outputs, so nothing needs creating by hand and nothing needs pasting
+# between steps.
 #
 # Manual trigger only: the job downloads several GB of weights, and the
 # imported model it produces carries a monthly per-CMU storage charge until
-# it is deleted. Re-running is safe and cheap, since the script exits early
-# when a model of the target name already exists.
+# deleted. Re-running is safe and cheap: the script exits early when a model
+# of the target name already exists.
 
 on:
   workflow_dispatch:
@@ -101,13 +101,14 @@ jobs:
           echo "IMPORT_ROLE=$IMPORT_ROLE" >> "$GITHUB_ENV"
 
       - name: Install the hf CLI
-        # The hf entrypoint ships in the base package; the old cli extra is gone.
+        # Installing huggingface_hub alone provides the hf CLI entrypoint; no
+        # separate extra is required.
         run: pip install --upgrade huggingface_hub
 
       - name: Run import
-        # Inputs are passed through the environment rather than interpolated
-        # into the script body, so a value containing shell metacharacters is
-        # data to the script instead of syntax to the runner shell.
+        # Inputs are passed through the environment. A value containing shell
+        # metacharacters is then data to the script, not syntax the runner
+        # shell parses.
         env:
           MODEL_ID: ${{ inputs.model_id }}
           MODEL_NAME: ${{ inputs.model_name }}

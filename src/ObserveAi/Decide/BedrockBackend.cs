@@ -7,7 +7,7 @@ using Amazon.BedrockRuntime.Model;
 
 namespace ObserveAi;
 
-/// <summary>The model's own most likely next token at the first sampled position.</summary>
+/// <summary>The most likely token at the first sampled position.</summary>
 public sealed record TopToken(
     [property: JsonPropertyName("token")] string Token,
     [property: JsonPropertyName("probability")] double Probability);
@@ -28,17 +28,15 @@ public sealed record ScoreResult(
     string PromptVersion);
 
 /// <summary>
-/// The narrow surface BedrockBackend needs from a Bedrock runtime client: send a
-/// request body to a model and get the raw response body back. Kept separate from
-/// Amazon.BedrockRuntime.IAmazonBedrockRuntime so tests can supply a small fake
-/// instead of the full AWS SDK client surface.
+/// The part of a Bedrock runtime client BedrockBackend uses: send a request body to a model and return
+/// the raw response body. Tests implement it with a small fake.
 /// </summary>
 public interface IBedrockInvoker
 {
     Task<byte[]> InvokeModelAsync(string modelId, byte[] requestBody, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Adapts the real AWSSDK.BedrockRuntime client to <see cref="IBedrockInvoker"/>.</summary>
+/// <summary>Adapts the AWSSDK.BedrockRuntime client to <see cref="IBedrockInvoker"/>.</summary>
 public sealed class AmazonBedrockInvoker(IAmazonBedrockRuntime client) : IBedrockInvoker
 {
     public async Task<byte[]> InvokeModelAsync(
@@ -61,12 +59,9 @@ public sealed class AmazonBedrockInvoker(IAmazonBedrockRuntime client) : IBedroc
 }
 
 /// <summary>
-/// Direct-decision readout sourced from Bedrock Custom Model Import log probabilities.
-///
-/// Mirrors src/observe_ai/bedrock_backend.py: sends an invoke_model request with
-/// max_tokens=1 and logprobs enabled, reads the log probability of each declared
-/// option letter (A, B, ...) at the first sampled position, and softmaxes the
-/// recovered values.
+/// Direct-decision readout from Bedrock Custom Model Import log probabilities, mirroring
+/// src/observe_ai/bedrock_backend.py. Requests one token with logprobs, reads each option letter's log
+/// probability at the first sampled position, and softmaxes them.
 /// </summary>
 public static class BedrockBackend
 {
@@ -109,10 +104,7 @@ public static class BedrockBackend
                 var prompt = Semif.RenderQwen3Prompt(messages);
                 promptHash = Semif.Digest(prompt);
                 writer.WriteString("prompt", prompt);
-                // The Completions schema carries the candidate count in
-                // logprobs itself, as an integer. Sending a boolean here is
-                // accepted and coerces to 1, which returns only the sampled
-                // token and no distribution to read the option letters from.
+                // logprobs is the candidate count as an integer. A boolean is accepted but coerces to 1, returning no distribution.
                 writer.WriteNumber("logprobs", topLogprobs);
 
                 if (constrain)
@@ -215,15 +207,9 @@ public static class BedrockBackend
     }
 
     /// <summary>
-    /// Maps token to log probability for the first sampled position.
-    ///
-    /// The two Bedrock request shapes report logprobs differently. The chat shape
-    /// nests a list of {token, logprob} objects under logprobs.content[0]. The
-    /// completion shape follows the older OpenAI Completions schema, where
-    /// logprobs.top_logprobs is a list holding one token-to-logprob mapping per
-    /// position. Both normalise to the same ordered token/logprob list here,
-    /// preserving first-occurrence order and letting a later entry for the same
-    /// token overwrite its value in place, matching a Python dict comprehension.
+    /// Maps token to log probability at the first sampled position. The chat shape nests {token, logprob}
+    /// objects under logprobs.content[0].top_logprobs. The completion shape follows the OpenAI Completions
+    /// schema: logprobs.top_logprobs holds one token-to-logprob map per position.
     /// </summary>
     private static List<KeyValuePair<string, double>> FirstPositionLogprobs(JsonElement payload)
     {
@@ -287,11 +273,7 @@ public static class BedrockBackend
         _ => false,
     };
 
-    /// <summary>
-    /// A token to log-probability map that preserves first-occurrence order,
-    /// with a later entry for the same token overwriting its value without
-    /// moving position, matching Python dict semantics.
-    /// </summary>
+    /// <summary>A token-to-logprob map with Python dict ordering: insertion order is kept and an overwrite stays in place.</summary>
     private sealed class OrderedTokenLogprobs
     {
         private readonly Dictionary<string, int> _index = new(StringComparer.Ordinal);

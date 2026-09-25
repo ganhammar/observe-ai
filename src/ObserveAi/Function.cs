@@ -16,12 +16,10 @@ using Amazon.StepFunctions.Model;
 namespace ObserveAi;
 
 /// <summary>
-/// AWS Lambda entrypoint for the pipeline stages a Step Functions state machine drives, selected
-/// by an "action" field on the event: identify, resolve-repo, triage, check-rate, escalate, or
-/// file-issue (a missing action means triage). The Kinesis event source that actually feeds this
-/// pipeline carries no action field at all; a top-level "Records" array is how that shape is told
-/// apart from everything else, ahead of the action switch. That path runs identify, repo
-/// resolution and the seen check itself, starting an execution only when triage is warranted.
+/// Lambda entrypoint for the pipeline stages, selected by the event's "action" field: identify,
+/// resolve-repo, triage, check-rate, escalate or file-issue. A missing action means triage. A Kinesis
+/// event has no action field and is recognised first by its top-level "Records" array; that path runs
+/// identify, repo resolution and the seen check, and starts an execution only when triage is warranted.
 /// </summary>
 public static class Function
 {
@@ -34,10 +32,10 @@ public static class Function
     private static readonly Lazy<HttpClient> LazyHttp = new(() => new HttpClient());
     private static readonly Lazy<QuestionTree> LazyTree = new(QuestionTree.LoadEmbedded);
 
-    /// <summary>Reads one secret's current value. A test supplies a fake instead of a real Secrets Manager call.</summary>
+    /// <summary>Reads one secret's current value. Tests substitute a fake.</summary>
     internal delegate Task<string> ReadSecret(string secretArn, CancellationToken cancellationToken);
 
-    /// <summary>Starts one Step Functions execution. A test supplies a fake instead of a real StartExecution call.</summary>
+    /// <summary>Starts one Step Functions execution. Tests substitute a fake.</summary>
     internal delegate Task<StartExecutionResponse> StartExecution(StartExecutionRequest request, CancellationToken cancellationToken);
 
     public static async Task Main()
@@ -52,18 +50,13 @@ public static class Function
     public static Task<LambdaResponse> FunctionHandlerAsync(JsonElement lambdaEvent, ILambdaContext context)
     {
         var modelArn = RequireEnv("MODEL_ARN");
-        // SEMIF_MODE picks the triage path: the tree of sub-questions (default), or
-        // the single flat question it replaced, kept so the two can be compared
-        // against a deployed model without shipping code.
+        // SEMIF_MODE selects the triage path: "tree" (default) or "flat", a single-question baseline.
         var mode = Environment.GetEnvironmentVariable("SEMIF_MODE") ?? "tree";
 
         return DispatchAsync(lambdaEvent, LazyClient.Value, modelArn, mode, context);
     }
 
-    /// <summary>
-    /// The handler's body with the Bedrock client passed in, so a test can
-    /// supply a fake invoker instead of one built from real AWS configuration.
-    /// </summary>
+    /// <summary>The handler body, with the Bedrock client and every other external call injectable for tests.</summary>
     internal static Task<LambdaResponse> DispatchAsync(
         JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, ILambdaContext context,
         Caps.UpdateItem? updateRate = null, StartExecution? startExecution = null,
@@ -98,10 +91,9 @@ public static class Function
     private static readonly Regex UnsafeExecutionNameChars = new(@"[^A-Za-z0-9\-_.]", RegexOptions.Compiled);
 
     /// <summary>
-    /// What the Kinesis event source invokes: identify, resolve the repo and check
-    /// SeenTable right here, so only a log worth triaging starts an execution.
-    /// Every other outcome is counted rather than silently dropped, since that
-    /// count is now the only trace a skipped log leaves behind.
+    /// Handles a Kinesis batch: identifies each log event, resolves its repo and checks SeenTable, and starts
+    /// an execution only for events worth triaging. Skipped events are counted, and the counts are the only
+    /// record a skipped event leaves.
     /// </summary>
     private static async Task<LambdaResponse> RunStartExecutionsAsync(
         JsonElement records, StartExecution? startExecution, SeenStore.UpdateItem? recordSeen, ILambdaContext context)
@@ -160,7 +152,7 @@ public static class Function
         return new LambdaResponse { Started = started, AlreadyKnown = alreadyKnown, Unparseable = unparseable, NoRepo = noRepo };
     }
 
-    /// <summary>The state infra/pipeline.asl.json's Triage state builds from $.logGroup and $.message, so the signature hashes what triage will actually score.</summary>
+    /// <summary>The input the Triage state in infra/pipeline.asl.json builds from $.logGroup and $.message, so the signature hashes what triage scores.</summary>
     private static JsonElement TriageState(string logGroup, string message)
     {
         using var stream = new MemoryStream();
@@ -176,10 +168,9 @@ public static class Function
     }
 
     /// <summary>
-    /// Step Functions deduplicates by execution name, so naming it after the log
-    /// event's own id makes StartExecution idempotent for free against a Kinesis
-    /// retry. Execution names allow at most 80 characters and reject whitespace,
-    /// wildcards, brackets and several punctuation marks.
+    /// Step Functions deduplicates by execution name, so naming the execution after the log event id makes
+    /// StartExecution idempotent across Kinesis retries. Names allow at most 80 characters and reject
+    /// whitespace, wildcards, brackets and several punctuation marks.
     /// </summary>
     private static string SanitiseExecutionName(string id)
     {
@@ -197,7 +188,7 @@ public static class Function
         return new LambdaResponse { Repo = repo, ResolvedBy = repo is null ? null : "convention" };
     }
 
-    /// <summary>Buckets are keyed by hour; two hours of slack past the boundary is plenty for the TTL sweep to catch up.</summary>
+    /// <summary>Buckets are keyed by hour, and a two-hour TTL always lands after the bucket's hour has ended.</summary>
     private static async Task<LambdaResponse> RunCheckRateAsync(JsonElement lambdaEvent, Caps.UpdateItem? updateRate)
     {
         var repo = RequireString(lambdaEvent, "repo");
@@ -220,7 +211,7 @@ public static class Function
         return new LambdaResponse { Identify = IdentifyResultDto.From(Pipeline.Identify(logGroupName, message, appPrefixes)) };
     }
 
-    /// <summary>Scores a single SemIf row or a {"rows": [...]} batch, returning {"results": [...]}, unchanged from before actions existed.</summary>
+    /// <summary>Scores a single SemIf row or a {"rows": [...]} batch and returns {"results": [...]}.</summary>
     internal static async Task<LambdaResponse> ScoreRowsAsync(
         JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, ILambdaContext context)
     {
@@ -249,9 +240,8 @@ public static class Function
     }
 
     /// <summary>
-    /// Fetches the files the trace names, then runs the escalate stage over
-    /// them. The token read and the GitHub reads happen here so that the stage
-    /// itself stays a function over data.
+    /// Fetches the files the trace names and runs the escalate stage over them. All GitHub access happens
+    /// here, so Pipeline.EscalateAsync receives the source files as data.
     /// </summary>
     private static async Task<LambdaResponse> RunEscalateAsync(
         JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, ReadSecret? readSecret,
@@ -296,7 +286,7 @@ public static class Function
             e.TryGetProperty("firstSeen", out var firstSeen) ? firstSeen.GetDateTimeOffset() : DateTimeOffset.UtcNow);
     }
 
-    /// <summary>Reads the token out of band and lets IssueFiler decide whether this is a fresh issue or a reopen of one already tracked.</summary>
+    /// <summary>IssueFiler comments on an open issue with the same title, or creates a new one.</summary>
     private static async Task<LambdaResponse> RunFileIssueAsync(
         JsonElement lambdaEvent, ReadSecret? readSecret, IssueFiler.CallGitHub? callGitHub)
     {
@@ -334,13 +324,9 @@ public static class Function
             RegionEndpoint = RegionEndpoint.GetBySystemName(region),
         };
         config.RetryMode = RequestRetryMode.Standard;
-        // A Bedrock model that has scaled to zero can sit there until something
-        // times out. A small retry count with a per-attempt timeout well inside
-        // the Lambda timeout fails the row with an error the caller can act on,
-        // instead of billing the whole invocation for a request that never returned.
+        // A Bedrock model scaled to zero can hang a request; bounded retries fail the row inside the Lambda timeout.
         config.MaxErrorRetry = 3;
-        // 20 seconds covers a root cause paragraph from the diagnosis model; the
-        // readout answers in well under a second once the model copy is warm.
+        // 20 seconds covers a diagnosis paragraph; a warm readout answers in under a second.
         config.Timeout = TimeSpan.FromSeconds(20);
         return new AmazonBedrockRuntimeClient(config);
     }

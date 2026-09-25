@@ -4,23 +4,16 @@ using System.Text.Json;
 
 namespace ObserveAi;
 
-/// <summary>
-/// Raised for any row that fails validation or otherwise cannot be scored.
-/// Mirrors the role of a plain ValueError in the Python original.
-/// </summary>
+/// <summary>Raised for a row that fails validation or cannot be scored, as ValueError is in the Python original.</summary>
 public sealed class RowValidationException(string message) : Exception(message);
 
 /// <summary>A single chat message in the direct-decision prompt.</summary>
 public sealed record ChatMessage(string Role, string Content);
 
 /// <summary>
-/// Portable SemIf direct-decision contract: input validation, prompts, and softmax.
-///
-/// Ported from SemIf (formerly OpenJev), https://github.com/TheoLeeCJ/SemIf-OpenJev,
-/// Copyright (c) 2026 TheoLeeCJ, MIT License (see upstream LICENSE). Letters,
-/// DirectSystem, ValidateRow, DirectMessages, Softmax, and Digest carry the same
-/// values and behaviour as src/observe_ai/semif.py so the prompt text stays
-/// byte-identical and prompt_sha256 values stay comparable with that project's
+/// The SemIf direct-decision contract: validation, prompts and softmax. Ported from SemIf,
+/// https://github.com/TheoLeeCJ/SemIf-OpenJev, Copyright (c) 2026 TheoLeeCJ, MIT License (see upstream
+/// LICENSE). Matches src/observe_ai/semif.py so prompt text and prompt_sha256 stay comparable with SemIf's
 /// published results.
 /// </summary>
 public static class Semif
@@ -31,14 +24,9 @@ public static class Semif
         "Apply the supplied criterion to the supplied evidence. Choose exactly one listed option. " +
         "Respond with only its uppercase letter, with no explanation or reasoning.";
 
-    // Qwen3 ChatML control tokens. Rendering the prompt here rather than letting
-    // Bedrock apply the model's packaged chat template is deliberate: Qwen3's
-    // default template ends the prompt at "<|im_start|>assistant\n", which leaves
-    // the model free to open a reasoning block, so the first sampled position holds
-    // the distribution over <think> rather than over the answer letters. The
-    // thinking-suppressed form closes an empty reasoning block in the prompt itself,
-    // which puts the answer letter at the first sampled position. Upstream SemIf
-    // reaches the same string through apply_chat_template(enable_thinking=False).
+    // Qwen3 ChatML control tokens. Qwen3's packaged template ends at "<|im_start|>assistant\n", so the first
+    // sampled token can open a <think> block. This suffix closes an empty reasoning block, which puts the answer
+    // letter at the first sampled position. Upstream SemIf reaches the same string via apply_chat_template(enable_thinking=False).
     public const string QwenThinkSuppressedSuffix = "<|im_start|>assistant\n<think>\n\n</think>\n\n";
 
     private static readonly string[] RequiredFields = ["id", "options", "question", "state"];
@@ -187,10 +175,9 @@ public static class Semif
 }
 
 /// <summary>
-/// Serialises a JsonElement the way Python's json.dumps(value, ensure_ascii=False)
-/// does: ", " and ": " separators, minimal string escaping, and non-ASCII
-/// characters left untouched. Used to keep the rendered prompt content
-/// byte-for-byte comparable with the upstream Python implementation.
+/// Serialises a JsonElement as Python's json.dumps(value, ensure_ascii=False) does: ", " and ": " separators,
+/// minimal escaping, and non-ASCII characters left as they are. Keeps prompt bytes identical to the Python
+/// implementation.
 /// </summary>
 internal static class PythonJson
 {

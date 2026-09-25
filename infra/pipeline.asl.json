@@ -25,7 +25,7 @@
         }
       ],
       "Next": "Confident it is ours?",
-      "Comment": "id, state.service and state.stack_trace are exactly what the Kinesis consumer already computed; a row where every sub-question fails throws instead of returning an errored result, so a Bedrock outage lands here as a retry rather than a fingerprint wrongly marked decided. The retry spans about five minutes because an imported model copy that has scaled to zero answers ModelNotReady and then container errors for the first half minute or more, and the first log after a quiet spell is exactly the one that meets it."
+      "Comment": "id, state.service and state.stack_trace are what the Kinesis consumer already computed. A row where every sub-question fails throws, so a Bedrock outage retries here and no fingerprint gets marked decided by mistake. The retry spans about five minutes: an imported model copy that has scaled to zero answers ModelNotReady and then returns container errors for the first half minute or more, and the first log after a quiet spell often falls in that window."
     },
     "Confident it is ours?": {
       "Type": "Choice",
@@ -46,11 +46,11 @@
     },
     "LikelyDownstream": {
       "Type": "Succeed",
-      "Comment": "Dropped deliberately. The counter still rose, so a dependency failing constantly stays visible without filing anything."
+      "Comment": "Dropped. The counter still rose, so a dependency failing constantly stays visible without filing anything."
     },
     "Uncertain": {
       "Type": "Succeed",
-      "Comment": "Held rather than guessed. A second pass with more evidence, or a human, belongs here."
+      "Comment": "A second pass with more evidence, or a human, belongs here."
     },
     "CheckRateLimit": {
       "Type": "Task",
@@ -84,7 +84,7 @@
     },
     "RollUp": {
       "Type": "Succeed",
-      "Comment": "Over this repository's hourly budget. The overflow belongs in one incident issue rather than being discarded."
+      "Comment": "Over this repository's hourly budget. The overflow is folded into one incident issue."
     },
     "Escalate": {
       "Type": "Task",

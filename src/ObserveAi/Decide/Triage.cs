@@ -6,10 +6,7 @@ namespace ObserveAi;
 /// <summary>One sub-question's outcome: either option-id-to-probability, or an error, never both.</summary>
 public sealed record TriageAnswer(string Key, IReadOnlyDictionary<string, double>? Probabilities, string? Error);
 
-/// <summary>
-/// The tree's verdict for one row, plus every sub-answer it was built from, so a
-/// wrong result can be traced to a wrong signal rather than a wrong rule.
-/// </summary>
+/// <summary>The tree's verdict for one row plus every sub-answer, so a wrong result can be traced to its signal.</summary>
 public sealed record TriageResult(CombineResult Verdict, IReadOnlyList<TriageAnswer> Answers)
 {
     /// <summary>The yes-probability for a signal key, or 0.0 when it did not answer.</summary>
@@ -18,14 +15,9 @@ public sealed record TriageResult(CombineResult Verdict, IReadOnlyList<TriageAns
 }
 
 /// <summary>
-/// Runs the question tree against one row: enrich its state with derived facts,
-/// score the baseline, the surface question, and every signal, then combine the
-/// typed answers into a bug-versus-downstream verdict.
-///
-/// Mirrors eval/run_tree.py, except the sub-questions are scored concurrently
-/// rather than in a loop. The Python runner is a batch script with no reason to
-/// wait on one round trip before starting the next; a live Lambda pays for that
-/// wait directly, and nothing here depends on one sub-answer to ask another.
+/// Runs the question tree against one row: adds derived facts to its state, scores the baseline, surface
+/// and signal questions concurrently, and combines the answers into a bug-versus-downstream verdict.
+/// Mirrors eval/run_tree.py, which scores sequentially; no sub-question depends on another's answer.
 /// </summary>
 public static class Triage
 {
@@ -41,8 +33,7 @@ public static class Triage
         var state = Derived.WithDerived(rawState);
         var hasEvidence = QuestionTree.HasEvidence(state);
 
-        // With nothing for the signal questions to read, Combine below falls back to
-        // the baseline alone, so the other eight calls would only be scored and discarded.
+        // Without evidence Combine reads only the baseline, so the other eight questions are skipped.
         var questions = hasEvidence ? SubQuestions(tree) : BaselineOnly(tree);
         var scoring = questions.Select(sub =>
             ScoreSubQuestionAsync(client, modelArn, id, state, sub.Key, sub.Question, sub.Options, cancellationToken));
@@ -52,9 +43,7 @@ public static class Triage
             .Where(answer => answer.Probabilities is not null)
             .ToDictionary(answer => answer.Key, answer => answer.Probabilities!);
 
-        // Combine returns a number whatever it is given, so an empty answer set
-        // yields a confident looking 0.5 built from nothing. Losing every
-        // sub-question is an outage, not a verdict, so it surfaces as an error.
+        // Combine returns a verdict even from no answers, so losing every sub-question is raised as an outage.
         if (byKey.Count == 0)
         {
             var reasons = answers.Select(answer => answer.Error).Where(e => e is not null).Distinct();
@@ -66,14 +55,12 @@ public static class Triage
         return new TriageResult(verdict, answers);
     }
 
-    /// <summary>The baseline alone: all Combine reads when there is no evidence for the rest to score.</summary>
     private static IEnumerable<(string Key, string Question, IReadOnlyList<TreeOption> Options)> BaselineOnly(
         QuestionTree tree)
     {
         yield return (tree.Baseline.Key, tree.Baseline.Question, tree.Baseline.Options);
     }
 
-    /// <summary>The tree's individual decision rows: baseline, surface, then every signal.</summary>
     private static IEnumerable<(string Key, string Question, IReadOnlyList<TreeOption> Options)> SubQuestions(
         QuestionTree tree)
     {
@@ -102,8 +89,7 @@ public static class Triage
         }
         catch (Exception error) when (error is RowValidationException or AmazonServiceException or AmazonClientException)
         {
-            // A missing signal contributes 0.0 to Combine, same as an explicit "no".
-            // The error is kept here purely for tracing.
+            // A missing signal counts as 0.0 in Combine, the same as "no"; the error is kept for tracing.
             return new TriageAnswer(key, null, $"{error.GetType().Name}: {error.Message}");
         }
     }

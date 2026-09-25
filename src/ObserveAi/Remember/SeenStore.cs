@@ -7,42 +7,26 @@ namespace ObserveAi;
 public sealed record SeenResult(bool IsFirst, long Occurrences, bool ShouldTriage);
 
 /// <summary>
-/// Counts occurrences per distinct failure so the triage tree runs once rather
-/// than once per log line. The nine model calls are only affordable because
-/// almost every log arriving here is a repeat of something already decided.
-///
-/// The counter is also the first rate limiter: a defect firing ten thousand
-/// times increments a number instead of opening ten thousand issues.
-///
-/// A repeat is re-triaged, not just counted, when its evidence has moved: a
-/// database genuinely out of connections and a service leaking them can throw
-/// the byte-identical stack trace, and only the surrounding evidence tells
-/// them apart, so whichever cause arrives first must not get the only say.
+/// Counts occurrences per repository and fingerprint so the nine-call triage tree runs once per failure. A
+/// repeat is re-triaged when its evidence signature changes: a database out of connections and a service
+/// leaking them can throw the same stack trace, and only the evidence tells them apart.
 /// </summary>
 public static class SeenStore
 {
-    /// <summary>The one DynamoDB operation this needs, so a test can supply it directly.</summary>
+    /// <summary>The one DynamoDB operation SeenStore uses. Tests substitute a fake.</summary>
     public delegate Task<UpdateItemResponse> UpdateItem(UpdateItemRequest request, CancellationToken cancellationToken);
 
     public static UpdateItem Against(IAmazonDynamoDB dynamo) => dynamo.UpdateItemAsync;
 
     /// <summary>
-    /// Records one occurrence and reports whether it is the first, and
-    /// separately whether it should be triaged: first sighting, or the
-    /// evidence signature has changed since the one last stored.
-    ///
-    /// The key is repository plus fingerprint, not fingerprint alone: two
-    /// services throwing the same framework exception are not the same defect,
-    /// and a global key would merge them silently.
-    ///
-    /// A single UpdateItem does the read, the increment, the first-sighting
-    /// test and the signature comparison together, so two log lines arriving
-    /// at once cannot both believe they are first and both trigger triage.
+    /// Records one occurrence and reports whether to triage it: on first sighting, or when the evidence
+    /// signature differs from the stored one. The key is repository plus fingerprint, since two services
+    /// throwing the same framework exception are separate defects. One UpdateItem does the increment, the
+    /// first-sighting test and the signature swap, so two concurrent lines cannot both trigger triage.
     /// </summary>
     /// <param name="evidenceSignature">
-    /// EvidenceSignature.Compute's result for this occurrence's evidence.
-    /// Callers that never pass one keep the pre-existing behaviour: triage
-    /// runs on first sighting only, since an unset signature never changes.
+    /// EvidenceSignature.Compute's result for this occurrence. Left empty, the signature never changes and
+    /// triage runs on first sighting only.
     /// </param>
     public static async Task<SeenResult> RecordAsync(
         UpdateItem updateItem, string table, string repo, string fingerprint,
@@ -73,8 +57,7 @@ public static class SeenStore
 
         var occurrences = long.Parse(response.Attributes["occurrences"].N);
         var isFirst = occurrences == 1;
-        // A response with no previous_signature attribute counts as unchanged, so a
-        // caller that never passes evidenceSignature only ever triages on first sighting.
+        // A missing previous_signature counts as unchanged.
         var previousSignature = response.Attributes.TryGetValue("previous_signature", out var previous)
             ? previous.S
             : evidenceSignature;

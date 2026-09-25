@@ -25,9 +25,10 @@ jobs:
           python-version: '3.12'
 
       - name: Run Python eval tests
-        # The Python package is the evaluation implementation, not the deployed
-        # one. Its tests still run because tests/vectors/combine.json is
-        # generated from it and the C# combining rule is checked against it.
+        # The Python package holds the evaluation implementation; the deployed
+        # implementation is in C#. Its tests run here because
+        # tests/vectors/combine.json is generated from this package, and the
+        # C# combining rule is checked against that file.
         run: |
           pip install -e ".[test]"
           pytest -q

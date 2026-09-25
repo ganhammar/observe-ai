@@ -11,14 +11,13 @@ public sealed record SourceFetchRequest(
     [property: JsonPropertyName("path")] string Path,
     [property: JsonPropertyName("url")] string Url);
 
-/// <summary>What FetchAsync found: the source per path it resolved, and the paths that were not found anywhere.</summary>
+/// <summary>FetchAsync's outcome: source by path, and the paths found nowhere.</summary>
 public sealed record FetchResult(IReadOnlyDictionary<string, string> Sources, IReadOnlyList<string> NotFound);
 
 /// <summary>
-/// Turns a parsed trace back into the minimal set of files worth reading, and
-/// the GitHub API requests that fetch only those. Every path comes from stack
-/// trace text an attacker can shape and ends up in a URL, so a ".." segment is
-/// dropped; repo goes into the URL path itself, so it must match "owner/name".
+/// Maps a parsed trace to the few files worth reading and the GitHub requests that fetch them. Paths come
+/// from trace text an attacker can shape and end up in URLs, so any ".." segment is dropped; repo forms
+/// part of the URL path, so it must match "owner/name".
 /// </summary>
 public static class SourceFetch
 {
@@ -33,7 +32,7 @@ public static class SourceFetch
 
     private static readonly Regex RepoPattern = new(@"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.Compiled);
 
-    /// <summary>Common container mount points, longest first among any that match, so a caller can add its own without losing these.</summary>
+    /// <summary>Common container mount points. When several match, the longest is stripped.</summary>
     public static readonly IReadOnlyList<string> DefaultMountPrefixes =
         ["/app/", "/var/task/", "/usr/src/app/", "/home/app/", "/workspace/", "/src/"];
 
@@ -41,9 +40,8 @@ public static class SourceFetch
     public delegate Task<string?> Get(string url, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The real Get: a bearer-token GET asking GitHub for raw file content, so a
-    /// Contents request answers with the file itself rather than base64 in JSON.
-    /// The Trees endpoint ignores that media type and still answers JSON.
+    /// Get over HTTP with a bearer token, requesting the raw media type, under which the Contents API returns
+    /// the file body. The Trees endpoint ignores that media type and returns JSON.
     /// </summary>
     public static Get Against(HttpClient http, string token) => async (url, cancellationToken) =>
     {
@@ -58,12 +56,9 @@ public static class SourceFetch
     };
 
     /// <summary>
-    /// The repository-relative path behind each of trace.Frames, or null for a
-    /// vendor frame, a frame the trace names no file for, or an unsafe path.
-    /// rawTrace must be the text TraceParser parsed into trace, since Frame does
-    /// not retain a path to read back. A path rooted at a known container mount
-    /// (mountPrefixes, defaulting to DefaultMountPrefixes) has that mount
-    /// stripped to guess the repository-relative path.
+    /// The repository-relative path behind each of trace.Frames, or null for a vendor frame, a frame with no
+    /// file, or an unsafe path. rawTrace must be the text TraceParser parsed, since Frame keeps no path. A path
+    /// under a known container mount (mountPrefixes, default DefaultMountPrefixes) has the mount stripped.
     /// </summary>
     public static IReadOnlyList<string?> FramePaths(
         ParsedTrace trace, string rawTrace, IReadOnlyList<string>? mountPrefixes = null)
@@ -75,7 +70,7 @@ public static class SourceFetch
             if (lastCause >= 0) lines = lines[lastCause..];
         }
 
-        // Same order as trace.Frames, so Python's outermost-first lines are reversed here too.
+        // Matches trace.Frames order: Python's outermost-first lines are reversed.
         var perFrame = trace.Runtime switch
         {
             "python" => Enumerable.Reverse(MatchLines(lines, PythonFrame)).ToList(),
@@ -102,14 +97,14 @@ public static class SourceFetch
         ParsedTrace trace, string rawTrace, int maxFiles = 5, IReadOnlyList<string>? mountPrefixes = null) =>
         FramePaths(trace, rawTrace, mountPrefixes).OfType<string>().Distinct().Take(maxFiles).ToList();
 
-    /// <summary>The Contents API request for each path at the given ref, returned as data for the caller's HTTP delegate to run.</summary>
+    /// <summary>The Contents API request for each path at the given ref.</summary>
     public static IReadOnlyList<SourceFetchRequest> RequestsFor(string repo, string commitish, IReadOnlyList<string> paths)
     {
         ValidateRepo(repo);
         return paths.Select(path => new SourceFetchRequest(path, ContentsUrl(repo, commitish, path))).ToList();
     }
 
-    /// <summary>The recursive Git Trees API request, used to find a path the Contents API could not resolve directly.</summary>
+    /// <summary>The recursive Git Trees API URL, used to locate a path the Contents API missed.</summary>
     public static string TreeRequest(string repo, string commitish)
     {
         ValidateRepo(repo);
@@ -117,10 +112,8 @@ public static class SourceFetch
     }
 
     /// <summary>
-    /// The tree path with the longest run of segments matching wantedPath from the
-    /// filename backwards (a monorepo holds "services/orders/payment.py" for a
-    /// trace naming "orders/payment.py"), or null on no match or a tie, since
-    /// guessing between two candidates is worse than reporting none found.
+    /// The tree path sharing the longest run of trailing segments with wantedPath, as when a monorepo holds
+    /// "services/orders/payment.py" for a trace naming "orders/payment.py". Returns null on no match or a tie.
     /// </summary>
     public static string? MatchByBasename(IReadOnlyList<string> treePaths, string wantedPath)
     {
@@ -136,9 +129,8 @@ public static class SourceFetch
     }
 
     /// <summary>
-    /// Fetches each path's source, falling back once to a tree lookup and retry
-    /// when the direct request misses. get performs one GET and returns null for
-    /// a 404; nothing here touches HTTP itself, so a test can supply a fake.
+    /// Fetches each path's source. On a miss it fetches the repository tree once and retries with the best
+    /// basename match. get returns null for a 404.
     /// </summary>
     public static async Task<FetchResult> FetchAsync(
         Get get, string repo, string commitish, IReadOnlyList<string> paths,
@@ -191,7 +183,7 @@ public static class SourceFetch
         return count;
     }
 
-    /// <summary>Strips the longest matching mount prefix, or failing that a lone leading slash, to guess a repo-relative path.</summary>
+    /// <summary>Strips the longest matching mount prefix, or else a leading slash.</summary>
     private static string MapMountPath(string path, IReadOnlyList<string> mountPrefixes)
     {
         var prefix = mountPrefixes

@@ -4,16 +4,12 @@ using System.Text.Json.Serialization;
 namespace ObserveAi;
 
 /// <summary>
-/// One row's result. Nullable throughout because a successful row and a failed
-/// row populate disjoint sets of fields; DefaultIgnoreCondition.WhenWritingNull
-/// on the serializer context drops the unused half, matching the two distinct
-/// shapes a scored row and a rejected row produce.
+/// One row's result. A scored row and a rejected row set disjoint fields, and WhenWritingNull on the
+/// serializer context omits whichever are unset.
 /// </summary>
 public sealed class RowResultDto
 {
-    // id is always present in the response, even when null (an unidentifiable
-    // row), unlike every other field here which is entirely absent on the row
-    // shape it does not belong to.
+    // id is always written, as null for an unidentifiable row.
     [JsonPropertyName("id")]
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public string? Id { get; init; }
@@ -54,7 +50,7 @@ public sealed class RowResultDto
     [JsonPropertyName("error")]
     public string? Error { get; init; }
 
-    // The remaining fields are tree-mode only: the flat path never sets them.
+    // Set in tree mode only.
 
     [JsonPropertyName("fallback")]
     public bool? Fallback { get; init; }
@@ -80,7 +76,6 @@ public sealed class RowResultDto
 
     public static RowResultDto FromError(string? id, string error) => new() { Id = id, Error = error };
 
-    /// <summary>option_ids is always ["bug", "downstream"]: the tree only ever decides between the two.</summary>
     public static RowResultDto FromTriage(string? id, TriageResult result, QuestionTree tree) => new()
     {
         Id = id,
@@ -91,7 +86,7 @@ public sealed class RowResultDto
     };
 }
 
-/// <summary>identify's result. Only Error is set when Parsed is false; every other field is only set when it is true.</summary>
+/// <summary>identify's result. When Parsed is false, only Error, ResourceKind and ResourceName are set.</summary>
 public sealed class IdentifyResultDto
 {
     [JsonPropertyName("parsed")]
@@ -139,7 +134,6 @@ public sealed class IdentifyResultDto
     };
 }
 
-/// <summary>escalate's result: what to fetch, what it would have verified, and the issue drafted from both.</summary>
 public sealed class EscalateResultDto
 {
     [JsonPropertyName("fetchRequests")]
@@ -160,16 +154,11 @@ public sealed class EscalateResultDto
 }
 
 /// <summary>
-/// The Lambda response shape. Only Results is set for triage, keeping that
-/// action's wire format exactly as it was before identify and escalate existed;
-/// Identify and Escalate are each set only by their own action. Repo/ResolvedBy
-/// (resolve-repo), Allowed/Tripped/Count/Limit (check-rate), Started/AlreadyKnown/
-/// Unparseable/NoRepo (start-executions, the audit trail for the log events that
-/// never become an execution), and Outcome/IssueNumber (file-issue) stay flat
-/// here rather than nested under their own key, because the state machine reads
-/// them straight off the ResultPath it assigns their task to (for example
-/// $.repo.repo, $.rate.tripped), the same way $.verdict.results[0] reads
-/// Results.
+/// The response for every action. Each action sets only its own fields: Results (triage), Identify
+/// (identify), Escalate (escalate), Repo/ResolvedBy (resolve-repo), Allowed/Tripped/Count/Limit
+/// (check-rate), Started/AlreadyKnown/Unparseable/NoRepo (Kinesis batch) and Outcome/IssueNumber
+/// (file-issue). Fields stay flat because the state machine reads them off each task's ResultPath, as in
+/// $.repo.repo, $.rate.tripped and $.verdict.results[0].
 /// </summary>
 public sealed class LambdaResponse
 {

@@ -8,26 +8,17 @@ public sealed record Frame(
     [property: JsonPropertyName("method")] string Method,
     [property: JsonPropertyName("inApp")] bool InApp);
 
-/// <summary>A trace reduced to what fingerprinting needs: the runtime, the exception type, and the call stack.</summary>
+/// <summary>A trace reduced to what fingerprinting needs. Frames[0] is the throw site for every runtime.</summary>
 public sealed record ParsedTrace(string Runtime, string ExceptionType, IReadOnlyList<Frame> Frames);
 
 /// <summary>
-/// Parses raw stack traces from five runtimes into a common shape. The method name sits on one
-/// line in all of them, so one frame regex with a "method" capture group per runtime is enough;
-/// exception-type extraction is the only real difference, so a sixth runtime is a row in Specs,
-/// not a class. Returns null for anything unrecognised; the model is the right fallback for
-/// that, but is not built here since it needs a Bedrock call this parser has no business making.
+/// Parses raw stack traces from five runtimes into a common shape. Each runtime is one row in Specs: a
+/// detector, a frame regex with a "method" group, and an exception-type extractor. Returns null for an
+/// unrecognised trace.
 /// </summary>
 public static class TraceParser
 {
-    // Fallback for when the caller has no per-service app-code prefix list.
-    //
-    // A list like this cannot be complete: there are more libraries than anyone
-    // will enumerate, and a library that is missing from it reads as application
-    // code, which makes the fingerprint group by the library rather than by the
-    // code that called it. Two unrelated defects failing inside the same client
-    // then merge. Resolving application namespaces through a cached model call
-    // is the real answer; these entries only cover what the fixture proved.
+    // Used when the caller has no app prefixes. A library missing here counts as app code and merges its callers' defects.
     private static readonly string[] VendorPrefixes =
     [
         "System.", "Microsoft.", "java.", "javax.", "jdk.", "sun.",
@@ -48,10 +39,8 @@ public static class TraceParser
     private static readonly Regex NodeStyleLocation = new(@":\d+:\d+\)\s*$", RegexOptions.Compiled);
     private static readonly Regex NodeFrame = new(@"^\s*at (?<method>.+?) \(.*:\d+:\d+\)\s*$", RegexOptions.Compiled);
 
-    // Order matters: python and go have unambiguous marker lines, checked first, then java's
-    // ".java:" source reference. dotnet is checked before node because Node's built-in callback
-    // classes (GetAddrInfoReqWrap and friends) are PascalCase and would otherwise pass for a
-    // .NET frame; DotnetFramePlain excludes anything already shaped like a Node location instead.
+    // First match wins. dotnet runs before node, and MatchDotnetFrame rejects Node-style locations, because
+    // Node's PascalCase callback classes (GetAddrInfoReqWrap) otherwise pass for .NET frames.
     private static readonly RuntimeSpec[] Specs =
     [
         new("python", lines => lines.Any(l => l.Contains("Traceback (most recent call last)")), PythonFrame.Match, ExtractPythonType),
@@ -68,8 +57,7 @@ public static class TraceParser
         var spec = Specs.FirstOrDefault(s => s.Detect(lines));
         if (spec is null) return null;
 
-        // Half of real Java traces wrap the thing that actually broke; scoping to the last
-        // "Caused by:" keeps the fingerprint on the real defect instead of the wrapper.
+        // About half of real Java traces wrap the defect, so frames are read from the last "Caused by:".
         var scoped = spec.Name == "java" ? SliceAtLastCause(lines) : lines;
         var exceptionType = spec.ExceptionType(scoped);
 
@@ -82,8 +70,7 @@ public static class TraceParser
             var method = Normalize(match.Groups["method"].Value);
             frames.Add(new Frame(method, IsInApp(method, line, appPrefixes)));
         }
-        // Frames[0] is the throw site for every runtime. Python is the one that
-        // prints its traceback outermost first, so it is reversed to match.
+        // Frames[0] is the throw site. Python prints outermost first, so its frames are reversed.
         if (spec.Name == "python") frames.Reverse();
 
         return new ParsedTrace(spec.Name, exceptionType, frames);
@@ -106,9 +93,8 @@ public static class TraceParser
 
     private static string BeforeFirstColon(string text) => text.Split(':')[0].Trim();
 
-    // A native Python traceback ends with the exception line. The Python Lambda
-    // runtime logs it first instead, prefixed with "[ERROR]", and ends with the
-    // innermost source line.
+    // A native Python traceback ends with the exception line. The Lambda runtime logs that line first,
+    // prefixed "[ERROR]", and ends with the innermost source line.
     private static string ExtractPythonType(string[] lines)
     {
         var first = lines.FirstOrDefault(l => l.Trim().Length > 0)?.Trim() ?? "";
@@ -117,10 +103,7 @@ public static class TraceParser
             : BeforeFirstColon(lines.LastOrDefault(l => l.Trim().Length > 0) ?? "");
     }
 
-    // Go is the one runtime whose exception type carries a message, and "index out
-    // of range [5] with length 3" would otherwise fingerprint separately for every
-    // index the defect happens to hit. The message is kept because it separates one
-    // panic kind from another, with the varying parts replaced so it still groups.
+    // Go's exception type is the panic message, with strings, hex and digits masked so it groups across values.
     private static readonly Regex Quoted = new("\"[^\"]*\"|'[^']*'", RegexOptions.Compiled);
     private static readonly Regex Hex = new(@"\b0x[0-9a-fA-F]+\b", RegexOptions.Compiled);
     private static readonly Regex Digits = new(@"\d+", RegexOptions.Compiled);
@@ -137,7 +120,7 @@ public static class TraceParser
             if (marker is not null) return NormaliseMessage(trimmed[marker.Length..].Trim());
         }
 
-        // A bare "goroutine " dump with no panic/fatal error line: fall back to the first line.
+        // A bare goroutine dump with no panic or fatal error line uses its first line.
         return BeforeFirstColon(lines.FirstOrDefault() ?? "");
     }
 
@@ -149,16 +132,13 @@ public static class TraceParser
 
     private static string ExtractFirstLineType(string[] lines) => BeforeFirstColon(lines.FirstOrDefault() ?? "");
 
-    // node_modules is a path, not part of the captured method name, so it is checked against
-    // the raw line rather than against the method itself.
+    // node_modules is part of the path, so it is matched against the raw line.
     private static bool IsInApp(string method, string line, IReadOnlyCollection<string> appPrefixes) =>
         appPrefixes.Count > 0
             ? appPrefixes.Any(method.StartsWith)
             : !VendorPrefixes.Any(method.StartsWith) && !line.Contains("node_modules");
 
-    // Strips decorations that vary between occurrences of the same call site: generic arity and
-    // type arguments, .NET's async state-machine and closure naming, and Java's lambda suffix.
-    // Without this the same defect fingerprints differently every time it fires.
+    // Strips names that vary between occurrences of one call site: generics, .NET async and closure names, Java lambdas.
     private static string Normalize(string method)
     {
         method = Regex.Replace(method, @"<(\w+)>d__\d+\.MoveNext", "$1");

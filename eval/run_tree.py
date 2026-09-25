@@ -1,13 +1,12 @@
-"""Score the fixture with the decomposed question tree instead of one question.
+"""Score the fixture with a decomposed question tree of several sub-questions.
 
 Each input row becomes several independent decisions against the same state.
 The model answers those; combine() in tree.py turns them into the bug versus
 downstream probability. Output matches the single-question runner's shape, so
 eval/evaluate.py scores both the same way.
 
-Writes a sidecar .tree.jsonl holding every sub-answer, which is what shows
-whether a wrong verdict came from a wrong sub-answer or from the combining
-rule.
+Writes a sidecar .tree.jsonl holding every sub-answer, so a wrong verdict can
+be traced to a wrong sub-answer or to the combining rule.
 """
 
 from __future__ import annotations
