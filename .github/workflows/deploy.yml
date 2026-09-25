@@ -65,11 +65,23 @@ jobs:
         # Deployed first so its stream ARN can be handed to the app stack, and
         # a no-op when the template is unchanged.
         run: |
-          aws cloudformation deploy \
+          STATUS="$(aws cloudformation describe-stacks --stack-name observe-ai-ingest \
+            --query "Stacks[0].StackStatus" --output text 2>/dev/null || true)"
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
+            # A first create that failed leaves a stack that can only be deleted.
+            aws cloudformation delete-stack --stack-name observe-ai-ingest
+            aws cloudformation wait stack-delete-complete --stack-name observe-ai-ingest
+          fi
+          if ! aws cloudformation deploy \
             --stack-name observe-ai-ingest \
             --template-file infra/ingest.yaml \
             --capabilities CAPABILITY_IAM \
-            --no-fail-on-empty-changeset
+            --no-fail-on-empty-changeset; then
+            aws cloudformation describe-stack-events --stack-name observe-ai-ingest \
+              --query "StackEvents[?contains(ResourceStatus, 'FAILED')].[LogicalResourceId, ResourceStatusReason]" \
+              --output table
+            exit 1
+          fi
           LOG_STREAM_ARN="$(aws cloudformation describe-stacks \
             --stack-name observe-ai-ingest \
             --query "Stacks[0].Outputs[?OutputKey=='LogStreamArn'].OutputValue | [0]" \
