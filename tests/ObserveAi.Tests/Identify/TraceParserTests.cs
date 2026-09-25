@@ -15,7 +15,7 @@ public class TraceParserTests
     [MemberData(nameof(FixtureRows))]
     public void ParsesEveryFixtureRowAsItsLabelledRuntime(EvalFixture.Row row)
     {
-        var parsed = TraceParser.Parse(row.StackTrace, []);
+        var parsed = TraceParser.Parse(row.StackTrace);
 
         Assert.NotNull(parsed);
         Assert.Equal(row.Runtime, parsed!.Runtime);
@@ -32,7 +32,7 @@ public class TraceParserTests
     {
         var row = EvalFixture.Load().Single(r => r.Id == id);
 
-        var parsed = TraceParser.Parse(row.StackTrace, []);
+        var parsed = TraceParser.Parse(row.StackTrace);
 
         Assert.Equal(expected, parsed!.ExceptionType);
     }
@@ -50,7 +50,7 @@ public class TraceParserTests
                 ... 3 more
             """;
 
-        var parsed = TraceParser.Parse(trace, []);
+        var parsed = TraceParser.Parse(trace);
 
         Assert.NotNull(parsed);
         Assert.Equal("java", parsed!.Runtime);
@@ -70,7 +70,7 @@ public class TraceParserTests
                 at com.acme.catalog.pricing.PriceCalculator.apply(PriceCalculator.java:88)
             """;
 
-        var parsed = TraceParser.Parse(trace, []);
+        var parsed = TraceParser.Parse(trace);
 
         Assert.NotNull(parsed);
         Assert.Equal("java.lang.ArithmeticException", parsed!.ExceptionType);
@@ -80,6 +80,15 @@ public class TraceParserTests
     [Fact]
     public void UnrecognisedTextDoesNotParse()
     {
-        Assert.Null(TraceParser.Parse("just a plain log line with no stack trace at all", []));
+        Assert.Null(TraceParser.Parse("just a plain log line with no stack trace at all"));
+    }
+
+    [Fact]
+    public void AOneLineExceptionMessageWithNoFramesDoesNotParse()
+    {
+        // dn-01's short "message" is one line of exception text, unlike its full "stack_trace".
+        var row = EvalFixture.Load().Single(r => r.Id == "dn-01");
+
+        Assert.Null(TraceParser.Parse(row.Message));
     }
 }

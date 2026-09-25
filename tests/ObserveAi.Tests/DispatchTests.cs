@@ -59,25 +59,6 @@ public class DispatchTests
         """;
 
     [Fact]
-    public async Task IdentifyActionReachesTheIdentifyStage()
-    {
-        var evt = Parse(new JsonObject
-        {
-            ["action"] = "identify",
-            ["logGroupName"] = "/aws/lambda/checkout-api",
-            ["message"] = DotnetTrace,
-        });
-
-        var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", new FakeContext());
-
-        Assert.NotNull(response.Identify);
-        Assert.True(response.Identify!.Parsed);
-        Assert.Equal("dotnet", response.Identify.Runtime);
-        Assert.Null(response.Results);
-        Assert.Null(response.Escalate);
-    }
-
-    [Fact]
     public async Task AMissingActionStillTriages()
     {
         var row = Parse(new JsonObject { ["id"] = "row-1", ["state"] = new JsonObject { ["stack_trace"] = "boom" } });
@@ -87,7 +68,6 @@ public class DispatchTests
 
         var result = Assert.Single(response.Results!);
         Assert.Equal("row-1", result.Id);
-        Assert.Null(response.Identify);
         Assert.Null(response.Escalate);
     }
 
@@ -133,54 +113,6 @@ public class DispatchTests
         Assert.Contains("Index past the end.", response.Escalate.Draft.Body);
         Assert.Single(prompts);
         Assert.Null(response.Results);
-        Assert.Null(response.Identify);
-    }
-
-    /// <summary>Resolving the repo is a pure convention now: the org from GITHUB_ORG plus the log group's own resource name.</summary>
-    [Fact]
-    public async Task ResolveRepoActionAppliesTheConventionToARecognisedLogGroup()
-    {
-        Environment.SetEnvironmentVariable("GITHUB_ORG", "acme");
-        try
-        {
-            var evt = Parse(new JsonObject
-            {
-                ["action"] = "resolve-repo",
-                ["logGroupName"] = "/aws/lambda/checkout-api",
-            });
-
-            var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", new FakeContext());
-
-            Assert.Equal("acme/checkout-api", response.Repo);
-            Assert.Equal("convention", response.ResolvedBy);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("GITHUB_ORG", null);
-        }
-    }
-
-    [Fact]
-    public async Task ResolveRepoActionReturnsAnAbsentRepoForAnUnrecognisedLogGroup()
-    {
-        Environment.SetEnvironmentVariable("GITHUB_ORG", "acme");
-        try
-        {
-            var evt = Parse(new JsonObject
-            {
-                ["action"] = "resolve-repo",
-                ["logGroupName"] = "some-custom-log-group",
-            });
-
-            var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", new FakeContext());
-
-            Assert.Null(response.Repo);
-            Assert.Null(response.ResolvedBy);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("GITHUB_ORG", null);
-        }
     }
 
     [Fact]

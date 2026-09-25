@@ -25,7 +25,7 @@ public class SourceFetchTests
                 total = record["total_amount"]
             KeyError: 'total_amount'
             """;
-        var parsed = TraceParser.Parse(trace, []);
+        var parsed = TraceParser.Parse(trace);
 
         var paths = SourceFetch.PathsFor(parsed!, trace);
 
@@ -38,7 +38,7 @@ public class SourceFetchTests
         // am-03's frame is /var/task/report/summarise.py: a real Lambda mount
         // path, stripped by DefaultMountPrefixes rather than dropped outright.
         var row = Row("am-03");
-        var trace = TraceParser.Parse(row.StackTrace, []);
+        var trace = TraceParser.Parse(row.StackTrace);
 
         var paths = SourceFetch.PathsFor(trace!, row.StackTrace);
 
@@ -49,7 +49,7 @@ public class SourceFetchTests
     public void JavaPathsAreFilenamesInFrameOrder()
     {
         var row = Row("bg-02");
-        var trace = TraceParser.Parse(row.StackTrace, []);
+        var trace = TraceParser.Parse(row.StackTrace);
 
         var paths = SourceFetch.PathsFor(trace!, row.StackTrace);
 
@@ -60,7 +60,7 @@ public class SourceFetchTests
     public void JavaPathsAreDeduplicatedWhenTheSameFrameRecurses()
     {
         var row = Row("bg-07"); // PolicyResolver.expand appears four times, same file each time.
-        var trace = TraceParser.Parse(row.StackTrace, []);
+        var trace = TraceParser.Parse(row.StackTrace);
 
         var paths = SourceFetch.PathsFor(trace!, row.StackTrace);
 
@@ -76,7 +76,7 @@ public class SourceFetchTests
             main.(*Ingestor).readAll(0xc0000b4000)
             	ingest/read.go:41 +0x88
             """;
-        var parsed = TraceParser.Parse(trace, []);
+        var parsed = TraceParser.Parse(trace);
 
         var paths = SourceFetch.PathsFor(parsed!, trace);
 
@@ -87,7 +87,7 @@ public class SourceFetchTests
     public void GoAbsolutePathFromTheRealFixtureIsMappedToARepoRelativePath()
     {
         var row = Row("am-06"); // /app/ingest/read.go: an absolute container path.
-        var trace = TraceParser.Parse(row.StackTrace, []);
+        var trace = TraceParser.Parse(row.StackTrace);
 
         var paths = SourceFetch.PathsFor(trace!, row.StackTrace);
 
@@ -105,7 +105,7 @@ public class SourceFetchTests
             main.(*Ingestor).handleLine(0xc0000b4000, 0xc000130040)
             	ingest/run.go:64 +0x110
             """;
-        var parsed = TraceParser.Parse(trace, []);
+        var parsed = TraceParser.Parse(trace);
 
         var paths = SourceFetch.PathsFor(parsed!, trace);
 
@@ -121,7 +121,7 @@ public class SourceFetchTests
                 at renderSearch (src/bff/search.js:112:19)
                 at async src/bff/routes.js:64:20
             """;
-        var parsed = TraceParser.Parse(trace, []);
+        var parsed = TraceParser.Parse(trace);
 
         var paths = SourceFetch.PathsFor(parsed!, trace);
 
@@ -134,7 +134,7 @@ public class SourceFetchTests
     public void NodeAbsolutePathsFromTheRealFixtureAreMappedToRepoRelativePaths()
     {
         var row = Row("bg-04"); // /app/src/bff/facets.js and friends: absolute container paths.
-        var trace = TraceParser.Parse(row.StackTrace, []);
+        var trace = TraceParser.Parse(row.StackTrace);
 
         var paths = SourceFetch.PathsFor(trace!, row.StackTrace);
 
@@ -149,7 +149,7 @@ public class SourceFetchTests
               File "/opt/custom/place/report.py", line 12, in build_row
             RuntimeError: boom
             """;
-        var parsed = TraceParser.Parse(trace, []);
+        var parsed = TraceParser.Parse(trace);
 
         var paths = SourceFetch.PathsFor(parsed!, trace);
 
@@ -164,7 +164,7 @@ public class SourceFetchTests
                at Orders.Billing.InvoiceBuilder.Build(Invoice invoice) in src/Orders/Billing/InvoiceBuilder.cs:line 42
                at Orders.Api.InvoiceController.Post(InvoiceRequest body)
             """;
-        var parsed = TraceParser.Parse(trace, []);
+        var parsed = TraceParser.Parse(trace);
 
         var paths = SourceFetch.PathsFor(parsed!, trace);
 
@@ -177,7 +177,7 @@ public class SourceFetchTests
     public void MaxFilesCapsTheDistinctPathCount()
     {
         var row = Row("bg-02");
-        var trace = TraceParser.Parse(row.StackTrace, []);
+        var trace = TraceParser.Parse(row.StackTrace);
 
         var paths = SourceFetch.PathsFor(trace!, row.StackTrace, maxFiles: 2);
 
@@ -291,7 +291,7 @@ public class SourceFetchTests
               File "../../etc/passwd", line 1, in evil_func
             RuntimeError: boom
             """;
-        var parsed = TraceParser.Parse(trace, []);
+        var parsed = TraceParser.Parse(trace);
 
         var paths = SourceFetch.PathsFor(parsed!, trace);
 

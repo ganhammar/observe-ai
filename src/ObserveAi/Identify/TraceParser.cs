@@ -18,7 +18,7 @@ public sealed record ParsedTrace(string Runtime, string ExceptionType, IReadOnly
 /// </summary>
 public static class TraceParser
 {
-    // Used when the caller has no app prefixes. A library missing here counts as app code and merges its callers' defects.
+    // A library missing here counts as app code and merges its callers' defects.
     private static readonly string[] VendorPrefixes =
     [
         "System.", "Microsoft.", "java.", "javax.", "jdk.", "sun.",
@@ -50,7 +50,7 @@ public static class TraceParser
         new("node", lines => lines.Any(NodeFrame.IsMatch), NodeFrame.Match, ExtractFirstLineType),
     ];
 
-    public static ParsedTrace? Parse(string text, IReadOnlyCollection<string> appPrefixes)
+    public static ParsedTrace? Parse(string text)
     {
         // The Python Lambda runtime joins a traceback's lines with a bare carriage return.
         var lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
@@ -68,7 +68,7 @@ public static class TraceParser
             if (!match.Success) continue;
 
             var method = Normalize(match.Groups["method"].Value);
-            frames.Add(new Frame(method, IsInApp(method, line, appPrefixes)));
+            frames.Add(new Frame(method, IsInApp(method, line)));
         }
         // Frames[0] is the throw site. Python prints outermost first, so its frames are reversed.
         if (spec.Name == "python") frames.Reverse();
@@ -133,10 +133,8 @@ public static class TraceParser
     private static string ExtractFirstLineType(string[] lines) => BeforeFirstColon(lines.FirstOrDefault() ?? "");
 
     // node_modules is part of the path, so it is matched against the raw line.
-    private static bool IsInApp(string method, string line, IReadOnlyCollection<string> appPrefixes) =>
-        appPrefixes.Count > 0
-            ? appPrefixes.Any(method.StartsWith)
-            : !VendorPrefixes.Any(method.StartsWith) && !line.Contains("node_modules");
+    private static bool IsInApp(string method, string line) =>
+        !VendorPrefixes.Any(method.StartsWith) && !line.Contains("node_modules");
 
     // Strips names that vary between occurrences of one call site: generics, .NET async and closure names, Java lambdas.
     private static string Normalize(string method)

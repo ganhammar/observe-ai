@@ -16,10 +16,10 @@ using Amazon.StepFunctions.Model;
 namespace ObserveAi;
 
 /// <summary>
-/// Lambda entrypoint for the pipeline stages, selected by the event's "action" field: identify,
-/// resolve-repo, triage, check-rate, escalate or file-issue. A missing action means triage. A Kinesis
-/// event has no action field and is recognised first by its top-level "Records" array; that path runs
-/// identify, repo resolution and the seen check, and starts an execution only when triage is warranted.
+/// Lambda entrypoint for the pipeline stages, selected by the event's "action" field: triage, check-rate,
+/// escalate or file-issue. A missing action means triage. A Kinesis event has no action field and is
+/// recognised first by its top-level "Records" array; that path parses the trace, resolves the repo and
+/// checks the seen table, and starts an execution only when triage is warranted.
 /// </summary>
 public static class Function
 {
@@ -73,8 +73,6 @@ public static class Function
 
         return action switch
         {
-            "identify" => Task.FromResult(RunIdentify(lambdaEvent)),
-            "resolve-repo" => Task.FromResult(RunResolveRepo(lambdaEvent)),
             "triage" => ScoreRowsAsync(lambdaEvent, client, modelArn, context),
             "check-rate" => RunCheckRateAsync(lambdaEvent, updateRate),
             "escalate" => RunEscalateAsync(lambdaEvent, client, modelArn, readSecret, getSource, converse, context),
@@ -87,7 +85,7 @@ public static class Function
     private static readonly Regex UnsafeExecutionNameChars = new(@"[^A-Za-z0-9\-_.]", RegexOptions.Compiled);
 
     /// <summary>
-    /// Handles a Kinesis batch: identifies each log event, resolves its repo and checks SeenTable, and starts
+    /// Handles a Kinesis batch: parses each log event's trace, resolves its repo and checks SeenTable, and starts
     /// an execution only for events worth triaging. Skipped events are counted, and the counts are the only
     /// record a skipped event leaves.
     /// </summary>
@@ -107,8 +105,8 @@ public static class Function
             var data = kinesisRecord.GetProperty("kinesis").GetProperty("data").GetString()!;
             foreach (var candidate in LogEnvelope.Unpack(data))
             {
-                var identity = Pipeline.Identify(candidate.LogGroup, candidate.Message, []);
-                if (!identity.Parsed)
+                var trace = TraceParser.Parse(candidate.Message);
+                if (trace is null)
                 {
                     unparseable++;
                     continue;
@@ -122,7 +120,8 @@ public static class Function
                 }
 
                 var signature = EvidenceSignature.Compute(TriageState(candidate.LogGroup, candidate.Message));
-                var seen = await SeenStore.RecordAsync(record, seenTable, repo, identity.Fingerprint!, now, SeenRetention, signature)
+                var fingerprint = Fingerprint.Compute(trace);
+                var seen = await SeenStore.RecordAsync(record, seenTable, repo, fingerprint, now, SeenRetention, signature)
                     .ConfigureAwait(false);
                 if (!seen.ShouldTriage)
                 {
@@ -131,8 +130,8 @@ public static class Function
                 }
 
                 var input = new ExecutionInput(
-                    repo, identity.Fingerprint!, seen.Occurrences, candidate.LogGroup, candidate.Message,
-                    identity.Runtime!, identity.ExceptionType!, identity.Frames!);
+                    repo, fingerprint, seen.Occurrences, candidate.LogGroup, candidate.Message,
+                    trace.Runtime, trace.ExceptionType, trace.Frames);
                 await start(new StartExecutionRequest
                 {
                     StateMachineArn = pipelineArn,
@@ -177,13 +176,6 @@ public static class Function
     private static Task<StartExecutionResponse> RealStartExecutionAsync(StartExecutionRequest request, CancellationToken cancellationToken) =>
         LazyStepFunctions.Value.StartExecutionAsync(request, cancellationToken);
 
-    private static LambdaResponse RunResolveRepo(JsonElement lambdaEvent)
-    {
-        var logGroupName = RequireString(lambdaEvent, "logGroupName");
-        var repo = Pipeline.ResolveRepo(logGroupName, RequireEnv("GITHUB_ORG"));
-        return new LambdaResponse { Repo = repo, ResolvedBy = repo is null ? null : "convention" };
-    }
-
     /// <summary>Buckets are keyed by hour, and a two-hour TTL always lands after the bucket's hour has ended.</summary>
     private static async Task<LambdaResponse> RunCheckRateAsync(JsonElement lambdaEvent, Caps.UpdateItem? updateRate)
     {
@@ -194,17 +186,6 @@ public static class Function
             updateRate ?? Caps.Against(LazyDynamo.Value), RequireEnv("RATE_TABLE"), repo, perRepoLimit, globalLimit,
             DateTimeOffset.UtcNow, TimeSpan.FromHours(2)).ConfigureAwait(false);
         return new LambdaResponse { Allowed = result.Allowed, Tripped = result.Tripped, Count = result.Count, Limit = result.Limit };
-    }
-
-    private static LambdaResponse RunIdentify(JsonElement lambdaEvent)
-    {
-        var logGroupName = RequireString(lambdaEvent, "logGroupName");
-        var message = RequireString(lambdaEvent, "message");
-        var appPrefixes = lambdaEvent.TryGetProperty("appPrefixes", out var prefixes) && prefixes.ValueKind == JsonValueKind.Array
-            ? prefixes.EnumerateArray().Select(p => p.GetString() ?? "").ToList()
-            : [];
-
-        return new LambdaResponse { Identify = IdentifyResultDto.From(Pipeline.Identify(logGroupName, message, appPrefixes)) };
     }
 
     /// <summary>Scores a single SemIf row or a {"rows": [...]} batch and returns {"results": [...]}.</summary>

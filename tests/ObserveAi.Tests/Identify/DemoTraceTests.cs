@@ -20,7 +20,7 @@ public class DemoTraceTests
     [Fact]
     public void TheDemoEventParsesToAnInAppKeyErrorInHandlerPy()
     {
-        var trace = TraceParser.Parse(Message, []);
+        var trace = TraceParser.Parse(Message);
 
         Assert.NotNull(trace);
         Assert.Equal("python", trace!.Runtime);

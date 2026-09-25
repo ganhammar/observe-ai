@@ -14,7 +14,7 @@ public class FingerprintCollisionTests
         Dictionary<string, List<EvalFixture.Row>> byFingerprint = [];
         foreach (var row in EvalFixture.Load())
         {
-            var trace = TraceParser.Parse(row.StackTrace, []);
+            var trace = TraceParser.Parse(row.StackTrace);
             if (trace is null) continue;
             var fingerprint = Fingerprint.Compute(trace);
             byFingerprint.TryAdd(fingerprint, []);
@@ -42,8 +42,8 @@ public class FingerprintCollisionTests
         // decides the verdict for both. Separating them needs the evidence, which
         // the fingerprint deliberately does not read.
         var rows = EvalFixture.Load().ToDictionary(row => row.Id);
-        var downstream = TraceParser.Parse(rows["dn-04"].StackTrace, []);
-        var ourLeak = TraceParser.Parse(rows["am-05"].StackTrace, []);
+        var downstream = TraceParser.Parse(rows["dn-04"].StackTrace);
+        var ourLeak = TraceParser.Parse(rows["am-05"].StackTrace);
 
         Assert.NotNull(downstream);
         Assert.NotNull(ourLeak);
@@ -60,7 +60,7 @@ public class FingerprintCollisionTests
         // is not evidence the approach scales, which is why the list carries a
         // comment pointing at the cached model call instead.
         var misattributed = EvalFixture.Load()
-            .Select(row => (row.Id, Top: TraceParser.Parse(row.StackTrace, [])?.Frames.FirstOrDefault(f => f.InApp)))
+            .Select(row => (row.Id, Top: TraceParser.Parse(row.StackTrace)?.Frames.FirstOrDefault(f => f.InApp)))
             .Where(pair => pair.Top is not null && IsThirdParty(pair.Top.Method))
             .Select(pair => $"{pair.Id}: {pair.Top!.Method}")
             .ToList();

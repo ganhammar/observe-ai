@@ -4,12 +4,6 @@ using Amazon.Lambda.Core;
 
 namespace ObserveAi;
 
-/// <summary>Identify's outcome: fingerprintable facts about one log event, or why it did not parse.</summary>
-public sealed record IdentifyResult(
-    bool Parsed, string? Runtime, string? ExceptionType, string? Fingerprint, string? Signature,
-    string? NamespacePrefix, LogGroupKind? ResourceKind, string? ResourceName,
-    IReadOnlyList<Frame>? Frames, string? Error);
-
 /// <summary>Input for one triage execution: what the Kinesis consumer already computed, so the state machine never repeats it.</summary>
 public sealed record ExecutionInput(
     [property: JsonPropertyName("repo")] string Repo,
@@ -36,33 +30,6 @@ public sealed record EscalateResult(
 /// </summary>
 public static class Pipeline
 {
-    /// <summary>
-    /// Parses one raw log event into fingerprintable facts. A message with no stack trace returns
-    /// Parsed = false for the state machine to route.
-    /// </summary>
-    public static IdentifyResult Identify(string logGroupName, string message, IReadOnlyList<string> appPrefixes)
-    {
-        var logGroup = ServiceIdentity.ParseLogGroup(logGroupName);
-        var trace = TraceParser.Parse(message, appPrefixes);
-        if (trace is null)
-        {
-            return new IdentifyResult(
-                false, null, null, null, null, null, logGroup?.Kind, logGroup?.ResourceName, null,
-                "message does not contain a recognised stack trace");
-        }
-
-        return new IdentifyResult(
-            true, trace.Runtime, trace.ExceptionType, Fingerprint.Compute(trace), Fingerprint.Signature(trace),
-            ServiceIdentity.NamespacePrefix(trace), logGroup?.Kind, logGroup?.ResourceName, trace.Frames, null);
-    }
-
-    /// <summary>
-    /// Resolves the repository by convention (see ServiceIdentity.ConventionalRepo). Returns null for an
-    /// unrecognised log group, which the state machine routes to its UnknownRepo stop.
-    /// </summary>
-    public static string? ResolveRepo(string logGroupName, string githubOrg) =>
-        ServiceIdentity.ConventionalRepo(logGroupName, githubOrg);
-
     /// <summary>
     /// Scores one row with the question tree. A total scoring failure propagates, so Step Functions retries
     /// the Triage state and the fingerprint stays undecided.

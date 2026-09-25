@@ -43,54 +43,6 @@ public sealed class RowResultDto
     };
 }
 
-/// <summary>identify's result. When Parsed is false, only Error, ResourceKind and ResourceName are set.</summary>
-public sealed class IdentifyResultDto
-{
-    [JsonPropertyName("parsed")]
-    public required bool Parsed { get; init; }
-
-    [JsonPropertyName("runtime")]
-    public string? Runtime { get; init; }
-
-    [JsonPropertyName("exceptionType")]
-    public string? ExceptionType { get; init; }
-
-    [JsonPropertyName("fingerprint")]
-    public string? Fingerprint { get; init; }
-
-    [JsonPropertyName("signature")]
-    public string? Signature { get; init; }
-
-    [JsonPropertyName("namespacePrefix")]
-    public string? NamespacePrefix { get; init; }
-
-    [JsonPropertyName("resourceKind")]
-    public string? ResourceKind { get; init; }
-
-    [JsonPropertyName("resourceName")]
-    public string? ResourceName { get; init; }
-
-    [JsonPropertyName("frames")]
-    public IReadOnlyList<Frame>? Frames { get; init; }
-
-    [JsonPropertyName("error")]
-    public string? Error { get; init; }
-
-    public static IdentifyResultDto From(IdentifyResult result) => new()
-    {
-        Parsed = result.Parsed,
-        Runtime = result.Runtime,
-        ExceptionType = result.ExceptionType,
-        Fingerprint = result.Fingerprint,
-        Signature = result.Signature,
-        NamespacePrefix = result.NamespacePrefix,
-        ResourceKind = result.ResourceKind?.ToString(),
-        ResourceName = result.ResourceName,
-        Frames = result.Frames,
-        Error = result.Error,
-    };
-}
-
 public sealed class EscalateResultDto
 {
     [JsonPropertyName("fetchRequests")]
@@ -111,28 +63,18 @@ public sealed class EscalateResultDto
 }
 
 /// <summary>
-/// The response for every action. Each action sets only its own fields: Results (triage), Identify
-/// (identify), Escalate (escalate), Repo/ResolvedBy (resolve-repo), Allowed/Tripped/Count/Limit
-/// (check-rate), Started/AlreadyKnown/Unparseable/NoRepo (Kinesis batch) and Outcome/IssueNumber
-/// (file-issue). Fields stay flat because the state machine reads them off each task's ResultPath, as in
-/// $.repo.repo, $.rate.tripped and $.verdict.results[0].
+/// The response for every action. Each action sets only its own fields: Results (triage), Escalate
+/// (escalate), Allowed/Tripped/Count/Limit (check-rate), Started/AlreadyKnown/Unparseable/NoRepo (Kinesis
+/// batch) and Outcome/IssueNumber (file-issue). Fields stay flat because the state machine reads them off
+/// each task's ResultPath, as in $.rate.tripped and $.verdict.results[0].
 /// </summary>
 public sealed class LambdaResponse
 {
     [JsonPropertyName("results")]
     public IReadOnlyList<RowResultDto>? Results { get; init; }
 
-    [JsonPropertyName("identify")]
-    public IdentifyResultDto? Identify { get; init; }
-
     [JsonPropertyName("escalate")]
     public EscalateResultDto? Escalate { get; init; }
-
-    [JsonPropertyName("repo")]
-    public string? Repo { get; init; }
-
-    [JsonPropertyName("resolvedBy")]
-    public string? ResolvedBy { get; init; }
 
     [JsonPropertyName("allowed")]
     public bool? Allowed { get; init; }
@@ -171,7 +113,6 @@ public sealed class LambdaResponse
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(LambdaResponse))]
 [JsonSerializable(typeof(RowResultDto))]
-[JsonSerializable(typeof(IdentifyResultDto))]
 [JsonSerializable(typeof(EscalateResultDto))]
 [JsonSerializable(typeof(ExecutionInput))]
 public partial class LambdaJsonContext : JsonSerializerContext;

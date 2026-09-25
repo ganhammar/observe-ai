@@ -5,7 +5,7 @@ namespace ObserveAi.Tests;
 /// <summary>Checks that Fingerprint groups repeats of the same defect together and keeps different defects apart.</summary>
 public class FingerprintTests
 {
-    private static ParsedTrace Parse(string trace) => TraceParser.Parse(trace, [])!;
+    private static ParsedTrace Parse(string trace) => TraceParser.Parse(trace)!;
 
     [Fact]
     public void SameDefectWithDifferentVariableDataProducesTheSameFingerprint()
@@ -99,8 +99,8 @@ public class FingerprintTests
             	/app/ingest/parse.go:118 +0x2a4
             """;
 
-        var a = TraceParser.Parse(first, ["main."]);
-        var b = TraceParser.Parse(second, ["main."]);
+        var a = TraceParser.Parse(first);
+        var b = TraceParser.Parse(second);
 
         Assert.NotNull(a);
         Assert.NotNull(b);
@@ -111,8 +111,8 @@ public class FingerprintTests
     [Fact]
     public void DifferentGoPanicKindsStayApart()
     {
-        var bounds = TraceParser.Parse("panic: runtime error: index out of range [5] with length 3\nmain.a()\n\t/app/a.go:1 +0x1", ["main."]);
-        var nilMap = TraceParser.Parse("panic: assignment to entry in nil map\nmain.a()\n\t/app/a.go:1 +0x1", ["main."]);
+        var bounds = TraceParser.Parse("panic: runtime error: index out of range [5] with length 3\nmain.a()\n\t/app/a.go:1 +0x1");
+        var nilMap = TraceParser.Parse("panic: assignment to entry in nil map\nmain.a()\n\t/app/a.go:1 +0x1");
 
         Assert.NotNull(bounds);
         Assert.NotNull(nilMap);
