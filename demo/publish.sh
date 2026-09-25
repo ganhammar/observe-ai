@@ -22,6 +22,6 @@ cp -R "$here/pricing-demo/." "$work/"
 git -C "$work" init -q -b main
 git -C "$work" add -A
 git -C "$work" commit -q -m "chore: publish demo service"
-git -C "$work" push -q --force "https://github.com/$target.git" main
+git -C "$work" -c credential.helper="!gh auth git-credential" push -q --force "https://github.com/$target.git" main
 
 echo "https://github.com/$target"
