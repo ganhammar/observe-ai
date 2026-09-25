@@ -9,6 +9,7 @@ public sealed record ExecutionInput(
     [property: JsonPropertyName("repo")] string Repo,
     [property: JsonPropertyName("fingerprint")] string Fingerprint,
     [property: JsonPropertyName("occurrences")] long Occurrences,
+    [property: JsonPropertyName("firstSeen")] DateTimeOffset FirstSeen,
     [property: JsonPropertyName("logGroup")] string LogGroup,
     [property: JsonPropertyName("message")] string Message,
     [property: JsonPropertyName("runtime")] string Runtime,

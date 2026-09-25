@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -80,7 +81,7 @@ public static class Function
 
     /// <summary>
     /// Handles a Kinesis batch: parses each log event's trace, resolves its repo and checks SeenTable, and starts
-    /// an execution only for events worth triaging. Skipped events are counted, and the counts are the only
+    /// an execution only for a fingerprint's first sighting. Skipped events are counted, and the counts are the only
     /// record a skipped event leaves.
     /// </summary>
     private static async Task<LambdaResponse> RunStartExecutionsAsync(
@@ -113,18 +114,17 @@ public static class Function
                     continue;
                 }
 
-                var signature = EvidenceSignature.Compute(TriageState(candidate.LogGroup, candidate.Message));
                 var fingerprint = Fingerprint.Compute(trace);
-                var seen = await SeenStore.RecordAsync(record, seenTable, repo, fingerprint, now, SeenRetention, signature)
+                var seen = await SeenStore.RecordAsync(record, seenTable, repo, fingerprint, now, SeenRetention)
                     .ConfigureAwait(false);
-                if (!seen.ShouldTriage)
+                if (seen.Occurrences != 1)
                 {
                     alreadyKnown++;
                     continue;
                 }
 
                 var input = new ExecutionInput(
-                    repo, fingerprint, seen.Occurrences, candidate.LogGroup, candidate.Message,
+                    repo, fingerprint, seen.Occurrences, seen.FirstSeen, candidate.LogGroup, candidate.Message,
                     trace.Runtime, trace.ExceptionType, trace.Frames);
                 await start(new StartExecutionRequest
                 {
@@ -139,21 +139,6 @@ public static class Function
         context.Logger.LogInformation(
             $"Started {started}, already known {alreadyKnown}, unparseable {unparseable}, no repo {noRepo}");
         return new LambdaResponse { Started = started, AlreadyKnown = alreadyKnown, Unparseable = unparseable, NoRepo = noRepo };
-    }
-
-    /// <summary>The input the Triage state in infra/pipeline.asl.json builds from $.logGroup and $.message, so the signature hashes what triage scores.</summary>
-    private static JsonElement TriageState(string logGroup, string message)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-        {
-            writer.WriteStartObject();
-            writer.WriteString("service", logGroup);
-            writer.WriteString("stack_trace", message);
-            writer.WriteEndObject();
-        }
-        using var document = JsonDocument.Parse(stream.ToArray());
-        return document.RootElement.Clone();
     }
 
     /// <summary>
@@ -226,7 +211,7 @@ public static class Function
             RequireString(e, "repo"), RequireString(e, "commitish"), trace, RequireString(e, "rawTrace"),
             new Dictionary<string, string>(), verdict,
             e.TryGetProperty("occurrences", out var occ) ? occ.GetInt64() : 1,
-            e.TryGetProperty("firstSeen", out var firstSeen) ? firstSeen.GetDateTimeOffset() : DateTimeOffset.UtcNow);
+            DateTimeOffset.Parse(RequireString(e, "firstSeen"), CultureInfo.InvariantCulture));
     }
 
     /// <summary>IssueFiler comments on an open issue with the same title, or creates a new one.</summary>

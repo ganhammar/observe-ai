@@ -77,6 +77,8 @@ public class DispatchTests
                     new JsonObject { ["method"] = "Pricing.Tiers.TierResolver.Resolve", ["inApp"] = true }),
             },
             ["verdict"] = new JsonObject { ["bug"] = 0.9, ["downstream"] = 0.1, ["fallback"] = false },
+            ["occurrences"] = 3,
+            ["firstSeen"] = "2026-09-01T08:00:00+00:00",
         });
 
         // Nothing fetches, so no frame is verified and the readout is never called;
@@ -100,6 +102,7 @@ public class DispatchTests
         Assert.NotEmpty(response.Escalate!.FetchRequests);
         Assert.Empty(response.Escalate.FrameVerdicts);
         Assert.Contains("Index past the end.", response.Escalate.Draft.Body);
+        Assert.Contains("Seen 3 times, first on 2026-09-01.", response.Escalate.Draft.Body);
         Assert.Single(prompts);
         Assert.Null(response.Probabilities);
     }
@@ -201,19 +204,19 @@ public class DispatchTests
 
     private const string PipelineArn = "arn:aws:states:eu-central-1:1:stateMachine:pipeline";
 
-    /// <summary>A SeenTable backing store that behaves the way DynamoDB's ADD plus if_not_exists does.</summary>
-    private static SeenStore.UpdateItem SeenCounter(Dictionary<string, (long Count, string? Signature)> store) => (request, _) =>
+    private const string FirstSeen = "2026-09-01T08:00:00.0000000+00:00";
+
+    /// <summary>A SeenTable backing store that counts per key and reports a fixed first sighting.</summary>
+    private static SeenStore.UpdateItem SeenCounter(Dictionary<string, long> store) => (request, _) =>
     {
         var key = $"{request.Key["repo"].S}/{request.Key["fingerprint"].S}";
-        var incoming = request.ExpressionAttributeValues[":sig"].S;
-        var (count, storedSignature) = store.GetValueOrDefault(key, (0, null));
-        store[key] = (count + 1, incoming);
+        store[key] = store.GetValueOrDefault(key) + 1;
         return Task.FromResult(new UpdateItemResponse
         {
             Attributes = new Dictionary<string, AttributeValue>
             {
-                ["occurrences"] = new() { N = (count + 1).ToString() },
-                ["previous_signature"] = new(storedSignature ?? incoming),
+                ["occurrences"] = new() { N = store[key].ToString() },
+                ["first_seen"] = new(FirstSeen),
             },
         });
     };
@@ -264,6 +267,7 @@ public class DispatchTests
             Assert.Equal("2_with_slash", request.Name);
             Assert.Contains("\"repo\":\"acme/checkout-api\"", request.Input);
             Assert.Contains("\"occurrences\":1", request.Input);
+            Assert.Contains("\"firstSeen\":\"2026-09-01T08:00:00+00:00\"", request.Input);
         }
         finally
         {

@@ -104,7 +104,8 @@
           "downstream.$": "$.verdict.probabilities[1]",
           "fallback.$": "$.verdict.fallback"
         },
-        "occurrences.$": "$.occurrences"
+        "occurrences.$": "$.occurrences",
+        "firstSeen.$": "$.firstSeen"
       },
       "ResultPath": "$.draft",
       "Catch": [
