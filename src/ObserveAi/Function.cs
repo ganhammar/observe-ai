@@ -57,8 +57,8 @@ public static class Function
     internal static Task<LambdaResponse> DispatchAsync(
         JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, ILambdaContext context,
         Caps.UpdateItem? updateRate = null, StartExecution? startExecution = null,
-        ReadSecret? readSecret = null, IssueFiler.CallGitHub? callGitHub = null, SeenStore.UpdateItem? recordSeen = null,
-        SourceFetch.Get? getSource = null, Diagnosis.Converse? converse = null)
+        ReadSecret? readSecret = null, GitHub.Call? gitHub = null, SeenStore.UpdateItem? recordSeen = null,
+        Diagnosis.Converse? converse = null)
     {
         if (lambdaEvent.TryGetProperty("Records", out var records))
         {
@@ -70,8 +70,8 @@ public static class Function
         {
             "triage" => Pipeline.TriageRowAsync(lambdaEvent, client, modelArn, LazyTree.Value, context),
             "check-rate" => RunCheckRateAsync(lambdaEvent, updateRate),
-            "escalate" => RunEscalateAsync(lambdaEvent, client, modelArn, readSecret, getSource, converse, context),
-            "file-issue" => RunFileIssueAsync(lambdaEvent, readSecret, callGitHub),
+            "escalate" => RunEscalateAsync(lambdaEvent, client, modelArn, readSecret, gitHub, converse, context),
+            "file-issue" => RunFileIssueAsync(lambdaEvent, readSecret, gitHub),
             _ => throw new InvalidOperationException($"Unknown action: '{action}'"),
         };
     }
@@ -173,17 +173,13 @@ public static class Function
     /// </summary>
     private static async Task<LambdaResponse> RunEscalateAsync(
         JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, ReadSecret? readSecret,
-        SourceFetch.Get? getSource, Diagnosis.Converse? converse, ILambdaContext context)
+        GitHub.Call? gitHub, Diagnosis.Converse? converse, ILambdaContext context)
     {
         var request = ParseEscalateRequest(lambdaEvent);
         var paths = SourceFetch.PathsFor(request.Trace, request.RawTrace);
-        if (getSource is null)
-        {
-            var token = await (readSecret ?? ReadGitHubTokenAsync)(RequireEnv("GITHUB_TOKEN_SECRET_ARN"), default)
-                .ConfigureAwait(false);
-            getSource = SourceFetch.Against(LazyHttp.Value, token);
-        }
-        var fetched = await SourceFetch.FetchAsync(getSource, request.Repo, request.Commitish, paths).ConfigureAwait(false);
+        var fetched = await SourceFetch.FetchAsync(
+            gitHub ?? await RealGitHubAsync(readSecret).ConfigureAwait(false), request.Repo, request.Commitish, paths)
+            .ConfigureAwait(false);
 
         var result = await Pipeline.EscalateAsync(
             client, modelArn, converse ?? LazyConverse.Value, RequireEnv("DIAGNOSIS_MODEL_ID"),
@@ -191,7 +187,7 @@ public static class Function
         var matched = result.FrameVerdicts.Count(v => v.Matched);
         context.Logger.LogInformation(
             $"Escalated {request.Repo}@{request.Commitish}: {fetched.Sources.Count}/{paths.Count} files fetched, {matched}/{result.FrameVerdicts.Count} frames matched");
-        return new LambdaResponse { Escalate = EscalateResultDto.From(result) };
+        return new LambdaResponse { Escalate = result };
     }
 
     private static EscalateRequest ParseEscalateRequest(JsonElement e)
@@ -203,30 +199,33 @@ public static class Function
             frames.Add(new Frame(frame.GetProperty("method").GetString()!, frame.GetProperty("inApp").GetBoolean()));
         }
         var trace = new ParsedTrace(traceEl.GetProperty("runtime").GetString()!, traceEl.GetProperty("exceptionType").GetString()!, frames);
-        var v = e.GetProperty("verdict");
-        var verdict = new CombineResult(
-            v.GetProperty("bug").GetDouble(), v.GetProperty("downstream").GetDouble(), v.TryGetProperty("fallback", out var fb) && fb.GetBoolean());
 
         return new EscalateRequest(
             RequireString(e, "repo"), RequireString(e, "commitish"), trace, RequireString(e, "rawTrace"),
-            new Dictionary<string, string>(), verdict,
+            new Dictionary<string, string>(), e.GetProperty("bug").GetDouble(),
             e.TryGetProperty("occurrences", out var occ) ? occ.GetInt64() : 1,
             DateTimeOffset.Parse(RequireString(e, "firstSeen"), CultureInfo.InvariantCulture));
     }
 
     /// <summary>IssueFiler comments on an open issue with the same title, or creates a new one.</summary>
     private static async Task<LambdaResponse> RunFileIssueAsync(
-        JsonElement lambdaEvent, ReadSecret? readSecret, IssueFiler.CallGitHub? callGitHub)
+        JsonElement lambdaEvent, ReadSecret? readSecret, GitHub.Call? gitHub)
     {
         var repo = RequireString(lambdaEvent, "repo");
         var draft = new Draft(RequireString(lambdaEvent, "title"), RequireString(lambdaEvent, "body"));
 
-        var token = await (readSecret ?? ReadGitHubTokenAsync)(RequireEnv("GITHUB_TOKEN_SECRET_ARN"), default)
-            .ConfigureAwait(false);
-        var result = await IssueFiler.FileAsync(callGitHub ?? IssueFiler.Against(LazyHttp.Value, token), repo, draft)
+        var result = await IssueFiler.FileAsync(gitHub ?? await RealGitHubAsync(readSecret).ConfigureAwait(false), repo, draft)
             .ConfigureAwait(false);
 
         return new LambdaResponse { Outcome = result.Outcome.ToString().ToLowerInvariant(), IssueNumber = result.IssueNumber };
+    }
+
+    /// <summary>GitHub over HTTP, authenticated with the token read from GITHUB_TOKEN_SECRET_ARN.</summary>
+    private static async Task<GitHub.Call> RealGitHubAsync(ReadSecret? readSecret)
+    {
+        var token = await (readSecret ?? ReadGitHubTokenAsync)(RequireEnv("GITHUB_TOKEN_SECRET_ARN"), default)
+            .ConfigureAwait(false);
+        return GitHub.Against(LazyHttp.Value, token);
     }
 
     private static async Task<string> ReadGitHubTokenAsync(string secretArn, CancellationToken cancellationToken)

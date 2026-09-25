@@ -12,7 +12,7 @@ public class IssueDraftTests
             new Frame("Pricing.Quote.QuoteBuilder.Build", true),
         ]);
 
-    private static readonly CombineResult Verdict = new(Bug: 0.87, Downstream: 0.13, Fallback: false);
+    private const double Bug = 0.87;
 
     [Fact]
     public void TitleIsExceptionTypePlusTheTopInAppFrame()
@@ -20,7 +20,7 @@ public class IssueDraftTests
         var summary = SourceVerification.Summarise("main@abc1234", [true, true]);
 
         var draft = IssueDraft.Build(
-            Trace, Verdict, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            Trace, Bug, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
             summary, "The tier list can be shorter than the resolved index.", ["Pricing/Tiers/TierResolver.cs"]);
 
         Assert.Equal("System.IndexOutOfRangeException in Pricing.Tiers.TierResolver.Resolve", draft.Title);
@@ -33,10 +33,10 @@ public class IssueDraftTests
         var laterSummary = SourceVerification.Summarise("main@def5678", [true, false]);
 
         var first = IssueDraft.Build(
-            Trace, Verdict, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            Trace, Bug, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
             earlySummary, "First read of the root cause.", ["Pricing/Tiers/TierResolver.cs"]);
         var repeat = IssueDraft.Build(
-            Trace, Verdict, occurrences: 42, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            Trace, Bug, occurrences: 42, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
             laterSummary, "A differently worded read of the same root cause.", ["Pricing/Tiers/TierResolver.cs"]);
 
         Assert.Equal(first.Title, repeat.Title);
@@ -48,7 +48,7 @@ public class IssueDraftTests
         var summary = SourceVerification.Summarise("main@abc1234", [true, false, false]);
 
         var draft = IssueDraft.Build(
-            Trace, Verdict, occurrences: 42, DateTimeOffset.Parse("2026-08-15T00:00:00Z"),
+            Trace, Bug, occurrences: 42, DateTimeOffset.Parse("2026-08-15T00:00:00Z"),
             summary, "The tier list can be shorter than the resolved index.", ["Pricing/Tiers/TierResolver.cs"]);
 
         Assert.Contains("42", draft.Body);
@@ -65,7 +65,7 @@ public class IssueDraftTests
         var summary = SourceVerification.Summarise("main@abc1234", [false]);
 
         var draft = IssueDraft.Build(
-            vendorOnlyTrace, Verdict, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            vendorOnlyTrace, Bug, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
             summary, "Unclear; every frame is vendor code.", []);
 
         Assert.Equal("java.lang.NullPointerException in java.base/java.util.Objects.requireNonNull", draft.Title);
@@ -78,7 +78,7 @@ public class IssueDraftTests
         var summary = SourceVerification.Summarise("main@abc1234", []);
 
         var draft = IssueDraft.Build(
-            Trace, Verdict, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"), summary, "", []);
+            Trace, Bug, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"), summary, "", []);
 
         Assert.DoesNotContain("Root cause", draft.Body);
         Assert.Contains("(none; no file named by the trace could be fetched)", draft.Body);

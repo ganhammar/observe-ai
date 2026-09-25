@@ -36,7 +36,7 @@ public class SourceFetchTests
     public void PythonAbsolutePathFromTheRealFixtureIsMappedToARepoRelativePath()
     {
         // am-03's frame is /var/task/report/summarise.py: a real Lambda mount
-        // path, stripped by DefaultMountPrefixes rather than dropped outright.
+        // path, stripped as a known mount rather than dropped outright.
         var row = Row("am-03");
         var trace = TraceParser.Parse(row.StackTrace);
 
@@ -258,7 +258,7 @@ public class SourceFetchTests
         var retryUrl = SourceFetch.RequestsFor("acme/mono", "main", ["services/orders/payment.py"]).Single().Url;
         const string treeJson = """{"tree":[{"path":"services/orders/payment.py","type":"blob"},{"path":"services/orders/README.md","type":"blob"}]}""";
 
-        Task<string?> Get(string url, CancellationToken _) => Task.FromResult<string?>(url switch
+        Task<string?> Get(string url, string? body, CancellationToken _) => Task.FromResult<string?>(url switch
         {
             _ when url == directUrl => null,
             _ when url == treeUrl => treeJson,
@@ -275,7 +275,7 @@ public class SourceFetchTests
     [Fact]
     public async Task FetchAsyncReportsAMissingFileAsNotFoundInsteadOfThrowing()
     {
-        Task<string?> Get(string url, CancellationToken _) => Task.FromResult<string?>(null);
+        Task<string?> Get(string url, string? body, CancellationToken _) => Task.FromResult<string?>(null);
 
         var result = await SourceFetch.FetchAsync(Get, "acme/catalog", "main", ["missing.py"]);
 

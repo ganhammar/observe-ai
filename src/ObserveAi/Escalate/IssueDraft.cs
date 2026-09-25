@@ -9,7 +9,7 @@ public sealed record Draft(
     [property: JsonPropertyName("body")] string Body);
 
 /// <summary>
-/// Builds a triage issue's title and body from the parsed trace, the escalating verdict, the occurrence
+/// Builds a triage issue's title and body from the parsed trace, the bug probability, the occurrence
 /// count, the source verification and the model's root cause. Makes no network call.
 /// </summary>
 public static class IssueDraft
@@ -20,7 +20,7 @@ public static class IssueDraft
     /// </summary>
     public static Draft Build(
         ParsedTrace trace,
-        CombineResult verdict,
+        double bug,
         long occurrences,
         DateTimeOffset firstSeen,
         VerificationSummary verification,
@@ -40,7 +40,7 @@ public static class IssueDraft
         var times = occurrences == 1 ? "time" : "times";
         body.Append("Seen ").Append(occurrences).Append(' ').Append(times)
             .Append(", first on ").Append(firstSeen.ToString("yyyy-MM-dd"))
-            .Append(". P(bug) = ").Append(verdict.Bug.ToString("0.00")).Append(".\n\n");
+            .Append(". P(bug) = ").Append(bug.ToString("0.00")).Append(".\n\n");
 
         body.Append(verification.Sentence).Append("\n\n");
 

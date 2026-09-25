@@ -76,7 +76,7 @@ public class DispatchTests
                 ["frames"] = new JsonArray(
                     new JsonObject { ["method"] = "Pricing.Tiers.TierResolver.Resolve", ["inApp"] = true }),
             },
-            ["verdict"] = new JsonObject { ["bug"] = 0.9, ["downstream"] = 0.1, ["fallback"] = false },
+            ["bug"] = 0.9,
             ["occurrences"] = 3,
             ["firstSeen"] = "2026-09-01T08:00:00+00:00",
         });
@@ -90,7 +90,7 @@ public class DispatchTests
         {
             response = await Function.DispatchAsync(
                 evt, new NeverCalledInvoker(), "arn:model", new FakeContext(),
-                getSource: (_, _) => Task.FromResult<string?>(null),
+                gitHub: (_, _, _) => Task.FromResult<string?>(null),
                 converse: (_, _, user, _) => { prompts.Add(user); return Task.FromResult("Index past the end."); });
         }
         finally
@@ -99,8 +99,7 @@ public class DispatchTests
         }
 
         Assert.NotNull(response.Escalate);
-        Assert.NotEmpty(response.Escalate!.FetchRequests);
-        Assert.Empty(response.Escalate.FrameVerdicts);
+        Assert.Empty(response.Escalate!.FrameVerdicts);
         Assert.Contains("Index past the end.", response.Escalate.Draft.Body);
         Assert.Contains("Seen 3 times, first on 2026-09-01.", response.Escalate.Draft.Body);
         Assert.Single(prompts);
@@ -278,44 +277,28 @@ public class DispatchTests
     }
 
     [Fact]
-    public async Task FileIssueActionReadsTheSecretAndFilesThroughIssueFiler()
+    public async Task FileIssueActionFilesThroughIssueFiler()
     {
-        Environment.SetEnvironmentVariable("GITHUB_TOKEN_SECRET_ARN", "arn:aws:secretsmanager:eu-central-1:1:secret:github-token");
-        try
+        var evt = Parse(new JsonObject
         {
-            var evt = Parse(new JsonObject
-            {
-                ["action"] = "file-issue",
-                ["repo"] = "acme/orders",
-                ["title"] = "NullReferenceException in Orders.Billing.Build",
-                ["body"] = "Body text.",
-            });
-            var secretRequests = new List<string>();
-            Function.ReadSecret readSecret = (arn, _) =>
-            {
-                secretRequests.Add(arn);
-                return Task.FromResult("ghp_faketoken");
-            };
-            var calls = new List<(string Url, string Body)>();
-            IssueFiler.CallGitHub callGitHub = (url, body, _) =>
-            {
-                calls.Add((url, body));
-                return Task.FromResult(url.Contains("state=open") ? "[]" : """{"number":99}""");
-            };
-
-            var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(),
-                readSecret: readSecret, callGitHub: callGitHub);
-
-            Assert.Equal(["arn:aws:secretsmanager:eu-central-1:1:secret:github-token"], secretRequests);
-            Assert.Equal("created", response.Outcome);
-            Assert.Equal(99, response.IssueNumber);
-            Assert.Equal(2, calls.Count);
-        }
-        finally
+            ["action"] = "file-issue",
+            ["repo"] = "acme/orders",
+            ["title"] = "NullReferenceException in Orders.Billing.Build",
+            ["body"] = "Body text.",
+        });
+        var calls = new List<(string Url, string? Body)>();
+        GitHub.Call gitHub = (url, body, _) =>
         {
-            Environment.SetEnvironmentVariable("GITHUB_TOKEN_SECRET_ARN", null);
-        }
+            calls.Add((url, body));
+            return Task.FromResult<string?>(url.Contains("state=open") ? "[]" : """{"number":99}""");
+        };
+
+        var response = await Function.DispatchAsync(
+            evt, new NeverCalledInvoker(), "arn:model", new FakeContext(), gitHub: gitHub);
+
+        Assert.Equal("created", response.Outcome);
+        Assert.Equal(99, response.IssueNumber);
+        Assert.Equal(2, calls.Count);
     }
 
     /// <summary>Builds the gzipped base64 envelope a CloudWatch Logs subscription delivers as one Kinesis record's data.</summary>

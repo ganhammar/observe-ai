@@ -19,11 +19,12 @@ public sealed record ExecutionInput(
 /// <summary>Escalate's input. Sources maps each path SourceFetch.PathsFor names to its fetched contents.</summary>
 public sealed record EscalateRequest(
     string Repo, string Commitish, ParsedTrace Trace, string RawTrace, IReadOnlyDictionary<string, string> Sources,
-    CombineResult Verdict, long Occurrences, DateTimeOffset FirstSeen);
+    double Bug, long Occurrences, DateTimeOffset FirstSeen);
 
-/// <summary>Escalate's outcome: the fetch requests, a verdict per frame, and the drafted issue.</summary>
+/// <summary>Escalate's outcome: a verdict per verified frame, and the drafted issue.</summary>
 public sealed record EscalateResult(
-    IReadOnlyList<SourceFetchRequest> FetchRequests, IReadOnlyList<FrameVerdict> FrameVerdicts, Draft Draft);
+    [property: JsonPropertyName("frameVerdicts")] IReadOnlyList<FrameVerdict> FrameVerdicts,
+    [property: JsonPropertyName("draft")] Draft Draft);
 
 /// <summary>
 /// The pipeline stages as functions over the components they are given. None of them writes anywhere;
@@ -65,8 +66,6 @@ public static class Pipeline
         EscalateRequest request, CancellationToken cancellationToken = default)
     {
         var framePaths = SourceFetch.FramePaths(request.Trace, request.RawTrace);
-        var requests = SourceFetch.RequestsFor(
-            request.Repo, request.Commitish, SourceFetch.PathsFor(request.Trace, request.RawTrace));
 
         var verdicts = new List<FrameVerdict>();
         for (var i = 0; i < request.Trace.Frames.Count; i++)
@@ -91,9 +90,9 @@ public static class Pipeline
         var rootCause = await Diagnosis.DiagnoseAsync(
             converse, diagnosisModelId, request.RawTrace, request.Sources, cancellationToken).ConfigureAwait(false);
         var draft = IssueDraft.Build(
-            request.Trace, request.Verdict, request.Occurrences, request.FirstSeen, summary, rootCause,
+            request.Trace, request.Bug, request.Occurrences, request.FirstSeen, summary, rootCause,
             [.. request.Sources.Keys]);
 
-        return new EscalateResult(requests, verdicts, draft);
+        return new EscalateResult(verdicts, draft);
     }
 }

@@ -3,25 +3,6 @@ using System.Text.Json.Serialization;
 
 namespace ObserveAi;
 
-public sealed class EscalateResultDto
-{
-    [JsonPropertyName("fetchRequests")]
-    public required IReadOnlyList<SourceFetchRequest> FetchRequests { get; init; }
-
-    [JsonPropertyName("frameVerdicts")]
-    public required IReadOnlyList<FrameVerdict> FrameVerdicts { get; init; }
-
-    [JsonPropertyName("draft")]
-    public required Draft Draft { get; init; }
-
-    public static EscalateResultDto From(EscalateResult result) => new()
-    {
-        FetchRequests = result.FetchRequests,
-        FrameVerdicts = result.FrameVerdicts,
-        Draft = result.Draft,
-    };
-}
-
 /// <summary>
 /// The response for every action. Each action sets only its own fields:
 /// OptionIds/Probabilities/Fallback/Signals/DeclaredMass (triage), Escalate (escalate),
@@ -48,7 +29,7 @@ public sealed class LambdaResponse
     public double? DeclaredMass { get; init; }
 
     [JsonPropertyName("escalate")]
-    public EscalateResultDto? Escalate { get; init; }
+    public EscalateResult? Escalate { get; init; }
 
     [JsonPropertyName("allowed")]
     public bool? Allowed { get; init; }
@@ -97,6 +78,6 @@ public sealed class LambdaResponse
     NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals)]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(LambdaResponse))]
-[JsonSerializable(typeof(EscalateResultDto))]
+[JsonSerializable(typeof(EscalateResult))]
 [JsonSerializable(typeof(ExecutionInput))]
 public partial class LambdaJsonContext : JsonSerializerContext;

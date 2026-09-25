@@ -6,7 +6,7 @@ using ObserveAi;
 namespace ObserveAi.Tests;
 
 /// <summary>
-/// Checks Pipeline.EscalateAsync: it returns the fetch requests and a drafted
+/// Checks Pipeline.EscalateAsync: it returns the frame verdicts and a drafted
 /// issue built from a real IssueDraft/SourceVerification pass, without ever
 /// calling GitHub itself. The per-frame "could this code throw here" question
 /// goes through a fake Bedrock invoker, and the root cause through a fake
@@ -77,19 +77,13 @@ public class EscalateTests
         var request = new EscalateRequest(
             "acme/catalog", "abc1234", Trace, RawTrace,
             Sources: new Dictionary<string, string> { ["src/Pricing/Tiers/TierResolver.cs"] = source },
-            Verdict: new CombineResult(0.9, 0.1, false),
+            Bug: 0.9,
             Occurrences: 5,
             FirstSeen: DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
         var fake = new FakeInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }));
         var diagnosis = new FakeDiagnosis("The tier list is shorter than the resolved index.");
 
         var result = await Pipeline.EscalateAsync(fake, "arn:model", diagnosis.Converse, "eu.model", request);
-
-        var fetchRequest = Assert.Single(result.FetchRequests);
-        Assert.Equal("src/Pricing/Tiers/TierResolver.cs", fetchRequest.Path);
-        Assert.Equal(
-            "https://api.github.com/repos/acme/catalog/contents/src/Pricing/Tiers/TierResolver.cs?ref=abc1234",
-            fetchRequest.Url);
 
         // Only the frame that is both in-app and has a fetched source gets asked about.
         var verdict = Assert.Single(result.FrameVerdicts);
@@ -105,6 +99,7 @@ public class EscalateTests
 
         Assert.Equal("System.IndexOutOfRangeException in Pricing.Tiers.TierResolver.Resolve", result.Draft.Title);
         Assert.Contains("5 times", result.Draft.Body);
+        Assert.Contains("P(bug) = 0.90", result.Draft.Body);
         Assert.Contains("The tier list is shorter than the resolved index.", result.Draft.Body);
         Assert.Contains("1 of 1 matched.", result.Draft.Body);
         Assert.Contains("- `src/Pricing/Tiers/TierResolver.cs`", result.Draft.Body);
@@ -115,7 +110,7 @@ public class EscalateTests
     {
         var request = new EscalateRequest(
             "acme/catalog", "main", Trace, RawTrace, Sources: new Dictionary<string, string>(),
-            Verdict: new CombineResult(0.6, 0.4, false), Occurrences: 1,
+            Bug: 0.6, Occurrences: 1,
             FirstSeen: DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
         var fake = new FakeInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }));
         var diagnosis = new FakeDiagnosis("Unclear without a checkout.");

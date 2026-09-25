@@ -99,11 +99,7 @@
           "exceptionType.$": "$.exceptionType",
           "frames.$": "$.frames"
         },
-        "verdict": {
-          "bug.$": "$.verdict.probabilities[0]",
-          "downstream.$": "$.verdict.probabilities[1]",
-          "fallback.$": "$.verdict.fallback"
-        },
+        "bug.$": "$.verdict.probabilities[0]",
         "occurrences.$": "$.occurrences",
         "firstSeen.$": "$.firstSeen"
       },
