@@ -91,7 +91,7 @@ Resources:
         {
           "DestinationArn": "${LogStream.Arn}",
           "RoleArn": "${DeliveryRole.Arn}",
-          "FilterPattern": "?ERROR ?Error ?error ?Exception ?Traceback ?panic:",
+          "FilterPattern": "?ERROR ?Error ?error ?Exception ?Traceback ?\"panic:\"",
           "Distribution": "ByLogStream"
         }
 
