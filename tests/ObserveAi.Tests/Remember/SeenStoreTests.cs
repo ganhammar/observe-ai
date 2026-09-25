@@ -10,7 +10,7 @@ public class SeenStoreTests
     private static readonly TimeSpan Retention = TimeSpan.FromDays(30);
 
     /// <summary>A counter that behaves the way DynamoDB's ADD and if_not_exists(first_seen) do.</summary>
-    private static SeenStore.UpdateItem Counter(Dictionary<string, (long Count, string FirstSeen)> store, List<UpdateItemRequest> seen)
+    private static Dynamo.UpdateItem Counter(Dictionary<string, (long Count, string FirstSeen)> store, List<UpdateItemRequest> seen)
     {
         return (request, _) =>
         {

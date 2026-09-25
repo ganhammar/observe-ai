@@ -9,7 +9,7 @@ public class CapsTests
     private static readonly TimeSpan Retention = TimeSpan.FromDays(1);
 
     /// <summary>A counter keyed by bucket, behaving the way DynamoDB's ADD does.</summary>
-    private static Caps.UpdateItem Counter(Dictionary<string, long> store)
+    private static Dynamo.UpdateItem Counter(Dictionary<string, long> store)
     {
         return (request, _) =>
         {

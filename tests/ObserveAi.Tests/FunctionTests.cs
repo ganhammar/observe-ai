@@ -7,9 +7,10 @@ using ObserveAi;
 namespace ObserveAi.Tests;
 
 /// <summary>
-/// Drives the triage action through Function.DispatchAsync with a fake
-/// IBedrockInvoker, checking the combined-verdict response shape.
+/// Drives the triage action through Function.DispatchAsync with a fake Invoke,
+/// checking the combined-verdict response shape.
 /// </summary>
+[Collection("Environment")]
 public class FunctionTests
 {
     private sealed class FakeLogger : ILambdaLogger
@@ -31,13 +32,6 @@ public class FunctionTests
         public string LogStreamName => "test";
         public int MemoryLimitInMB => 128;
         public TimeSpan RemainingTime => TimeSpan.FromSeconds(30);
-    }
-
-    private sealed class FakeInvoker(byte[] responseBody) : IBedrockInvoker
-    {
-        public Task<byte[]> InvokeModelAsync(
-            string modelId, byte[] requestBody, CancellationToken cancellationToken = default) =>
-            Task.FromResult(responseBody);
     }
 
     private static byte[] CompletionBody(Dictionary<string, double> letterLogprobs, long promptTokens = 50)
@@ -69,17 +63,31 @@ public class FunctionTests
     {
         var evt = JsonDocument.Parse(
             """{"action": "triage", "id": "row-2", "state": {"stack_trace": "boom"}}""").RootElement;
-        var fake = new FakeInvoker(
-            CompletionBody(new Dictionary<string, double> { ["A"] = -0.2, ["B"] = -1.0, ["C"] = -1.5, ["D"] = -2.0 }));
+        var response = CompletionBody(new Dictionary<string, double> { ["A"] = -0.2, ["B"] = -1.0, ["C"] = -1.5, ["D"] = -2.0 });
+        var deps = new Function.Dependencies(
+            Invoke: (_, _, _) => Task.FromResult(response),
+            Converse: (_, _, _, _) => throw new InvalidOperationException(),
+            UpdateItem: (_, _) => throw new InvalidOperationException(),
+            StartExecution: (_, _) => throw new InvalidOperationException(),
+            GitHub: (_, _, _) => throw new InvalidOperationException());
 
-        var response = await Function.DispatchAsync(evt, fake, "arn:model", new FakeContext());
+        LambdaResponse verdict;
+        Environment.SetEnvironmentVariable("MODEL_ARN", "arn:model");
+        try
+        {
+            verdict = await Function.DispatchAsync(evt, deps, new FakeContext());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("MODEL_ARN", null);
+        }
 
-        Assert.Equal(["bug", "downstream"], response.OptionIds);
-        Assert.Equal(2, response.Probabilities!.Count);
-        Assert.NotNull(response.Fallback);
-        Assert.Equal(Math.Exp(-0.2) + Math.Exp(-1.0), response.DeclaredMass!.Value, precision: 9);
+        Assert.Equal(["bug", "downstream"], verdict.OptionIds);
+        Assert.Equal(2, verdict.Probabilities!.Count);
+        Assert.NotNull(verdict.Fallback);
+        Assert.Equal(Math.Exp(-0.2) + Math.Exp(-1.0), verdict.DeclaredMass!.Value, precision: 9);
         // Without evidence only the baseline is asked, so no signal answered.
-        Assert.NotNull(response.Signals);
-        Assert.Empty(response.Signals!);
+        Assert.NotNull(verdict.Signals);
+        Assert.Empty(verdict.Signals!);
     }
 }

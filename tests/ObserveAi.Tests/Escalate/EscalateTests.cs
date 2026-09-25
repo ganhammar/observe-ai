@@ -9,21 +9,17 @@ namespace ObserveAi.Tests;
 /// Checks Pipeline.EscalateAsync: it returns the frame verdicts and a drafted
 /// issue built from a real IssueDraft/SourceVerification pass, without ever
 /// calling GitHub itself. The per-frame "could this code throw here" question
-/// goes through a fake Bedrock invoker, and the root cause through a fake
+/// goes through a fake Invoke, and the root cause through a fake
 /// Converse that records what it was shown.
 /// </summary>
 public class EscalateTests
 {
-    private sealed class FakeInvoker(byte[] response) : IBedrockInvoker
+    /// <summary>An Invoke that answers every question with response, recording each prompt in questions.</summary>
+    private static BedrockBackend.Invoke Answering(byte[] response, List<string> questions) => (_, body, _) =>
     {
-        public List<string> Questions { get; } = [];
-
-        public Task<byte[]> InvokeModelAsync(string modelId, byte[] requestBody, CancellationToken cancellationToken = default)
-        {
-            Questions.Add(JsonDocument.Parse(requestBody).RootElement.GetProperty("prompt").GetString()!);
-            return Task.FromResult(response);
-        }
-    }
+        questions.Add(JsonDocument.Parse(body).RootElement.GetProperty("prompt").GetString()!);
+        return Task.FromResult(response);
+    };
 
     private static byte[] CompletionBody(Dictionary<string, double> letterLogprobs)
     {
@@ -80,16 +76,17 @@ public class EscalateTests
             Bug: 0.9,
             Occurrences: 5,
             FirstSeen: DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
-        var fake = new FakeInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }));
+        var questions = new List<string>();
+        var invoke = Answering(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }), questions);
         var diagnosis = new FakeDiagnosis("The tier list is shorter than the resolved index.");
 
-        var result = await Pipeline.EscalateAsync(fake, "arn:model", diagnosis.Converse, "eu.model", request);
+        var result = await Pipeline.EscalateAsync(invoke, "arn:model", diagnosis.Converse, "eu.model", request);
 
         // Only the frame that is both in-app and has a fetched source gets asked about.
         var verdict = Assert.Single(result.FrameVerdicts);
         Assert.Equal("Pricing.Tiers.TierResolver.Resolve", verdict.Frame.Method);
         Assert.True(verdict.Matched);
-        Assert.Single(fake.Questions);
+        Assert.Single(questions);
 
         // The diagnosis model sees the trace and the fetched file, once.
         var call = Assert.Single(diagnosis.Calls);
@@ -112,13 +109,14 @@ public class EscalateTests
             "acme/catalog", "main", Trace, RawTrace, Sources: new Dictionary<string, string>(),
             Bug: 0.6, Occurrences: 1,
             FirstSeen: DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
-        var fake = new FakeInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }));
+        var questions = new List<string>();
+        var invoke = Answering(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }), questions);
         var diagnosis = new FakeDiagnosis("Unclear without a checkout.");
 
-        var result = await Pipeline.EscalateAsync(fake, "arn:model", diagnosis.Converse, "eu.model", request);
+        var result = await Pipeline.EscalateAsync(invoke, "arn:model", diagnosis.Converse, "eu.model", request);
 
         Assert.Empty(result.FrameVerdicts);
-        Assert.Empty(fake.Questions);
+        Assert.Empty(questions);
         Assert.Contains("No source file named by the trace could be fetched.", Assert.Single(diagnosis.Calls).Prompt);
         Assert.Contains("0 of 0 matched.", result.Draft.Body);
         Assert.Contains("(none; no file named by the trace could be fetched)", result.Draft.Body);

@@ -8,7 +8,7 @@ namespace ObserveAi.Tests;
 /// <summary>
 /// Ports the intent of tests/test_bedrock_backend.py: letter mapping, missing
 /// options, declared_mass, and the empty and missing logprobs errors, all
-/// against a fake IBedrockInvoker rather than AWS.
+/// against a fake Invoke rather than AWS.
 /// </summary>
 public class BedrockBackendTests
 {
@@ -84,24 +84,19 @@ public class BedrockBackendTests
         return Encoding.UTF8.GetBytes(payload.ToJsonString());
     }
 
-    private sealed class FakeBedrockInvoker(byte[] responseBody) : IBedrockInvoker
+    /// <summary>An Invoke that answers every request with response, recording each request body in calls.</summary>
+    private static BedrockBackend.Invoke Returning(byte[] response, List<byte[]>? calls = null) => (_, body, _) =>
     {
-        public List<(string ModelId, byte[] Body)> Calls { get; } = [];
-
-        public Task<byte[]> InvokeModelAsync(
-            string modelId, byte[] requestBody, CancellationToken cancellationToken = default)
-        {
-            Calls.Add((modelId, requestBody));
-            return Task.FromResult(responseBody);
-        }
-    }
+        calls?.Add(body);
+        return Task.FromResult(response);
+    };
 
     [Fact]
     public async Task LetterMappingTwoOptions()
     {
-        var client = new FakeBedrockInvoker(CompletionBody(new() { ["A"] = -0.1, ["B"] = -2.5 }));
+        var invoke = Returning(CompletionBody(new() { ["A"] = -0.1, ["B"] = -2.5 }));
 
-        var result = await BedrockBackend.ScoreAsync(client, "arn:model", Row2());
+        var result = await BedrockBackend.ScoreAsync(invoke, "arn:model", Row2());
 
         Assert.Equal(["bug", "downstream"], result.OptionIds);
         var expected = new[] { Math.Exp(-0.1), Math.Exp(-2.5) };
@@ -115,10 +110,10 @@ public class BedrockBackendTests
     [Fact]
     public async Task LetterMappingFourOptionsPreservesOrder()
     {
-        var client = new FakeBedrockInvoker(
+        var invoke = Returning(
             CompletionBody(new() { ["C"] = -0.2, ["A"] = -1.0, ["D"] = -3.0, ["B"] = -4.0 }));
 
-        var result = await BedrockBackend.ScoreAsync(client, "arn:model", Row4());
+        var result = await BedrockBackend.ScoreAsync(invoke, "arn:model", Row4());
 
         Assert.Equal(["a", "b", "c", "d"], result.OptionIds);
         var maxIndex = result.Probabilities
@@ -132,9 +127,9 @@ public class BedrockBackendTests
     public async Task MissingOptionLetterIsZeroed()
     {
         var row = Row4WithOptions(3); // a, b, c only
-        var client = new FakeBedrockInvoker(CompletionBody(new() { ["A"] = -0.5, ["B"] = -1.5, ["X"] = -3.0 }));
+        var invoke = Returning(CompletionBody(new() { ["A"] = -0.5, ["B"] = -1.5, ["X"] = -3.0 }));
 
-        var result = await BedrockBackend.ScoreAsync(client, "arn:model", row);
+        var result = await BedrockBackend.ScoreAsync(invoke, "arn:model", row);
 
         Assert.Equal(0.0, result.Probabilities[2]);
         var expectedAb = new[] { Math.Exp(-0.5), Math.Exp(-1.5) };
@@ -147,9 +142,9 @@ public class BedrockBackendTests
     [Fact]
     public async Task EveryOptionLetterMissingGivesZeroMassAndZeroProbabilities()
     {
-        var client = new FakeBedrockInvoker(CompletionBody(new() { ["Based"] = -0.1, ["on"] = -1.0 }));
+        var invoke = Returning(CompletionBody(new() { ["Based"] = -0.1, ["on"] = -1.0 }));
 
-        var result = await BedrockBackend.ScoreAsync(client, "arn:model", Row2());
+        var result = await BedrockBackend.ScoreAsync(invoke, "arn:model", Row2());
 
         Assert.Equal(0.0, result.DeclaredMass);
         Assert.Equal([0.0, 0.0], result.Probabilities);
@@ -158,33 +153,35 @@ public class BedrockBackendTests
     [Fact]
     public async Task EmptyTopLogprobsRaisesClearError()
     {
-        var client = new FakeBedrockInvoker(CompletionBody([]));
+        var invoke = Returning(CompletionBody([]));
 
         var error = await Assert.ThrowsAsync<RowValidationException>(
-            () => BedrockBackend.ScoreAsync(client, "arn:model", Row2()));
+            () => BedrockBackend.ScoreAsync(invoke, "arn:model", Row2()));
         Assert.Contains("no candidate tokens", error.Message);
     }
 
     [Fact]
     public async Task InvalidRowRaisesBeforeCallingBedrock()
     {
-        var client = new FakeBedrockInvoker(CompletionBody(new() { ["A"] = -0.1 }));
+        var calls = new List<byte[]>();
+        var invoke = Returning(CompletionBody(new() { ["A"] = -0.1 }), calls);
         var badRow = Row4WithOptions(1);
 
         var error = await Assert.ThrowsAsync<RowValidationException>(
-            () => BedrockBackend.ScoreAsync(client, "arn:model", badRow));
+            () => BedrockBackend.ScoreAsync(invoke, "arn:model", badRow));
         Assert.Contains("2-16", error.Message);
-        Assert.Empty(client.Calls);
+        Assert.Empty(calls);
     }
 
     [Fact]
     public async Task CompletionApiSendsRenderedPromptNotMessages()
     {
-        var client = new FakeBedrockInvoker(CompletionBody(new() { ["A"] = -0.2, ["B"] = -1.7 }));
+        var calls = new List<byte[]>();
+        var invoke = Returning(CompletionBody(new() { ["A"] = -0.2, ["B"] = -1.7 }), calls);
 
-        var result = await BedrockBackend.ScoreAsync(client, "arn:model", Row1());
+        var result = await BedrockBackend.ScoreAsync(invoke, "arn:model", Row1());
 
-        var sentBody = JsonDocument.Parse(client.Calls[0].Body).RootElement;
+        var sentBody = JsonDocument.Parse(calls[0]).RootElement;
         Assert.True(sentBody.TryGetProperty("prompt", out var prompt));
         Assert.False(sentBody.TryGetProperty("messages", out _));
         Assert.EndsWith("<|im_start|>assistant\n<think>\n\n</think>\n\n", prompt.GetString(), StringComparison.Ordinal);
@@ -204,10 +201,10 @@ public class BedrockBackendTests
             }),
             ["usage"] = new JsonObject { ["prompt_tokens"] = 51, ["completion_tokens"] = 1, ["total_tokens"] = 52 },
         };
-        var client = new FakeBedrockInvoker(Encoding.UTF8.GetBytes(payload.ToJsonString()));
+        var invoke = Returning(Encoding.UTF8.GetBytes(payload.ToJsonString()));
 
         var error = await Assert.ThrowsAsync<RowValidationException>(
-            () => BedrockBackend.ScoreAsync(client, "arn:model", Row1()));
+            () => BedrockBackend.ScoreAsync(invoke, "arn:model", Row1()));
         Assert.Contains("no logprobs", error.Message);
     }
 
@@ -215,12 +212,12 @@ public class BedrockBackendTests
     public async Task DeclaredMassIsLowWhenOtherTokensDominate()
     {
         // Reasoning token holds most of the mass; the option letters are a thin tail.
-        var client = new FakeBedrockInvoker(CompletionBody(new()
+        var invoke = Returning(CompletionBody(new()
         {
             ["<think>"] = Math.Log(0.94), ["A"] = Math.Log(0.04), ["B"] = Math.Log(0.02),
         }));
 
-        var result = await BedrockBackend.ScoreAsync(client, "arn:model", Row1());
+        var result = await BedrockBackend.ScoreAsync(invoke, "arn:model", Row1());
 
         Assert.Equal(0.06, result.DeclaredMass, precision: 6);
         // Renormalisation still reports a confident-looking split off that thin tail.
@@ -230,11 +227,12 @@ public class BedrockBackendTests
     [Fact]
     public async Task CompletionSendsLogprobsAsAnIntegerCount()
     {
-        var client = new FakeBedrockInvoker(CompletionBody(new() { ["A"] = -0.2, ["B"] = -1.7 }));
+        var calls = new List<byte[]>();
+        var invoke = Returning(CompletionBody(new() { ["A"] = -0.2, ["B"] = -1.7 }), calls);
 
-        await BedrockBackend.ScoreAsync(client, "arn:model", Row1());
+        await BedrockBackend.ScoreAsync(invoke, "arn:model", Row1());
 
-        var sentBody = JsonDocument.Parse(client.Calls[0].Body).RootElement;
+        var sentBody = JsonDocument.Parse(calls[0]).RootElement;
         Assert.Equal(20, sentBody.GetProperty("logprobs").GetInt32());
         Assert.False(sentBody.TryGetProperty("top_logprobs", out _));
     }

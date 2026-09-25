@@ -24,8 +24,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Lets tests drive FunctionHandlerAsync's body with a fake IBedrockInvoker
-         instead of one built from real AWS configuration. -->
+    <!-- Lets tests drive FunctionHandlerAsync's body with fake Dependencies
+         instead of ones built from real AWS configuration. -->
     <InternalsVisibleTo Include="ObserveAi.Tests" />
   </ItemGroup>
 

@@ -14,17 +14,12 @@ public sealed record CapResult(bool Allowed, long Count, long Limit, bool Trippe
 /// </summary>
 public static class Caps
 {
-    /// <summary>The one DynamoDB operation Caps uses. Tests substitute a fake.</summary>
-    public delegate Task<UpdateItemResponse> UpdateItem(UpdateItemRequest request, CancellationToken cancellationToken);
-
-    public static UpdateItem Against(IAmazonDynamoDB dynamo) => dynamo.UpdateItemAsync;
-
     /// <summary>
     /// Increments this repository's bucket and the global bucket for the current UTC hour, so a bad deploy at
     /// 09:00 does not spend the budget a failure at 14:00 needs.
     /// </summary>
     public static async Task<CapResult> TryConsumeAsync(
-        UpdateItem updateItem, string table, string repo,
+        Dynamo.UpdateItem updateItem, string table, string repo,
         long perRepoLimit, long globalLimit,
         DateTimeOffset now, TimeSpan retention, CancellationToken cancellationToken = default)
     {
@@ -39,7 +34,7 @@ public static class Caps
     }
 
     private static async Task<long> IncrementAsync(
-        UpdateItem updateItem, string table, string bucket, DateTimeOffset now, TimeSpan retention,
+        Dynamo.UpdateItem updateItem, string table, string bucket, DateTimeOffset now, TimeSpan retention,
         CancellationToken cancellationToken)
     {
         var response = await updateItem(new UpdateItemRequest

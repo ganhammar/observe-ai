@@ -13,18 +13,13 @@ public sealed record SeenResult(long Occurrences, DateTimeOffset FirstSeen);
 /// </summary>
 public static class SeenStore
 {
-    /// <summary>The one DynamoDB operation SeenStore uses. Tests substitute a fake.</summary>
-    public delegate Task<UpdateItemResponse> UpdateItem(UpdateItemRequest request, CancellationToken cancellationToken);
-
-    public static UpdateItem Against(IAmazonDynamoDB dynamo) => dynamo.UpdateItemAsync;
-
     /// <summary>
     /// Records one occurrence. The key is repository plus fingerprint, since two services throwing the same
     /// framework exception are separate defects. One UpdateItem does the increment and returns the new
     /// count, so two concurrent lines cannot both see a count of one.
     /// </summary>
     public static async Task<SeenResult> RecordAsync(
-        UpdateItem updateItem, string table, string repo, string fingerprint,
+        Dynamo.UpdateItem updateItem, string table, string repo, string fingerprint,
         DateTimeOffset now, TimeSpan retention, CancellationToken cancellationToken = default)
     {
         var response = await updateItem(new UpdateItemRequest

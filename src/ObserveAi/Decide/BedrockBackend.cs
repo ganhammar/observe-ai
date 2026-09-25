@@ -11,21 +11,18 @@ namespace ObserveAi;
 public sealed record ScoreResult(IReadOnlyList<string> OptionIds, IReadOnlyList<double> Probabilities, double DeclaredMass);
 
 /// <summary>
-/// The part of a Bedrock runtime client BedrockBackend uses: send a request body to a model and return
-/// the raw response body. Tests implement it with a small fake.
+/// Direct-decision readout from Bedrock Custom Model Import log probabilities, mirroring
+/// src/observe_ai/bedrock_backend.py. Requests one token with logprobs, reads each option letter's log
+/// probability at the first sampled position, and softmaxes them.
 /// </summary>
-public interface IBedrockInvoker
+public static class BedrockBackend
 {
-    Task<byte[]> InvokeModelAsync(string modelId, byte[] requestBody, CancellationToken cancellationToken = default);
-}
+    /// <summary>Sends a request body to a model and returns the raw response body.</summary>
+    public delegate Task<byte[]> Invoke(string modelId, byte[] body, CancellationToken cancellationToken);
 
-/// <summary>Adapts the AWSSDK.BedrockRuntime client to <see cref="IBedrockInvoker"/>.</summary>
-public sealed class AmazonBedrockInvoker(IAmazonBedrockRuntime client) : IBedrockInvoker
-{
-    public async Task<byte[]> InvokeModelAsync(
-        string modelId, byte[] requestBody, CancellationToken cancellationToken = default)
+    public static Invoke Against(IAmazonBedrockRuntime client) => async (modelId, body, cancellationToken) =>
     {
-        using var bodyStream = new MemoryStream(requestBody);
+        using var bodyStream = new MemoryStream(body);
         var request = new InvokeModelRequest
         {
             ModelId = modelId,
@@ -38,21 +35,13 @@ public sealed class AmazonBedrockInvoker(IAmazonBedrockRuntime client) : IBedroc
         using var buffer = new MemoryStream();
         await responseStream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
         return buffer.ToArray();
-    }
-}
+    };
 
-/// <summary>
-/// Direct-decision readout from Bedrock Custom Model Import log probabilities, mirroring
-/// src/observe_ai/bedrock_backend.py. Requests one token with logprobs, reads each option letter's log
-/// probability at the first sampled position, and softmaxes them.
-/// </summary>
-public static class BedrockBackend
-{
     // Candidates per position. Semif.ValidateRow caps a row at 16 options, so every letter can appear.
     private const int TopLogprobs = 20;
 
     public static async Task<ScoreResult> ScoreAsync(
-        IBedrockInvoker client, string modelArn, JsonElement row, CancellationToken cancellationToken = default)
+        Invoke invoke, string modelArn, JsonElement row, CancellationToken cancellationToken = default)
     {
         var messages = Semif.DirectMessages(row);
         var options = row.GetProperty("options");
@@ -75,8 +64,7 @@ public static class BedrockBackend
             requestBody = stream.ToArray();
         }
 
-        var responseBytes = await client.InvokeModelAsync(modelArn, requestBody, cancellationToken)
-            .ConfigureAwait(false);
+        var responseBytes = await invoke(modelArn, requestBody, cancellationToken).ConfigureAwait(false);
         using var document = JsonDocument.Parse(responseBytes);
 
         var byLetter = FirstPositionLogprobs(document.RootElement);

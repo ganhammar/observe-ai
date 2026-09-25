@@ -37,13 +37,13 @@ public static class Pipeline
     /// the Triage state and the fingerprint stays undecided.
     /// </summary>
     public static async Task<LambdaResponse> TriageRowAsync(
-        JsonElement row, IBedrockInvoker client, string modelArn, QuestionTree tree, ILambdaContext context)
+        JsonElement row, BedrockBackend.Invoke invoke, string modelArn, QuestionTree tree, ILambdaContext context)
     {
         string? rowId = row.TryGetProperty("id", out var idProperty) && idProperty.ValueKind == JsonValueKind.String
             ? idProperty.GetString()
             : null;
 
-        var result = await Triage.RunAsync(client, modelArn, row, tree).ConfigureAwait(false);
+        var result = await Triage.RunAsync(invoke, modelArn, row, tree).ConfigureAwait(false);
         foreach (var failed in result.Answers.Where(answer => answer.Error is not null))
         {
             context.Logger.LogWarning($"Row {rowId} signal {failed.Key} failed: {failed.Error}");
@@ -62,7 +62,7 @@ public static class Pipeline
     /// paragraph is the only generative call. Never calls GitHub.
     /// </summary>
     public static async Task<EscalateResult> EscalateAsync(
-        IBedrockInvoker client, string modelArn, Diagnosis.Converse converse, string diagnosisModelId,
+        BedrockBackend.Invoke invoke, string modelArn, Diagnosis.Converse converse, string diagnosisModelId,
         EscalateRequest request, CancellationToken cancellationToken = default)
     {
         var framePaths = SourceFetch.FramePaths(request.Trace, request.RawTrace);
@@ -78,7 +78,7 @@ public static class Pipeline
 
             var row = SourceVerification.BuildRow($"verify::{i}", frame, request.Trace.ExceptionType, source);
             var score = await BedrockBackend.ScoreAsync(
-                client, modelArn, row, cancellationToken).ConfigureAwait(false);
+                invoke, modelArn, row, cancellationToken).ConfigureAwait(false);
             var probabilities = score.OptionIds
                 .Zip(score.Probabilities, (id, p) => (id, p))
                 .ToDictionary(pair => pair.id, pair => pair.p);

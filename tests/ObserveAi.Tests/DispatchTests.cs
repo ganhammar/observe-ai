@@ -15,6 +15,7 @@ namespace ObserveAi.Tests;
 /// a Kinesis event carries no action field, and a missing or unknown action is
 /// an error rather than a silent no-op.
 /// </summary>
+[Collection("Environment")]
 public class DispatchTests
 {
     private sealed class FakeLogger : ILambdaLogger
@@ -38,11 +39,13 @@ public class DispatchTests
         public TimeSpan RemainingTime => TimeSpan.FromSeconds(30);
     }
 
-    private sealed class NeverCalledInvoker : IBedrockInvoker
-    {
-        public Task<byte[]> InvokeModelAsync(string modelId, byte[] requestBody, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("Bedrock must not be called for this request");
-    }
+    /// <summary>Dependencies whose every call fails, so a test replaces only what its action may use.</summary>
+    private static Function.Dependencies Unused() => new(
+        Invoke: (_, _, _) => throw new InvalidOperationException("Bedrock must not be called for this request"),
+        Converse: (_, _, _, _) => throw new InvalidOperationException("Converse must not be called for this request"),
+        UpdateItem: (_, _) => throw new InvalidOperationException("DynamoDB must not be called for this request"),
+        StartExecution: (_, _) => throw new InvalidOperationException("Step Functions must not be called for this request"),
+        GitHub: (_, _, _) => throw new InvalidOperationException("GitHub must not be called for this request"));
 
     private static JsonElement Parse(JsonNode node) => JsonDocument.Parse(node.ToJsonString()).RootElement;
 
@@ -57,7 +60,7 @@ public class DispatchTests
         var row = Parse(new JsonObject { ["id"] = "row-1", ["state"] = new JsonObject { ["stack_trace"] = "boom" } });
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Function.DispatchAsync(row, new NeverCalledInvoker(), "arn:model", new FakeContext()));
+            () => Function.DispatchAsync(row, Unused(), new FakeContext()));
     }
 
     [Fact]
@@ -83,18 +86,22 @@ public class DispatchTests
 
         // Nothing fetches, so no frame is verified and the readout is never called;
         // the diagnosis still runs, from the trace alone.
+        Environment.SetEnvironmentVariable("MODEL_ARN", "arn:model");
         Environment.SetEnvironmentVariable("DIAGNOSIS_MODEL_ID", "eu.model");
         var prompts = new List<string>();
         LambdaResponse response;
         try
         {
-            response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(),
-                gitHub: (_, _, _) => Task.FromResult<string?>(null),
-                converse: (_, _, user, _) => { prompts.Add(user); return Task.FromResult("Index past the end."); });
+            var deps = Unused() with
+            {
+                GitHub = (_, _, _) => Task.FromResult<string?>(null),
+                Converse = (_, _, user, _) => { prompts.Add(user); return Task.FromResult("Index past the end."); },
+            };
+            response = await Function.DispatchAsync(evt, deps, new FakeContext());
         }
         finally
         {
+            Environment.SetEnvironmentVariable("MODEL_ARN", null);
             Environment.SetEnvironmentVariable("DIAGNOSIS_MODEL_ID", null);
         }
 
@@ -115,13 +122,13 @@ public class DispatchTests
         try
         {
             var evt = Parse(new JsonObject { ["action"] = "check-rate", ["repo"] = "acme/orders" });
-            Caps.UpdateItem updateRate = (_, _) => Task.FromResult(new UpdateItemResponse
+            Dynamo.UpdateItem updateRate = (_, _) => Task.FromResult(new UpdateItemResponse
             {
                 Attributes = new Dictionary<string, AttributeValue> { ["occurrences"] = new() { N = "1" } },
             });
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(), updateRate: updateRate);
+                evt, Unused() with { UpdateItem = updateRate }, new FakeContext());
 
             Assert.True(response.Allowed);
             Assert.False(response.Tripped);
@@ -145,13 +152,13 @@ public class DispatchTests
         try
         {
             var evt = Parse(new JsonObject { ["action"] = "check-rate", ["repo"] = "acme/orders" });
-            Caps.UpdateItem updateRate = (_, _) => Task.FromResult(new UpdateItemResponse
+            Dynamo.UpdateItem updateRate = (_, _) => Task.FromResult(new UpdateItemResponse
             {
                 Attributes = new Dictionary<string, AttributeValue> { ["occurrences"] = new() { N = "7" } },
             });
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(), updateRate: updateRate);
+                evt, Unused() with { UpdateItem = updateRate }, new FakeContext());
 
             Assert.False(response.Allowed);
             Assert.False(response.Tripped);
@@ -173,13 +180,13 @@ public class DispatchTests
         try
         {
             var evt = Parse(new JsonObject { ["action"] = "check-rate", ["repo"] = "acme/orders" });
-            Caps.UpdateItem updateRate = (_, _) => Task.FromResult(new UpdateItemResponse
+            Dynamo.UpdateItem updateRate = (_, _) => Task.FromResult(new UpdateItemResponse
             {
                 Attributes = new Dictionary<string, AttributeValue> { ["occurrences"] = new() { N = "4" } },
             });
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(), updateRate: updateRate);
+                evt, Unused() with { UpdateItem = updateRate }, new FakeContext());
 
             Assert.True(response.Tripped);
             Assert.True(response.Allowed);
@@ -198,7 +205,7 @@ public class DispatchTests
         var evt = Parse(new JsonObject { ["action"] = "bogus" });
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", new FakeContext()));
+            () => Function.DispatchAsync(evt, Unused(), new FakeContext()));
     }
 
     private const string PipelineArn = "arn:aws:states:eu-central-1:1:stateMachine:pipeline";
@@ -206,7 +213,7 @@ public class DispatchTests
     private const string FirstSeen = "2026-09-01T08:00:00.0000000+00:00";
 
     /// <summary>A SeenTable backing store that counts per key and reports a fixed first sighting.</summary>
-    private static SeenStore.UpdateItem SeenCounter(Dictionary<string, long> store) => (request, _) =>
+    private static Dynamo.UpdateItem SeenCounter(Dictionary<string, long> store) => (request, _) =>
     {
         var key = $"{request.Key["repo"].S}/{request.Key["fingerprint"].S}";
         store[key] = store.GetValueOrDefault(key) + 1;
@@ -254,8 +261,7 @@ public class DispatchTests
             Function.StartExecution startExecution = (request, _) => { started.Add(request); return Task.FromResult(new StartExecutionResponse()); };
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(),
-                startExecution: startExecution, recordSeen: SeenCounter([]));
+                evt, Unused() with { StartExecution = startExecution, UpdateItem = SeenCounter([]) }, new FakeContext());
 
             Assert.Equal(1, response.Started);
             Assert.Equal(1, response.AlreadyKnown);
@@ -294,7 +300,7 @@ public class DispatchTests
         };
 
         var response = await Function.DispatchAsync(
-            evt, new NeverCalledInvoker(), "arn:model", new FakeContext(), gitHub: gitHub);
+            evt, Unused() with { GitHub = gitHub }, new FakeContext());
 
         Assert.Equal("created", response.Outcome);
         Assert.Equal(99, response.IssueNumber);

@@ -25,7 +25,7 @@ public sealed record TriageResult(CombineResult Verdict, IReadOnlyList<TriageAns
 public static class Triage
 {
     public static async Task<TriageResult> RunAsync(
-        IBedrockInvoker client, string modelArn, JsonElement row, QuestionTree tree,
+        BedrockBackend.Invoke invoke, string modelArn, JsonElement row, QuestionTree tree,
         CancellationToken cancellationToken = default)
     {
         var id = RequireString(row, "id");
@@ -39,7 +39,7 @@ public static class Triage
         // Without evidence Combine reads only the baseline, so the other eight questions are skipped.
         var questions = hasEvidence ? SubQuestions(tree) : BaselineOnly(tree);
         var scoring = questions.Select(sub =>
-            ScoreSubQuestionAsync(client, modelArn, id, state, sub.Key, sub.Question, sub.Options, cancellationToken));
+            ScoreSubQuestionAsync(invoke, modelArn, id, state, sub.Key, sub.Question, sub.Options, cancellationToken));
         var scored = await Task.WhenAll(scoring).ConfigureAwait(false);
         var answers = scored.Select(result => result.Answer).ToList();
 
@@ -78,13 +78,13 @@ public static class Triage
     }
 
     private static async Task<(TriageAnswer Answer, double DeclaredMass)> ScoreSubQuestionAsync(
-        IBedrockInvoker client, string modelArn, string rowId, JsonElement state,
+        BedrockBackend.Invoke invoke, string modelArn, string rowId, JsonElement state,
         string key, string question, IReadOnlyList<TreeOption> options, CancellationToken cancellationToken)
     {
         var subRow = BuildSubRow(rowId, key, state, question, options);
         try
         {
-            var score = await BedrockBackend.ScoreAsync(client, modelArn, subRow, cancellationToken).ConfigureAwait(false);
+            var score = await BedrockBackend.ScoreAsync(invoke, modelArn, subRow, cancellationToken).ConfigureAwait(false);
             var probabilities = score.OptionIds
                 .Zip(score.Probabilities, (optionId, probability) => (optionId, probability))
                 .ToDictionary(pair => pair.optionId, pair => pair.probability);

@@ -19,25 +19,50 @@ namespace ObserveAi;
 /// <summary>
 /// Lambda entrypoint for the pipeline stages, selected by the event's required "action" field: triage,
 /// check-rate, escalate or file-issue. A Kinesis event has no action field and is recognised first by its
-/// top-level "Records" array; that path parses the trace, resolves the repo and
-/// checks the seen table, and starts an execution only when triage is warranted.
+/// top-level "Records" array; that path parses the trace, resolves the repo and checks the seen table, and
+/// starts an execution only for a fingerprint's first sighting.
 /// </summary>
 public static class Function
 {
     private static readonly Lazy<AmazonBedrockRuntimeClient> LazyRuntime = new(CreateRuntime);
-    private static readonly Lazy<IBedrockInvoker> LazyClient = new(() => new AmazonBedrockInvoker(LazyRuntime.Value));
+    private static readonly Lazy<BedrockBackend.Invoke> LazyInvoke = new(() => BedrockBackend.Against(LazyRuntime.Value));
     private static readonly Lazy<Diagnosis.Converse> LazyConverse = new(() => Diagnosis.Against(LazyRuntime.Value));
-    private static readonly Lazy<IAmazonDynamoDB> LazyDynamo = new(() => new AmazonDynamoDBClient());
+    private static readonly Lazy<Dynamo.UpdateItem> LazyUpdateItem = new(() => Dynamo.Against(new AmazonDynamoDBClient()));
     private static readonly Lazy<IAmazonSecretsManager> LazySecretsManager = new(() => new AmazonSecretsManagerClient());
     private static readonly Lazy<IAmazonStepFunctions> LazyStepFunctions = new(() => new AmazonStepFunctionsClient());
     private static readonly Lazy<HttpClient> LazyHttp = new(() => new HttpClient());
     private static readonly Lazy<QuestionTree> LazyTree = new(QuestionTree.LoadEmbedded);
 
-    /// <summary>Reads one secret's current value. Tests substitute a fake.</summary>
-    internal delegate Task<string> ReadSecret(string secretArn, CancellationToken cancellationToken);
-
-    /// <summary>Starts one Step Functions execution. Tests substitute a fake.</summary>
+    /// <summary>Starts one Step Functions execution.</summary>
     internal delegate Task<StartExecutionResponse> StartExecution(StartExecutionRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Every external call the handler makes. Tests construct one with fakes.</summary>
+    internal sealed record Dependencies(
+        BedrockBackend.Invoke Invoke,
+        Diagnosis.Converse Converse,
+        Dynamo.UpdateItem UpdateItem,
+        StartExecution StartExecution,
+        GitHub.Call GitHub)
+    {
+        /// <summary>
+        /// The AWS and GitHub clients, each created on first use. The GitHub token is read from
+        /// GITHUB_TOKEN_SECRET_ARN at most once per Dependencies.
+        /// </summary>
+        public static Dependencies Real()
+        {
+            var token = new Lazy<Task<string>>(() => ReadGitHubTokenAsync(RequireEnv("GITHUB_TOKEN_SECRET_ARN")));
+            return new Dependencies(
+                Invoke: (modelId, body, cancellationToken) => LazyInvoke.Value(modelId, body, cancellationToken),
+                Converse: (modelId, system, user, cancellationToken) => LazyConverse.Value(modelId, system, user, cancellationToken),
+                UpdateItem: (request, cancellationToken) => LazyUpdateItem.Value(request, cancellationToken),
+                StartExecution: (request, cancellationToken) => LazyStepFunctions.Value.StartExecutionAsync(request, cancellationToken),
+                GitHub: async (url, jsonBody, cancellationToken) =>
+                {
+                    var call = ObserveAi.GitHub.Against(LazyHttp.Value, await token.Value.ConfigureAwait(false));
+                    return await call(url, jsonBody, cancellationToken).ConfigureAwait(false);
+                });
+        }
+    }
 
     public static async Task Main()
     {
@@ -50,28 +75,24 @@ public static class Function
 
     public static Task<LambdaResponse> FunctionHandlerAsync(JsonElement lambdaEvent, ILambdaContext context)
     {
-        return DispatchAsync(lambdaEvent, LazyClient.Value, RequireEnv("MODEL_ARN"), context);
+        return DispatchAsync(lambdaEvent, Dependencies.Real(), context);
     }
 
-    /// <summary>The handler body, with the Bedrock client and every other external call injectable for tests.</summary>
-    internal static Task<LambdaResponse> DispatchAsync(
-        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, ILambdaContext context,
-        Caps.UpdateItem? updateRate = null, StartExecution? startExecution = null,
-        ReadSecret? readSecret = null, GitHub.Call? gitHub = null, SeenStore.UpdateItem? recordSeen = null,
-        Diagnosis.Converse? converse = null)
+    /// <summary>The handler body over the external calls it is given.</summary>
+    internal static Task<LambdaResponse> DispatchAsync(JsonElement lambdaEvent, Dependencies deps, ILambdaContext context)
     {
         if (lambdaEvent.TryGetProperty("Records", out var records))
         {
-            return RunStartExecutionsAsync(records, startExecution, recordSeen, context);
+            return RunStartExecutionsAsync(records, deps, context);
         }
 
         var action = RequireString(lambdaEvent, "action");
         return action switch
         {
-            "triage" => Pipeline.TriageRowAsync(lambdaEvent, client, modelArn, LazyTree.Value, context),
-            "check-rate" => RunCheckRateAsync(lambdaEvent, updateRate),
-            "escalate" => RunEscalateAsync(lambdaEvent, client, modelArn, readSecret, gitHub, converse, context),
-            "file-issue" => RunFileIssueAsync(lambdaEvent, readSecret, gitHub),
+            "triage" => Pipeline.TriageRowAsync(lambdaEvent, deps.Invoke, RequireEnv("MODEL_ARN"), LazyTree.Value, context),
+            "check-rate" => RunCheckRateAsync(lambdaEvent, deps.UpdateItem),
+            "escalate" => RunEscalateAsync(lambdaEvent, deps, context),
+            "file-issue" => RunFileIssueAsync(lambdaEvent, deps.GitHub),
             _ => throw new InvalidOperationException($"Unknown action: '{action}'"),
         };
     }
@@ -84,14 +105,11 @@ public static class Function
     /// an execution only for a fingerprint's first sighting. Skipped events are counted, and the counts are the only
     /// record a skipped event leaves.
     /// </summary>
-    private static async Task<LambdaResponse> RunStartExecutionsAsync(
-        JsonElement records, StartExecution? startExecution, SeenStore.UpdateItem? recordSeen, ILambdaContext context)
+    private static async Task<LambdaResponse> RunStartExecutionsAsync(JsonElement records, Dependencies deps, ILambdaContext context)
     {
         var pipelineArn = RequireEnv("PIPELINE_ARN");
         var githubOrg = RequireEnv("GITHUB_ORG");
         var seenTable = RequireEnv("SEEN_TABLE");
-        var start = startExecution ?? RealStartExecutionAsync;
-        var record = recordSeen ?? SeenStore.Against(LazyDynamo.Value);
         var now = DateTimeOffset.UtcNow;
 
         long started = 0, alreadyKnown = 0, unparseable = 0, noRepo = 0;
@@ -115,7 +133,7 @@ public static class Function
                 }
 
                 var fingerprint = Fingerprint.Compute(trace);
-                var seen = await SeenStore.RecordAsync(record, seenTable, repo, fingerprint, now, SeenRetention)
+                var seen = await SeenStore.RecordAsync(deps.UpdateItem, seenTable, repo, fingerprint, now, SeenRetention)
                     .ConfigureAwait(false);
                 if (seen.Occurrences != 1)
                 {
@@ -126,7 +144,7 @@ public static class Function
                 var input = new ExecutionInput(
                     repo, fingerprint, seen.Occurrences, seen.FirstSeen, candidate.LogGroup, candidate.Message,
                     trace.Runtime, trace.ExceptionType, trace.Frames);
-                await start(new StartExecutionRequest
+                await deps.StartExecution(new StartExecutionRequest
                 {
                     StateMachineArn = pipelineArn,
                     Name = SanitiseExecutionName(candidate.Id),
@@ -152,17 +170,14 @@ public static class Function
         return sanitised.Length > 80 ? sanitised[..80] : sanitised;
     }
 
-    private static Task<StartExecutionResponse> RealStartExecutionAsync(StartExecutionRequest request, CancellationToken cancellationToken) =>
-        LazyStepFunctions.Value.StartExecutionAsync(request, cancellationToken);
-
     /// <summary>Buckets are keyed by hour, and a two-hour TTL always lands after the bucket's hour has ended.</summary>
-    private static async Task<LambdaResponse> RunCheckRateAsync(JsonElement lambdaEvent, Caps.UpdateItem? updateRate)
+    private static async Task<LambdaResponse> RunCheckRateAsync(JsonElement lambdaEvent, Dynamo.UpdateItem updateItem)
     {
         var repo = RequireString(lambdaEvent, "repo");
         var perRepoLimit = long.Parse(RequireEnv("ISSUES_PER_REPO_PER_HOUR"));
         var globalLimit = long.Parse(RequireEnv("ISSUES_PER_HOUR"));
         var result = await Caps.TryConsumeAsync(
-            updateRate ?? Caps.Against(LazyDynamo.Value), RequireEnv("RATE_TABLE"), repo, perRepoLimit, globalLimit,
+            updateItem, RequireEnv("RATE_TABLE"), repo, perRepoLimit, globalLimit,
             DateTimeOffset.UtcNow, TimeSpan.FromHours(2)).ConfigureAwait(false);
         return new LambdaResponse { Allowed = result.Allowed, Tripped = result.Tripped, Count = result.Count, Limit = result.Limit };
     }
@@ -171,18 +186,14 @@ public static class Function
     /// Fetches the files the trace names and runs the escalate stage over them. All GitHub access happens
     /// here, so Pipeline.EscalateAsync receives the source files as data.
     /// </summary>
-    private static async Task<LambdaResponse> RunEscalateAsync(
-        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, ReadSecret? readSecret,
-        GitHub.Call? gitHub, Diagnosis.Converse? converse, ILambdaContext context)
+    private static async Task<LambdaResponse> RunEscalateAsync(JsonElement lambdaEvent, Dependencies deps, ILambdaContext context)
     {
         var request = ParseEscalateRequest(lambdaEvent);
         var paths = SourceFetch.PathsFor(request.Trace, request.RawTrace);
-        var fetched = await SourceFetch.FetchAsync(
-            gitHub ?? await RealGitHubAsync(readSecret).ConfigureAwait(false), request.Repo, request.Commitish, paths)
-            .ConfigureAwait(false);
+        var fetched = await SourceFetch.FetchAsync(deps.GitHub, request.Repo, request.Commitish, paths).ConfigureAwait(false);
 
         var result = await Pipeline.EscalateAsync(
-            client, modelArn, converse ?? LazyConverse.Value, RequireEnv("DIAGNOSIS_MODEL_ID"),
+            deps.Invoke, RequireEnv("MODEL_ARN"), deps.Converse, RequireEnv("DIAGNOSIS_MODEL_ID"),
             request with { Sources = fetched.Sources }).ConfigureAwait(false);
         var matched = result.FrameVerdicts.Count(v => v.Matched);
         context.Logger.LogInformation(
@@ -208,30 +219,20 @@ public static class Function
     }
 
     /// <summary>IssueFiler comments on an open issue with the same title, or creates a new one.</summary>
-    private static async Task<LambdaResponse> RunFileIssueAsync(
-        JsonElement lambdaEvent, ReadSecret? readSecret, GitHub.Call? gitHub)
+    private static async Task<LambdaResponse> RunFileIssueAsync(JsonElement lambdaEvent, GitHub.Call gitHub)
     {
         var repo = RequireString(lambdaEvent, "repo");
         var draft = new Draft(RequireString(lambdaEvent, "title"), RequireString(lambdaEvent, "body"));
 
-        var result = await IssueFiler.FileAsync(gitHub ?? await RealGitHubAsync(readSecret).ConfigureAwait(false), repo, draft)
-            .ConfigureAwait(false);
+        var result = await IssueFiler.FileAsync(gitHub, repo, draft).ConfigureAwait(false);
 
         return new LambdaResponse { Outcome = result.Outcome.ToString().ToLowerInvariant(), IssueNumber = result.IssueNumber };
     }
 
-    /// <summary>GitHub over HTTP, authenticated with the token read from GITHUB_TOKEN_SECRET_ARN.</summary>
-    private static async Task<GitHub.Call> RealGitHubAsync(ReadSecret? readSecret)
-    {
-        var token = await (readSecret ?? ReadGitHubTokenAsync)(RequireEnv("GITHUB_TOKEN_SECRET_ARN"), default)
-            .ConfigureAwait(false);
-        return GitHub.Against(LazyHttp.Value, token);
-    }
-
-    private static async Task<string> ReadGitHubTokenAsync(string secretArn, CancellationToken cancellationToken)
+    private static async Task<string> ReadGitHubTokenAsync(string secretArn)
     {
         var response = await LazySecretsManager.Value.GetSecretValueAsync(
-            new GetSecretValueRequest { SecretId = secretArn }, cancellationToken).ConfigureAwait(false);
+            new GetSecretValueRequest { SecretId = secretArn }).ConfigureAwait(false);
         return response.SecretString;
     }
 
