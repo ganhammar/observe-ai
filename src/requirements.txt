@@ -1,5 +1,0 @@
-# Installed into the Lambda artifact by `sam build`. The Lambda runtime ships
-# its own boto3, but the pinned floor here keeps the deployed client aligned
-# with the Bedrock request shapes this function sends rather than tracking
-# whatever version the managed runtime happens to carry.
-boto3>=1.35

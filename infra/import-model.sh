@@ -1,215 +1,99 @@
 #!/usr/bin/env bash
 #
-# import-model.sh - gets a Qwen3 model into Amazon Bedrock Custom Model
-# Import so infra/template.yaml has a ModelArn to deploy against. The
-# Import Model GitHub Actions workflow runs this after deploying
-# infra/bootstrap.yaml, passing the staging bucket and Bedrock import role
-# from that stack's outputs as --bucket and --role-arn. It can also be run
-# by hand against an existing bucket and role.
+# Imports a Qwen3 checkpoint into Amazon Bedrock Custom Model Import and prints
+# the imported model ARN. The Import Model workflow runs it with the bucket and
+# role from infra/bootstrap.yaml.
 #
-# Verified constraint: Bedrock Custom Model Import supports only the
-# Qwen3ForCausalLM and Qwen3MoeForCausalLM architectures for the Qwen3
-# family. Qwen3.5 checkpoints report a different architecture string and
-# will NOT import. Use a Qwen3 (dense or MoE) checkpoint, such as the
-# default below.
+# Usage: import-model.sh --bucket NAME --role-arn ARN [--model-id Qwen/Qwen3-4B]
+#        [--job-name NAME] [--prefix PREFIX] [--region eu-central-1]
 #
-# What this does, in order:
-#   1. Lists the model's files from the HuggingFace API and selects the
-#      safetensors shards plus the small config/tokenizer files Bedrock
-#      needs.
-#   2. Stages and uploads those files one at a time: download a single
-#      file with the hf CLI, copy it to S3 with `aws s3 cp`, delete the
-#      local copy, then move on to the next.
-#   3. Calls `aws bedrock create-model-import-job` to start the import.
-#   4. Polls `aws bedrock get-model-import-job` until the job reaches a
-#      terminal state, then prints the resulting model ARN.
+# Files are staged one at a time (download, upload, delete), since a checkpoint
+# is split into shards of about 4 GB and a GitHub runner has about 14 GB free.
+# Custom Model Import accepts Qwen3ForCausalLM and Qwen3MoeForCausalLM only;
+# Qwen3.5 checkpoints do not import.
 #
-# Why per-file staging: these checkpoints split their weights into
-# roughly 4 GB safetensors shards, but a GitHub-hosted runner has only
-# about 14 GB free on /. Qwen3-32B alone is 17 shards totalling 65.5 GB,
-# far more than fits at once. Downloading, uploading and deleting one
-# file at a time keeps peak local disk use around a single shard,
-# regardless of total model size.
-#
-# Idempotency: the destination S3 prefix is cleared before staging
-# begins, so a retry cannot leave a previous attempt's files mixed in
-# with a new one; if an import job with the target name is already in
-# progress or already completed, this script reuses it instead of
-# starting a duplicate. A previously failed job is not reused; this
-# script starts a new one with a timestamp suffix and leaves the failed
-# job in place for inspection.
-#
-# Prerequisites: an S3 bucket to stage weights in, and an IAM role Bedrock
-# assumes to read them (trust policy for the bedrock.amazonaws.com service
-# principal, s3:GetObject / s3:ListBucket on the bucket). The Import Model
-# workflow creates both by deploying infra/bootstrap.yaml and passes their
-# names through; running this by hand needs an existing bucket and role
-# instead, see infra/bootstrap.yaml for the exact policy documents.
-#
-# Usage:
-#   ./import-model.sh --bucket my-bucket --role-arn arn:aws:iam::123456789012:role/BedrockImportRole [options]
-#
-# Options (each also readable from an environment variable; a flag
-# overrides the matching environment variable):
-#   --model-id ID     HuggingFace model id to import.
-#                      (env MODEL_ID, default: Qwen/Qwen3-4B)
-#   --bucket NAME      S3 bucket to stage weights in. Required.
-#                      (env S3_BUCKET)
-#   --prefix PREFIX    S3 key prefix under the bucket.
-#                      (env S3_PREFIX, default: derived from --model-id)
-#   --region REGION    AWS region for S3 and Bedrock.
-#                      (env AWS_REGION, default: eu-central-1)
-#   --role-arn ARN     IAM role ARN Bedrock assumes to read the S3 weights.
-#                      Required. (env IMPORT_ROLE_ARN)
-#   --job-name NAME    Import job / imported model name.
-#                      (env IMPORT_JOB_NAME, default: derived from --model-id)
-#   --dry-run          Report whether the model already exists, then stop.
-#   -h, --help         Show this help and exit.
-#
-# ------------------------------------------------------------------------
-# COST WARNING: Amazon Bedrock Custom Model Import bills per Custom Model
-# Unit (CMU) per minute while your imported model copy is active (serving
-# or having recently served traffic), and separately per CMU per month for
-# storing the imported model, whether or not it is ever invoked. An active
-# copy scales down to zero CMUs after about 5 minutes with no invocations,
-# but reactivates (with added latency) on the next call. Check current
-# Bedrock pricing for the region you pass before proceeding; this script
-# does not estimate cost for you. Importing itself is not charged; the
-# storage charge begins once the model exists and runs until it is deleted.
-# ------------------------------------------------------------------------
+# Cost: Bedrock bills per Custom Model Unit per minute while the model is active
+# and per CMU per month for storage from the moment the model exists. The import
+# itself is free. An existing model of the same name is reused, never duplicated.
 
 set -euo pipefail
 
-MODEL_ID="${MODEL_ID:-Qwen/Qwen3-4B}"
-S3_BUCKET="${S3_BUCKET:-}"
-S3_PREFIX="${S3_PREFIX:-}"
-REGION="${AWS_REGION:-eu-central-1}"
-IMPORT_ROLE_ARN="${IMPORT_ROLE_ARN:-}"
-IMPORT_JOB_NAME="${IMPORT_JOB_NAME:-}"
-DRY_RUN="false"
+MODEL_ID="Qwen/Qwen3-4B"
+S3_BUCKET=""
+S3_PREFIX=""
+REGION="eu-central-1"
+IMPORT_ROLE_ARN=""
+IMPORT_JOB_NAME=""
 
-log() {
-  printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*" >&2
-}
-
-usage() {
-  sed -n '2,78p' "$0" | sed 's/^# \{0,1\}//'
-}
-
-sanitize() {
-  # Lowercases and replaces anything that is not [a-z0-9-] with '-', for
-  # use as an S3 prefix or a Bedrock job/model name.
-  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/-\+/-/g; s/^-//; s/-$//'
-}
+log() { printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*" >&2; }
+usage() { sed -n '3,17p' "$0" | sed 's/^# \{0,1\}//'; }
+sanitize() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/-\+/-/g; s/^-//; s/-$//'; }
+human() { numfmt --to=iec --suffix=B "$1" 2>/dev/null || echo "$1 bytes"; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --model-id)
-      MODEL_ID="$2"; shift 2 ;;
-    --bucket)
-      S3_BUCKET="$2"; shift 2 ;;
-    --prefix)
-      S3_PREFIX="$2"; shift 2 ;;
-    --region)
-      REGION="$2"; shift 2 ;;
-    --role-arn)
-      IMPORT_ROLE_ARN="$2"; shift 2 ;;
-    --job-name)
-      IMPORT_JOB_NAME="$2"; shift 2 ;;
-    --dry-run)
-      DRY_RUN="true"; shift ;;
-    -h|--help)
-      usage; exit 0 ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      usage
-      exit 1 ;;
+    --model-id) MODEL_ID="$2"; shift 2 ;;
+    --bucket) S3_BUCKET="$2"; shift 2 ;;
+    --prefix) S3_PREFIX="$2"; shift 2 ;;
+    --region) REGION="$2"; shift 2 ;;
+    --role-arn) IMPORT_ROLE_ARN="$2"; shift 2 ;;
+    --job-name) IMPORT_JOB_NAME="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown argument: $1" >&2; usage; exit 1 ;;
   esac
 done
 
-if [[ -z "$S3_BUCKET" ]]; then
-  echo "Error: --bucket (or S3_BUCKET) is required." >&2
+if [[ -z "$S3_BUCKET" || -z "$IMPORT_ROLE_ARN" ]]; then
+  echo "Error: --bucket and --role-arn are required." >&2
   exit 1
 fi
-if [[ -z "$IMPORT_ROLE_ARN" ]]; then
-  echo "Error: --role-arn (or IMPORT_ROLE_ARN) is required. This must be an" >&2
-  echo "IAM role that trusts bedrock.amazonaws.com and can read the S3" >&2
-  echo "bucket. See infra/README.md for the trust and permissions policy." >&2
-  exit 1
-fi
+for cmd in hf aws curl python3; do
+  command -v "$cmd" >/dev/null 2>&1 || { echo "Error: '$cmd' not found on PATH." >&2; exit 1; }
+done
 
 SANITIZED_MODEL_ID="$(sanitize "$MODEL_ID")"
 S3_PREFIX="${S3_PREFIX:-models/${SANITIZED_MODEL_ID}}"
 IMPORT_JOB_NAME="${IMPORT_JOB_NAME:-${SANITIZED_MODEL_ID}-import}"
+S3_URI="s3://${S3_BUCKET}/${S3_PREFIX}/"
 
-for cmd in hf aws curl python3; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "Error: required command '$cmd' was not found on PATH." >&2
-    exit 1
-  fi
-done
+job_field() {
+  aws bedrock get-model-import-job --region "$REGION" --job-identifier "$1" --query "$2" --output text 2>/dev/null || true
+}
 
-cat >&2 <<EOF
+start_job() {
+  aws bedrock create-model-import-job \
+    --region "$REGION" \
+    --job-name "$1" \
+    --imported-model-name "$IMPORT_JOB_NAME" \
+    --role-arn "$IMPORT_ROLE_ARN" \
+    --model-data-source "{\"s3DataSource\":{\"s3Uri\":\"${S3_URI}\"}}" \
+    >/dev/null
+}
 
-================================================================================
- This will download '$MODEL_ID', upload it to
-   s3://${S3_BUCKET}/${S3_PREFIX}/
- in region ${REGION}, and start (or reuse) a Bedrock Custom Model Import job
- named '${IMPORT_JOB_NAME}'.
-
- Amazon Bedrock Custom Model Import bills per Custom Model Unit (CMU) per
- minute while the resulting model is active, plus a monthly storage charge
- per CMU. Check current Bedrock pricing for ${REGION} before continuing.
-================================================================================
-
-EOF
-
-# An existing imported model of this name is the finished product, so report
-# it and stop. Creating a second one would leave both in the account, each
-# carrying its own monthly per-CMU storage charge, and only one of them would
-# be wired into the stack.
-# A failed lookup is not the same answer as an empty one. Swallowing an
-# AccessDenied here would read as "no model exists" and import a second
-# billable copy, so the failure stops the script instead.
-if ! LIST_OUTPUT="$(aws bedrock list-imported-models \
+# A failed listing must stop the script: reading it as "no model" would import a second billable copy.
+if ! EXISTING_MODEL_ARN="$(aws bedrock list-imported-models \
   --region "$REGION" \
   --name-contains "$IMPORT_JOB_NAME" \
   --query "modelSummaries[?modelName=='${IMPORT_JOB_NAME}'].modelArn | [0]" \
   --output text 2>&1)"; then
-  echo "Could not list imported models in $REGION, so it is not safe to" >&2
-  echo "assume none exists. Fix the error below and re-run." >&2
-  echo "$LIST_OUTPUT" >&2
+  echo "Could not list imported models in $REGION: $EXISTING_MODEL_ARN" >&2
   exit 1
 fi
-EXISTING_MODEL_ARN="$LIST_OUTPUT"
 if [[ -n "$EXISTING_MODEL_ARN" && "$EXISTING_MODEL_ARN" != "None" ]]; then
-  log "Imported model '$IMPORT_JOB_NAME' already exists, nothing to do."
+  log "Imported model '$IMPORT_JOB_NAME' already exists."
   echo "$EXISTING_MODEL_ARN"
-  exit 0
-fi
-
-if [[ "$DRY_RUN" == "true" ]]; then
-  log "Dry run: no model exists yet; a real run would download, stage and import."
   exit 0
 fi
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
-S3_URI="s3://${S3_BUCKET}/${S3_PREFIX}/"
-
 log "Fetching file list for $MODEL_ID ..."
 API_URL="https://huggingface.co/api/models/${MODEL_ID}?blobs=true"
-if ! MODEL_INFO="$(curl -sfL "$API_URL")"; then
-  echo "Error: could not fetch file list from $API_URL" >&2
-  exit 1
-fi
+MODEL_INFO="$(curl -sfL "$API_URL")" || { echo "Error: could not fetch $API_URL" >&2; exit 1; }
 
-# Bedrock needs the safetensors shards plus the small files that describe
-# them. Everything else (README, .gitattributes, images, other checkpoint
-# formats such as .bin/.pth/.gguf, and anything under original/) is
-# skipped. Not every repo has every file in the allowlist below; a missing
-# one is not an error. Output is tab-separated "size<TAB>rfilename" lines.
+# Bedrock needs the safetensors shards, the shard index and the config and tokenizer files.
+# Output is "size<TAB>filename" per line.
 SELECTED="$(python3 -c '
 import json, sys
 
@@ -223,49 +107,25 @@ for sibling in data.get("siblings", []):
     name = sibling.get("rfilename", "")
     if name.startswith("original/"):
         continue
-    # A sharded checkpoint is unusable without its index: the index names
-    # which tensor lives in which shard, and Bedrock reports the weights as
-    # missing entirely when it is absent. The name ends in .json, so it
-    # matches neither the safetensors suffix nor the exact-name set.
-    if not (name.endswith(".safetensors") or name.endswith(".index.json")
-            or name in allowed):
-        continue
-    size = sibling.get("size", 0)
-    print(f"{size}\t{name}")
+    if name.endswith(".safetensors") or name.endswith(".index.json") or name in allowed:
+        print(f"{sibling.get(\"size\", 0)}\t{name}")
 ' <<<"$MODEL_INFO")"
+[[ -n "$SELECTED" ]] || { echo "Error: no matching files found for $MODEL_ID." >&2; exit 1; }
 
-if [[ -z "$SELECTED" ]]; then
-  echo "Error: no matching files found for $MODEL_ID." >&2
-  exit 1
-fi
-
-human() {
-  numfmt --to=iec --suffix=B "$1" 2>/dev/null || echo "$1 bytes"
-}
-
-TOTAL_SIZE=0
-MAX_SIZE=0
-FILE_COUNT=0
+TOTAL_SIZE=0; MAX_SIZE=0; FILE_COUNT=0
 while IFS=$'\t' read -r size name; do
   TOTAL_SIZE=$((TOTAL_SIZE + size))
-  if (( size > MAX_SIZE )); then
-    MAX_SIZE=$size
-  fi
+  (( size > MAX_SIZE )) && MAX_SIZE=$size
   FILE_COUNT=$((FILE_COUNT + 1))
 done <<<"$SELECTED"
-
 AVAILABLE_BYTES="$(df -B1 --output=avail "$WORKDIR" | tail -n1 | tr -d ' ')"
-
-log "Selected $FILE_COUNT files, $(human "$TOTAL_SIZE") total."
-log "Available disk at $WORKDIR: $(human "$AVAILABLE_BYTES")."
-
+log "Selected $FILE_COUNT files, $(human "$TOTAL_SIZE") total; $(human "$AVAILABLE_BYTES") free at $WORKDIR."
 if (( MAX_SIZE > AVAILABLE_BYTES )); then
-  echo "Error: the largest selected file ($(human "$MAX_SIZE")) does not fit" >&2
-  echo "in the $(human "$AVAILABLE_BYTES") available at $WORKDIR." >&2
+  echo "Error: the largest file ($(human "$MAX_SIZE")) does not fit in the space available." >&2
   exit 1
 fi
 
-log "Clearing $S3_URI before staging so a retry cannot mix in old files ..."
+log "Clearing $S3_URI so a retry cannot mix in an earlier attempt's files ..."
 aws s3 rm "$S3_URI" --recursive --region "$REGION"
 
 INDEX=0
@@ -277,87 +137,28 @@ while IFS=$'\t' read -r size name; do
   rm -f "${WORKDIR}/${name}"
 done <<<"$SELECTED"
 
-get_status() {
-  aws bedrock get-model-import-job \
-    --region "$REGION" \
-    --job-identifier "$1" \
-    --query 'status' \
-    --output text 2>/dev/null || true
-}
-
-get_field() {
-  aws bedrock get-model-import-job \
-    --region "$REGION" \
-    --job-identifier "$1" \
-    --query "$2" \
-    --output text 2>/dev/null || true
-}
-
 JOB_TO_POLL="$IMPORT_JOB_NAME"
-EXISTING_STATUS="$(get_status "$IMPORT_JOB_NAME")"
-
-case "$EXISTING_STATUS" in
-  "" )
-    log "Starting import job '$IMPORT_JOB_NAME' ..."
-    aws bedrock create-model-import-job \
-      --region "$REGION" \
-      --job-name "$IMPORT_JOB_NAME" \
-      --imported-model-name "$IMPORT_JOB_NAME" \
-      --role-arn "$IMPORT_ROLE_ARN" \
-      --model-data-source "{\"s3DataSource\":{\"s3Uri\":\"${S3_URI}\"}}" \
-      >/dev/null
-    ;;
-  InProgress)
-    log "Import job '$IMPORT_JOB_NAME' is already in progress, reusing it."
-    ;;
-  Completed)
-    log "Import job '$IMPORT_JOB_NAME' already completed, skipping straight to the result."
-    ;;
+case "$(job_field "$IMPORT_JOB_NAME" status)" in
+  "") log "Starting import job '$IMPORT_JOB_NAME' ..."; start_job "$IMPORT_JOB_NAME" ;;
+  InProgress) log "Import job '$IMPORT_JOB_NAME' is in progress, reusing it." ;;
+  Completed) log "Import job '$IMPORT_JOB_NAME' already completed." ;;
   Failed)
-    # Job names are unique per account, so a retry needs a fresh one. The
-    # imported model name stays fixed: it is the key the existence check above
-    # matches on, and letting retries suffix it would produce one more billable
-    # imported model per attempt.
+    # Job names are unique per account; the model name stays fixed so the existence check above still matches.
     JOB_TO_POLL="${IMPORT_JOB_NAME}-$(date -u +%Y%m%d%H%M%S)"
-    log "Import job '$IMPORT_JOB_NAME' previously failed; starting a new job '$JOB_TO_POLL' instead."
-    log "Inspect the failed job with: aws bedrock get-model-import-job --region $REGION --job-identifier $IMPORT_JOB_NAME"
-    aws bedrock create-model-import-job \
-      --region "$REGION" \
-      --job-name "$JOB_TO_POLL" \
-      --imported-model-name "$IMPORT_JOB_NAME" \
-      --role-arn "$IMPORT_ROLE_ARN" \
-      --model-data-source "{\"s3DataSource\":{\"s3Uri\":\"${S3_URI}\"}}" \
-      >/dev/null
-    ;;
-  *)
-    log "Import job '$IMPORT_JOB_NAME' is in state '$EXISTING_STATUS', polling it as-is."
-    ;;
+    log "Import job '$IMPORT_JOB_NAME' failed earlier; starting '$JOB_TO_POLL'."
+    start_job "$JOB_TO_POLL" ;;
+  *) log "Import job '$IMPORT_JOB_NAME' is in an unexpected state, polling it." ;;
 esac
 
-if [[ "$EXISTING_STATUS" != "Completed" ]]; then
-  log "Polling job '$JOB_TO_POLL' until it completes (checking every 30s) ..."
-  while true; do
-    STATUS="$(get_status "$JOB_TO_POLL")"
-    case "$STATUS" in
-      Completed)
-        break ;;
-      Failed)
-        FAILURE_MESSAGE="$(get_field "$JOB_TO_POLL" 'failureMessage')"
-        echo "Import job '$JOB_TO_POLL' failed: $FAILURE_MESSAGE" >&2
-        exit 1
-        ;;
-      "" )
-        echo "Error: could not read status for job '$JOB_TO_POLL'." >&2
-        exit 1
-        ;;
-      *)
-        log "Status: $STATUS"
-        sleep 30
-        ;;
-    esac
-  done
-fi
+log "Polling job '$JOB_TO_POLL' every 30s ..."
+while true; do
+  case "$(job_field "$JOB_TO_POLL" status)" in
+    Completed) break ;;
+    Failed) echo "Import job '$JOB_TO_POLL' failed: $(job_field "$JOB_TO_POLL" failureMessage)" >&2; exit 1 ;;
+    "") echo "Error: could not read status for job '$JOB_TO_POLL'." >&2; exit 1 ;;
+    *) sleep 30 ;;
+  esac
+done
 
-MODEL_ARN="$(get_field "$JOB_TO_POLL" 'importedModelArn')"
 log "Import complete."
-echo "$MODEL_ARN"
+job_field "$JOB_TO_POLL" importedModelArn
