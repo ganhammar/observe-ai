@@ -121,6 +121,17 @@ public class TriageTests
     }
 
     [Fact]
+    public async Task DeclaredMassIsTheLowestAcrossAnsweredSubQuestions()
+    {
+        var fake = new FakeInvoker();
+
+        var result = await Triage.RunAsync(fake, "arn:model", RowWithEvidence("row-6"), Tree);
+
+        // Two-option questions see only A and B, which carry less mass than surface's four letters.
+        Assert.Equal(Math.Exp(-0.2) + Math.Exp(-1.0), result.DeclaredMass, precision: 9);
+    }
+
+    [Fact]
     public async Task SubQuestionsRunConcurrentlyNotSequentially()
     {
         // A constrained thread pool can delay how quickly nine queued Task.Delay

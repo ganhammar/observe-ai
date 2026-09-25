@@ -6,40 +6,10 @@ namespace ObserveAi.Tests;
 /// <summary>
 /// Exercises the source-generated JsonSerializerContext the NativeAOT publish
 /// depends on (reflection-based serialization is unavailable once trimmed),
-/// checking that a successful row and a failed row serialise into the two
-/// distinct shapes Python's handler.py returns, and that -Infinity in
-/// option_logprobs (every option letter missing) round-trips the way Python's
-/// default json.dumps(allow_nan=True) would emit it.
+/// checking that a triaged row and a failed row serialise into distinct shapes.
 /// </summary>
 public class LambdaJsonContextTests
 {
-    [Fact]
-    public void SuccessfulRowOmitsErrorAndSerialisesAllFields()
-    {
-        var score = new ScoreResult(
-            "row-1",
-            ["bug", "downstream"],
-            [0.7, 0.3],
-            [-0.1, -1.2],
-            0.9,
-            [],
-            false,
-            new TopToken("A", 0.9),
-            41,
-            0.01,
-            "abc123",
-            BedrockBackend.PromptVersion);
-
-        var json = JsonSerializer.Serialize(RowResultDto.FromScore(score), LambdaJsonContext.Default.RowResultDto);
-        var element = JsonDocument.Parse(json).RootElement;
-
-        Assert.Equal("row-1", element.GetProperty("id").GetString());
-        Assert.False(element.TryGetProperty("error", out _));
-        Assert.Equal("bug", element.GetProperty("option_ids")[0].GetString());
-        Assert.Equal(0.9, element.GetProperty("declared_mass").GetDouble());
-        Assert.Equal("A", element.GetProperty("top_token").GetProperty("token").GetString());
-    }
-
     [Fact]
     public void FailedRowOnlyHasIdAndError()
     {
@@ -51,34 +21,7 @@ public class LambdaJsonContextTests
         Assert.Equal("row-2", element.GetProperty("id").GetString());
         Assert.Contains("2-16", element.GetProperty("error").GetString());
         Assert.False(element.TryGetProperty("option_ids", out _));
-        Assert.False(element.TryGetProperty("declared_mass", out _));
-        Assert.False(element.TryGetProperty("abstained", out _));
-    }
-
-    [Fact]
-    public void AbstainedRowSerialisesNegativeInfinityLogprobs()
-    {
-        var score = new ScoreResult(
-            "row-3",
-            ["bug", "downstream"],
-            [0.0, 0.0],
-            [double.NegativeInfinity, double.NegativeInfinity],
-            0.0,
-            ["bug", "downstream"],
-            true,
-            new TopToken("Based", 0.9),
-            41,
-            0.01,
-            "abc123",
-            BedrockBackend.PromptVersion);
-
-        var json = JsonSerializer.Serialize(RowResultDto.FromScore(score), LambdaJsonContext.Default.RowResultDto);
-
-        // Matches Python's default json.dumps(allow_nan=True) rendering of float('-inf').
-        Assert.Contains("-Infinity", json);
-
-        var roundTripped = JsonSerializer.Deserialize(json, LambdaJsonContext.Default.RowResultDto)!;
-        Assert.Equal(double.NegativeInfinity, roundTripped.OptionLogprobs![0]);
+        Assert.False(element.TryGetProperty("signals", out _));
     }
 
     [Fact]
@@ -88,7 +31,12 @@ public class LambdaJsonContextTests
             "row-4",
             new TriageResult(
                 new CombineResult(0.7, 0.3, true),
-                [new TriageAnswer("baseline", new Dictionary<string, double> { ["bug"] = 0.7, ["downstream"] = 0.3 }, null)]),
+                [
+                    new TriageAnswer("baseline", new Dictionary<string, double> { ["bug"] = 0.7, ["downstream"] = 0.3 }, null),
+                    new TriageAnswer("external_change", new Dictionary<string, double> { ["yes"] = 0.2, ["no"] = 0.8 }, null),
+                    new TriageAnswer("repeated_work", null, "AmazonServiceException: not ready"),
+                ],
+                DeclaredMass: 0.98),
             QuestionTree.LoadEmbedded());
 
         var json = JsonSerializer.Serialize(dto, LambdaJsonContext.Default.RowResultDto);
@@ -97,8 +45,10 @@ public class LambdaJsonContextTests
         Assert.Equal("row-4", element.GetProperty("id").GetString());
         Assert.Equal(["bug", "downstream"], element.GetProperty("option_ids").EnumerateArray().Select(e => e.GetString()));
         Assert.True(element.GetProperty("fallback").GetBoolean());
-        Assert.Equal(7, element.GetProperty("signals").EnumerateObject().Count());
-        Assert.False(element.TryGetProperty("declared_mass", out _));
+        // Only answered signals are reported; the baseline is not a signal.
+        var signal = Assert.Single(element.GetProperty("signals").EnumerateObject());
+        Assert.Equal("external_change", signal.Name);
+        Assert.Equal(0.2, signal.Value.GetDouble());
     }
 
     [Fact]

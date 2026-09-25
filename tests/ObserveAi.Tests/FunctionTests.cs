@@ -8,8 +8,7 @@ namespace ObserveAi.Tests;
 
 /// <summary>
 /// Drives Function.ScoreRowsAsync directly with a fake IBedrockInvoker, checking
-/// that SEMIF_MODE=flat still returns the single-question response shape, and that
-/// the default tree mode returns the combined-verdict shape instead.
+/// that a row returns the combined-verdict shape.
 /// </summary>
 public class FunctionTests
 {
@@ -66,48 +65,21 @@ public class FunctionTests
     }
 
     [Fact]
-    public async Task FlatModeReturnsTheOldSingleQuestionShape()
-    {
-        var row = JsonDocument.Parse("""
-            {
-              "id": "row-1",
-              "state": {"stack_trace": "boom"},
-              "question": "Bug or dependency?",
-              "options": [
-                {"id": "bug", "description": "Our code."},
-                {"id": "downstream", "description": "Their service."}
-              ]
-            }
-            """).RootElement;
-        var fake = new FakeInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -2.0 }));
-
-        var response = await Function.ScoreRowsAsync(row, fake, "arn:model", "flat", new FakeContext());
-
-        var result = Assert.Single(response.Results);
-        Assert.Equal("row-1", result.Id);
-        Assert.Equal(["bug", "downstream"], result.OptionIds);
-        Assert.NotNull(result.Probabilities);
-        Assert.NotNull(result.DeclaredMass);
-        Assert.Null(result.Fallback);
-        Assert.Null(result.Signals);
-    }
-
-    [Fact]
-    public async Task TreeModeReturnsTheCombinedVerdictShape()
+    public async Task ARowReturnsTheCombinedVerdictShape()
     {
         var row = JsonDocument.Parse("""{"id": "row-2", "state": {"stack_trace": "boom"}}""").RootElement;
         var fake = new FakeInvoker(
             CompletionBody(new Dictionary<string, double> { ["A"] = -0.2, ["B"] = -1.0, ["C"] = -1.5, ["D"] = -2.0 }));
 
-        var response = await Function.ScoreRowsAsync(row, fake, "arn:model", "tree", new FakeContext());
+        var response = await Function.ScoreRowsAsync(row, fake, "arn:model", new FakeContext());
 
         var result = Assert.Single(response.Results);
         Assert.Equal("row-2", result.Id);
         Assert.Equal(["bug", "downstream"], result.OptionIds);
         Assert.Equal(2, result.Probabilities!.Count);
         Assert.NotNull(result.Fallback);
+        // Without evidence only the baseline is asked, so no signal answered.
         Assert.NotNull(result.Signals);
-        Assert.Equal(7, result.Signals!.Count);
-        Assert.Null(result.DeclaredMass);
+        Assert.Empty(result.Signals!);
     }
 }

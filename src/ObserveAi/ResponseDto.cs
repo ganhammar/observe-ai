@@ -20,59 +20,14 @@ public sealed class RowResultDto
     [JsonPropertyName("probabilities")]
     public IReadOnlyList<double>? Probabilities { get; init; }
 
-    [JsonPropertyName("option_logprobs")]
-    public IReadOnlyList<double>? OptionLogprobs { get; init; }
-
-    [JsonPropertyName("declared_mass")]
-    public double? DeclaredMass { get; init; }
-
-    [JsonPropertyName("missing_options")]
-    public IReadOnlyList<string>? MissingOptions { get; init; }
-
-    [JsonPropertyName("abstained")]
-    public bool? Abstained { get; init; }
-
-    [JsonPropertyName("top_token")]
-    public TopToken? TopToken { get; init; }
-
-    [JsonPropertyName("input_tokens")]
-    public long? InputTokens { get; init; }
-
-    [JsonPropertyName("total_seconds")]
-    public double? TotalSeconds { get; init; }
-
-    [JsonPropertyName("prompt_sha256")]
-    public string? PromptSha256 { get; init; }
-
-    [JsonPropertyName("prompt_version")]
-    public string? PromptVersion { get; init; }
-
     [JsonPropertyName("error")]
     public string? Error { get; init; }
-
-    // Set in tree mode only.
 
     [JsonPropertyName("fallback")]
     public bool? Fallback { get; init; }
 
     [JsonPropertyName("signals")]
     public IReadOnlyDictionary<string, double>? Signals { get; init; }
-
-    public static RowResultDto FromScore(ScoreResult score) => new()
-    {
-        Id = score.Id,
-        OptionIds = score.OptionIds,
-        Probabilities = score.Probabilities,
-        OptionLogprobs = score.OptionLogprobs,
-        DeclaredMass = score.DeclaredMass,
-        MissingOptions = score.MissingOptions,
-        Abstained = score.Abstained,
-        TopToken = score.TopToken,
-        InputTokens = score.InputTokens,
-        TotalSeconds = score.TotalSeconds,
-        PromptSha256 = score.PromptSha256,
-        PromptVersion = score.PromptVersion,
-    };
 
     public static RowResultDto FromError(string? id, string error) => new() { Id = id, Error = error };
 
@@ -82,7 +37,9 @@ public sealed class RowResultDto
         OptionIds = ["bug", "downstream"],
         Probabilities = [result.Verdict.Bug, result.Verdict.Downstream],
         Fallback = result.Verdict.Fallback,
-        Signals = tree.Signals.ToDictionary(signal => signal.Key, signal => result.YesProbability(signal.Key)),
+        Signals = tree.Signals
+            .Where(signal => result.Answers.Any(answer => answer.Key == signal.Key && answer.Probabilities is not null))
+            .ToDictionary(signal => signal.Key, signal => result.YesProbability(signal.Key)),
     };
 }
 
@@ -214,7 +171,6 @@ public sealed class LambdaResponse
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(LambdaResponse))]
 [JsonSerializable(typeof(RowResultDto))]
-[JsonSerializable(typeof(TopToken))]
 [JsonSerializable(typeof(IdentifyResultDto))]
 [JsonSerializable(typeof(EscalateResultDto))]
 [JsonSerializable(typeof(ExecutionInput))]

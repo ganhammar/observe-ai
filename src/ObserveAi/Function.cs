@@ -49,16 +49,12 @@ public static class Function
 
     public static Task<LambdaResponse> FunctionHandlerAsync(JsonElement lambdaEvent, ILambdaContext context)
     {
-        var modelArn = RequireEnv("MODEL_ARN");
-        // SEMIF_MODE selects the triage path: "tree" (default) or "flat", a single-question baseline.
-        var mode = Environment.GetEnvironmentVariable("SEMIF_MODE") ?? "tree";
-
-        return DispatchAsync(lambdaEvent, LazyClient.Value, modelArn, mode, context);
+        return DispatchAsync(lambdaEvent, LazyClient.Value, RequireEnv("MODEL_ARN"), context);
     }
 
     /// <summary>The handler body, with the Bedrock client and every other external call injectable for tests.</summary>
     internal static Task<LambdaResponse> DispatchAsync(
-        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, ILambdaContext context,
+        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, ILambdaContext context,
         Caps.UpdateItem? updateRate = null, StartExecution? startExecution = null,
         ReadSecret? readSecret = null, IssueFiler.CallGitHub? callGitHub = null, SeenStore.UpdateItem? recordSeen = null,
         SourceFetch.Get? getSource = null, Diagnosis.Converse? converse = null)
@@ -79,7 +75,7 @@ public static class Function
         {
             "identify" => Task.FromResult(RunIdentify(lambdaEvent)),
             "resolve-repo" => Task.FromResult(RunResolveRepo(lambdaEvent)),
-            "triage" => ScoreRowsAsync(lambdaEvent, client, modelArn, mode, context),
+            "triage" => ScoreRowsAsync(lambdaEvent, client, modelArn, context),
             "check-rate" => RunCheckRateAsync(lambdaEvent, updateRate),
             "escalate" => RunEscalateAsync(lambdaEvent, client, modelArn, readSecret, getSource, converse, context),
             "file-issue" => RunFileIssueAsync(lambdaEvent, readSecret, callGitHub),
@@ -213,13 +209,13 @@ public static class Function
 
     /// <summary>Scores a single SemIf row or a {"rows": [...]} batch and returns {"results": [...]}.</summary>
     internal static async Task<LambdaResponse> ScoreRowsAsync(
-        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, ILambdaContext context)
+        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, ILambdaContext context)
     {
         var rows = ExtractRows(lambdaEvent);
         var results = new List<RowResultDto>(rows.Count);
         foreach (var row in rows)
         {
-            results.Add(await Pipeline.TriageRowAsync(row, client, modelArn, mode, LazyTree, context).ConfigureAwait(false));
+            results.Add(await Pipeline.TriageRowAsync(row, client, modelArn, LazyTree.Value, context).ConfigureAwait(false));
         }
 
         var failures = results.Count(result => result.Error is not null);

@@ -6,8 +6,11 @@ namespace ObserveAi;
 /// <summary>One sub-question's outcome: either option-id-to-probability, or an error, never both.</summary>
 public sealed record TriageAnswer(string Key, IReadOnlyDictionary<string, double>? Probabilities, string? Error);
 
-/// <summary>The tree's verdict for one row plus every sub-answer, so a wrong result can be traced to its signal.</summary>
-public sealed record TriageResult(CombineResult Verdict, IReadOnlyList<TriageAnswer> Answers)
+/// <summary>
+/// The tree's verdict for one row plus every sub-answer, so a wrong result can be traced to its signal.
+/// DeclaredMass is the lowest option-letter mass across the answered sub-questions.
+/// </summary>
+public sealed record TriageResult(CombineResult Verdict, IReadOnlyList<TriageAnswer> Answers, double DeclaredMass)
 {
     /// <summary>The yes-probability for a signal key, or 0.0 when it did not answer.</summary>
     public double YesProbability(string key) =>
@@ -37,7 +40,8 @@ public static class Triage
         var questions = hasEvidence ? SubQuestions(tree) : BaselineOnly(tree);
         var scoring = questions.Select(sub =>
             ScoreSubQuestionAsync(client, modelArn, id, state, sub.Key, sub.Question, sub.Options, cancellationToken));
-        var answers = await Task.WhenAll(scoring).ConfigureAwait(false);
+        var scored = await Task.WhenAll(scoring).ConfigureAwait(false);
+        var answers = scored.Select(result => result.Answer).ToList();
 
         var byKey = answers
             .Where(answer => answer.Probabilities is not null)
@@ -52,7 +56,8 @@ public static class Triage
         }
 
         var verdict = tree.Combine(byKey, hasEvidence);
-        return new TriageResult(verdict, answers);
+        var declaredMass = scored.Where(result => result.Answer.Probabilities is not null).Min(result => result.DeclaredMass);
+        return new TriageResult(verdict, answers, declaredMass);
     }
 
     private static IEnumerable<(string Key, string Question, IReadOnlyList<TreeOption> Options)> BaselineOnly(
@@ -72,25 +77,23 @@ public static class Triage
         }
     }
 
-    private static async Task<TriageAnswer> ScoreSubQuestionAsync(
+    private static async Task<(TriageAnswer Answer, double DeclaredMass)> ScoreSubQuestionAsync(
         IBedrockInvoker client, string modelArn, string rowId, JsonElement state,
         string key, string question, IReadOnlyList<TreeOption> options, CancellationToken cancellationToken)
     {
         var subRow = BuildSubRow(rowId, key, state, question, options);
         try
         {
-            // constrain: false matches how the sub-questions were measured.
-            var score = await BedrockBackend.ScoreAsync(
-                client, modelArn, subRow, constrain: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var score = await BedrockBackend.ScoreAsync(client, modelArn, subRow, cancellationToken).ConfigureAwait(false);
             var probabilities = score.OptionIds
                 .Zip(score.Probabilities, (optionId, probability) => (optionId, probability))
                 .ToDictionary(pair => pair.optionId, pair => pair.probability);
-            return new TriageAnswer(key, probabilities, null);
+            return (new TriageAnswer(key, probabilities, null), score.DeclaredMass);
         }
         catch (Exception error) when (error is RowValidationException or AmazonServiceException or AmazonClientException)
         {
             // A missing signal counts as 0.0 in Combine, the same as "no"; the error is kept for tracing.
-            return new TriageAnswer(key, null, $"{error.GetType().Name}: {error.Message}");
+            return (new TriageAnswer(key, null, $"{error.GetType().Name}: {error.Message}"), 0.0);
         }
     }
 

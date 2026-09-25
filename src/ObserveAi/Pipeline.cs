@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Amazon.Lambda.Core;
-using Amazon.Runtime;
 
 namespace ObserveAi;
 
@@ -65,12 +64,11 @@ public static class Pipeline
         ServiceIdentity.ConventionalRepo(logGroupName, githubOrg);
 
     /// <summary>
-    /// Scores one row in tree or flat mode. Only flat mode catches a rejected row. In tree mode a total
-    /// scoring failure propagates, so Step Functions retries the Triage state and the fingerprint stays undecided.
+    /// Scores one row with the question tree. A total scoring failure propagates, so Step Functions retries
+    /// the Triage state and the fingerprint stays undecided.
     /// </summary>
     public static async Task<RowResultDto> TriageRowAsync(
-        JsonElement row, IBedrockInvoker client, string modelArn, string mode,
-        Lazy<QuestionTree> lazyTree, ILambdaContext context)
+        JsonElement row, IBedrockInvoker client, string modelArn, QuestionTree tree, ILambdaContext context)
     {
         if (row.ValueKind != JsonValueKind.Object)
         {
@@ -83,25 +81,15 @@ public static class Pipeline
             ? idProperty.GetString()
             : null;
 
-        if (mode == "flat")
-        {
-            try
-            {
-                var score = await BedrockBackend.ScoreAsync(client, modelArn, row).ConfigureAwait(false);
-                return RowResultDto.FromScore(score);
-            }
-            catch (Exception error) when (error is RowValidationException or AmazonServiceException or AmazonClientException)
-            {
-                context.Logger.LogWarning($"Row {rowId} rejected: {error.GetType().Name}: {error.Message}");
-                return RowResultDto.FromError(rowId, $"{error.GetType().Name}: {error.Message}");
-            }
-        }
-
-        var tree = lazyTree.Value;
         var result = await Triage.RunAsync(client, modelArn, row, tree).ConfigureAwait(false);
         foreach (var failed in result.Answers.Where(answer => answer.Error is not null))
         {
             context.Logger.LogWarning($"Row {rowId} signal {failed.Key} failed: {failed.Error}");
+        }
+        // Mass off the option letters means the model is answering something else, as after a model swap.
+        if (result.DeclaredMass < 0.9)
+        {
+            context.Logger.LogWarning($"Row {rowId} declared mass below 0.9: {result.DeclaredMass:0.000}");
         }
         return RowResultDto.FromTriage(rowId, result, tree);
     }
@@ -140,7 +128,7 @@ public static class Pipeline
 
             var row = SourceVerification.BuildRow($"verify::{i}", frame, request.Trace.ExceptionType, source);
             var score = await BedrockBackend.ScoreAsync(
-                client, modelArn, row, constrain: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+                client, modelArn, row, cancellationToken).ConfigureAwait(false);
             var probabilities = score.OptionIds
                 .Zip(score.Probabilities, (id, p) => (id, p))
                 .ToDictionary(pair => pair.id, pair => pair.p);

@@ -68,7 +68,7 @@ public class DispatchTests
             ["message"] = DotnetTrace,
         });
 
-        var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext());
+        var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", new FakeContext());
 
         Assert.NotNull(response.Identify);
         Assert.True(response.Identify!.Parsed);
@@ -80,18 +80,10 @@ public class DispatchTests
     [Fact]
     public async Task AMissingActionStillTriages()
     {
-        var row = Parse(new JsonObject
-        {
-            ["id"] = "row-1",
-            ["state"] = new JsonObject { ["x"] = 1 },
-            ["question"] = "Bug or downstream?",
-            ["options"] = new JsonArray(
-                new JsonObject { ["id"] = "bug", ["description"] = "Our code." },
-                new JsonObject { ["id"] = "downstream", ["description"] = "Their service." }),
-        });
+        var row = Parse(new JsonObject { ["id"] = "row-1", ["state"] = new JsonObject { ["stack_trace"] = "boom" } });
         var fake = new FakeInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -2.0 }));
 
-        var response = await Function.DispatchAsync(row, fake, "arn:model", "flat", new FakeContext());
+        var response = await Function.DispatchAsync(row, fake, "arn:model", new FakeContext());
 
         var result = Assert.Single(response.Results!);
         Assert.Equal("row-1", result.Id);
@@ -126,7 +118,7 @@ public class DispatchTests
         try
         {
             response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(),
+                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(),
                 getSource: (_, _) => Task.FromResult<string?>(null),
                 converse: (_, _, user, _) => { prompts.Add(user); return Task.FromResult("Index past the end."); });
         }
@@ -157,7 +149,7 @@ public class DispatchTests
                 ["logGroupName"] = "/aws/lambda/checkout-api",
             });
 
-            var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext());
+            var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", new FakeContext());
 
             Assert.Equal("acme/checkout-api", response.Repo);
             Assert.Equal("convention", response.ResolvedBy);
@@ -180,7 +172,7 @@ public class DispatchTests
                 ["logGroupName"] = "some-custom-log-group",
             });
 
-            var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext());
+            var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", new FakeContext());
 
             Assert.Null(response.Repo);
             Assert.Null(response.ResolvedBy);
@@ -206,7 +198,7 @@ public class DispatchTests
             });
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(), updateRate: updateRate);
+                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(), updateRate: updateRate);
 
             Assert.True(response.Allowed);
             Assert.False(response.Tripped);
@@ -236,7 +228,7 @@ public class DispatchTests
             });
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(), updateRate: updateRate);
+                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(), updateRate: updateRate);
 
             Assert.False(response.Allowed);
             Assert.False(response.Tripped);
@@ -264,7 +256,7 @@ public class DispatchTests
             });
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(), updateRate: updateRate);
+                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(), updateRate: updateRate);
 
             Assert.True(response.Tripped);
             Assert.True(response.Allowed);
@@ -283,7 +275,7 @@ public class DispatchTests
         var evt = Parse(new JsonObject { ["action"] = "bogus" });
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext()));
+            () => Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", new FakeContext()));
     }
 
     private const string PipelineArn = "arn:aws:states:eu-central-1:1:stateMachine:pipeline";
@@ -339,7 +331,7 @@ public class DispatchTests
             Function.StartExecution startExecution = (request, _) => { started.Add(request); return Task.FromResult(new StartExecutionResponse()); };
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(),
+                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(),
                 startExecution: startExecution, recordSeen: SeenCounter([]));
 
             Assert.Equal(1, response.Started);
@@ -387,7 +379,7 @@ public class DispatchTests
             };
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(),
+                evt, new NeverCalledInvoker(), "arn:model", new FakeContext(),
                 readSecret: readSecret, callGitHub: callGitHub);
 
             Assert.Equal(["arn:aws:secretsmanager:eu-central-1:1:secret:github-token"], secretRequests);

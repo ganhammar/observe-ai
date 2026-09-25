@@ -1,31 +1,14 @@
-using System.Diagnostics;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Amazon.BedrockRuntime;
 using Amazon.BedrockRuntime.Model;
 
 namespace ObserveAi;
 
-/// <summary>The most likely token at the first sampled position.</summary>
-public sealed record TopToken(
-    [property: JsonPropertyName("token")] string Token,
-    [property: JsonPropertyName("probability")] double Probability);
-
-/// <summary>The full readout for one scored row.</summary>
-public sealed record ScoreResult(
-    string Id,
-    IReadOnlyList<string> OptionIds,
-    IReadOnlyList<double> Probabilities,
-    IReadOnlyList<double> OptionLogprobs,
-    double DeclaredMass,
-    IReadOnlyList<string> MissingOptions,
-    bool Abstained,
-    TopToken TopToken,
-    long InputTokens,
-    double TotalSeconds,
-    string PromptSha256,
-    string PromptVersion);
+/// <summary>
+/// One scored row: option ids with their probabilities, and the probability mass the model put on the
+/// option letters at all. A low DeclaredMass means the letters were a thin tail of the distribution.
+/// </summary>
+public sealed record ScoreResult(IReadOnlyList<string> OptionIds, IReadOnlyList<double> Probabilities, double DeclaredMass);
 
 /// <summary>
 /// The part of a Bedrock runtime client BedrockBackend uses: send a request body to a model and return
@@ -65,33 +48,17 @@ public sealed class AmazonBedrockInvoker(IAmazonBedrockRuntime client) : IBedroc
 /// </summary>
 public static class BedrockBackend
 {
-    public const string PromptVersion = "bedrock-direct-v1";
+    // Candidates per position. Semif.ValidateRow caps a row at 16 options, so every letter can appear.
+    private const int TopLogprobs = 20;
 
     public static async Task<ScoreResult> ScoreAsync(
-        IBedrockInvoker client,
-        string modelArn,
-        JsonElement row,
-        int topLogprobs = 20,
-        bool constrain = true,
-        CancellationToken cancellationToken = default)
+        IBedrockInvoker client, string modelArn, JsonElement row, CancellationToken cancellationToken = default)
     {
-        var stopwatch = Stopwatch.StartNew();
-        Semif.ValidateRow(row);
-        var options = row.GetProperty("options");
-        var optionCount = options.GetArrayLength();
-        var rowId = row.GetProperty("id").GetString()!;
-
-        if (optionCount > topLogprobs)
-        {
-            throw new RowValidationException(
-                $"Row {rowId}: {optionCount} options exceed top_logprobs={topLogprobs}; " +
-                "not enough candidates could possibly be returned to cover every option letter");
-        }
-
         var messages = Semif.DirectMessages(row);
-        var letters = Semif.Letters[..optionCount];
+        var options = row.GetProperty("options");
+        var rowId = row.GetProperty("id").GetString()!;
+        var letters = Semif.Letters[..options.GetArrayLength()];
 
-        string promptHash;
         byte[] requestBody;
         using (var stream = new MemoryStream())
         {
@@ -100,27 +67,9 @@ public static class BedrockBackend
                 writer.WriteStartObject();
                 writer.WriteNumber("max_tokens", 1);
                 writer.WriteNumber("temperature", 0);
-
-                var prompt = Semif.RenderQwen3Prompt(messages);
-                promptHash = Semif.Digest(prompt);
-                writer.WriteString("prompt", prompt);
+                writer.WriteString("prompt", Semif.RenderQwen3Prompt(messages));
                 // logprobs is the candidate count as an integer. A boolean is accepted but coerces to 1, returning no distribution.
-                writer.WriteNumber("logprobs", topLogprobs);
-
-                if (constrain)
-                {
-                    writer.WritePropertyName("structured_outputs");
-                    writer.WriteStartObject();
-                    writer.WritePropertyName("choice");
-                    writer.WriteStartArray();
-                    foreach (var letter in letters)
-                    {
-                        writer.WriteStringValue(letter.ToString());
-                    }
-                    writer.WriteEndArray();
-                    writer.WriteEndObject();
-                }
-
+                writer.WriteNumber("logprobs", TopLogprobs);
                 writer.WriteEndObject();
             }
             requestBody = stream.ToArray();
@@ -129,9 +78,8 @@ public static class BedrockBackend
         var responseBytes = await client.InvokeModelAsync(modelArn, requestBody, cancellationToken)
             .ConfigureAwait(false);
         using var document = JsonDocument.Parse(responseBytes);
-        var payload = document.RootElement;
 
-        var byLetter = FirstPositionLogprobs(payload);
+        var byLetter = FirstPositionLogprobs(document.RootElement);
         if (byLetter.Count == 0)
         {
             throw new RowValidationException($"Row {rowId}: response returned no candidate tokens in top_logprobs");
@@ -139,56 +87,16 @@ public static class BedrockBackend
 
         var optionIds = new List<string>();
         var optionLogprobs = new List<double>();
-        var missingOptions = new List<string>();
         var index = 0;
         foreach (var option in options.EnumerateArray())
         {
-            var optionId = option.GetProperty("id").GetString()!;
-            optionIds.Add(optionId);
-            var letter = letters[index].ToString();
-            if (TryGetLogprob(byLetter, letter, out var logprob))
-            {
-                optionLogprobs.Add(logprob);
-            }
-            else
-            {
-                missingOptions.Add(optionId);
-                optionLogprobs.Add(double.NegativeInfinity);
-            }
+            optionIds.Add(option.GetProperty("id").GetString()!);
+            optionLogprobs.Add(byLetter.TryGetValue(letters[index].ToString(), out var logprob) ? logprob : double.NegativeInfinity);
             index++;
         }
 
         var declaredMass = optionLogprobs.Where(double.IsFinite).Sum(Math.Exp);
-        var probabilities = SoftmaxAllowMissing(optionLogprobs);
-        var abstained = missingOptions.Count == optionCount;
-
-        string? topTokenName = null;
-        var topTokenLogprob = double.NegativeInfinity;
-        foreach (var entry in byLetter)
-        {
-            if (entry.Value > topTokenLogprob)
-            {
-                topTokenLogprob = entry.Value;
-                topTokenName = entry.Key;
-            }
-        }
-        var topToken = new TopToken(topTokenName!, Math.Exp(topTokenLogprob));
-
-        var inputTokens = payload.GetProperty("usage").GetProperty("prompt_tokens").GetInt64();
-
-        return new ScoreResult(
-            rowId,
-            optionIds,
-            probabilities,
-            optionLogprobs,
-            declaredMass,
-            missingOptions,
-            abstained,
-            topToken,
-            inputTokens,
-            stopwatch.Elapsed.TotalSeconds,
-            promptHash,
-            PromptVersion);
+        return new ScoreResult(optionIds, SoftmaxAllowMissing(optionLogprobs), declaredMass);
     }
 
     private static double[] SoftmaxAllowMissing(IReadOnlyList<double> logprobs)
@@ -207,89 +115,30 @@ public static class BedrockBackend
     }
 
     /// <summary>
-    /// Maps token to log probability at the first sampled position. The chat shape nests {token, logprob}
-    /// objects under logprobs.content[0].top_logprobs. The completion shape follows the OpenAI Completions
-    /// schema: logprobs.top_logprobs holds one token-to-logprob map per position.
+    /// Maps token to log probability at the first sampled position. The response follows the OpenAI
+    /// Completions schema: logprobs.top_logprobs holds one token-to-logprob map per position.
     /// </summary>
-    private static List<KeyValuePair<string, double>> FirstPositionLogprobs(JsonElement payload)
+    private static Dictionary<string, double> FirstPositionLogprobs(JsonElement payload)
     {
         var choice = payload.GetProperty("choices")[0];
-        if (!choice.TryGetProperty("logprobs", out var logprobs) || IsFalsy(logprobs))
+        if (!choice.TryGetProperty("logprobs", out var logprobs) || logprobs.ValueKind != JsonValueKind.Object)
         {
             throw new RowValidationException(
                 "Response carries no logprobs; confirm logprobs and top_logprobs were accepted");
         }
 
-        if (logprobs.TryGetProperty("content", out var content)
-            && content.ValueKind == JsonValueKind.Array && content.GetArrayLength() > 0)
-        {
-            var ordered = new OrderedTokenLogprobs();
-            foreach (var entry in content[0].GetProperty("top_logprobs").EnumerateArray())
-            {
-                ordered.Set(entry.GetProperty("token").GetString()!, entry.GetProperty("logprob").GetDouble());
-            }
-            return ordered.Entries;
-        }
-
         if (logprobs.TryGetProperty("top_logprobs", out var positions)
             && positions.ValueKind == JsonValueKind.Array && positions.GetArrayLength() > 0)
         {
-            var ordered = new OrderedTokenLogprobs();
+            var byToken = new Dictionary<string, double>(StringComparer.Ordinal);
             foreach (var property in positions[0].EnumerateObject())
             {
-                ordered.Set(property.Name, property.Value.GetDouble());
+                byToken[property.Name] = property.Value.GetDouble();
             }
-            return ordered.Entries;
+            return byToken;
         }
 
-        var keys = logprobs.ValueKind == JsonValueKind.Object
-            ? string.Join(", ", logprobs.EnumerateObject().Select(p => p.Name).OrderBy(k => k, StringComparer.Ordinal))
-            : string.Empty;
+        var keys = string.Join(", ", logprobs.EnumerateObject().Select(p => p.Name).OrderBy(k => k, StringComparer.Ordinal));
         throw new RowValidationException($"Unrecognised logprobs shape: [{keys}]");
-    }
-
-    private static bool TryGetLogprob(List<KeyValuePair<string, double>> byLetter, string letter, out double logprob)
-    {
-        foreach (var entry in byLetter)
-        {
-            if (entry.Key == letter)
-            {
-                logprob = entry.Value;
-                return true;
-            }
-        }
-        logprob = 0;
-        return false;
-    }
-
-    private static bool IsFalsy(JsonElement element) => element.ValueKind switch
-    {
-        JsonValueKind.Null or JsonValueKind.Undefined => true,
-        JsonValueKind.False => true,
-        JsonValueKind.Object => !element.EnumerateObject().Any(),
-        JsonValueKind.Array => element.GetArrayLength() == 0,
-        JsonValueKind.String => element.GetString()!.Length == 0,
-        JsonValueKind.Number => element.GetDouble() == 0,
-        _ => false,
-    };
-
-    /// <summary>A token-to-logprob map with Python dict ordering: insertion order is kept and an overwrite stays in place.</summary>
-    private sealed class OrderedTokenLogprobs
-    {
-        private readonly Dictionary<string, int> _index = new(StringComparer.Ordinal);
-        public List<KeyValuePair<string, double>> Entries { get; } = [];
-
-        public void Set(string token, double logprob)
-        {
-            if (_index.TryGetValue(token, out var position))
-            {
-                Entries[position] = new KeyValuePair<string, double>(token, logprob);
-            }
-            else
-            {
-                _index[token] = Entries.Count;
-                Entries.Add(new KeyValuePair<string, double>(token, logprob));
-            }
-        }
     }
 }
