@@ -80,7 +80,6 @@ public class DispatchTests
                     new JsonObject { ["method"] = "Pricing.Tiers.TierResolver.Resolve", ["inApp"] = true }),
             },
             ["bug"] = 0.9,
-            ["occurrences"] = 3,
             ["firstSeen"] = "2026-09-01T08:00:00+00:00",
         });
 
@@ -108,7 +107,7 @@ public class DispatchTests
         Assert.NotNull(response.Escalate);
         Assert.Empty(response.Escalate!.FrameVerdicts);
         Assert.Contains("Index past the end.", response.Escalate.Draft.Body);
-        Assert.Contains("Seen 3 times, first on 2026-09-01.", response.Escalate.Draft.Body);
+        Assert.Contains("First seen 2026-09-01.", response.Escalate.Draft.Body);
         Assert.Single(prompts);
         Assert.Null(response.Probabilities);
     }
@@ -271,7 +270,6 @@ public class DispatchTests
             Assert.Equal(PipelineArn, request.StateMachineArn);
             Assert.Equal("2_with_slash", request.Name);
             Assert.Contains("\"repo\":\"acme/checkout-api\"", request.Input);
-            Assert.Contains("\"occurrences\":1", request.Input);
             Assert.Contains("\"firstSeen\":\"2026-09-01T08:00:00+00:00\"", request.Input);
         }
         finally

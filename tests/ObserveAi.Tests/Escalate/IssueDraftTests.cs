@@ -20,7 +20,7 @@ public class IssueDraftTests
         var summary = SourceVerification.Summarise("main@abc1234", [true, true]);
 
         var draft = IssueDraft.Build(
-            Trace, Bug, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            Trace, Bug, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
             summary, "The tier list can be shorter than the resolved index.", ["Pricing/Tiers/TierResolver.cs"]);
 
         Assert.Equal("System.IndexOutOfRangeException in Pricing.Tiers.TierResolver.Resolve", draft.Title);
@@ -33,25 +33,25 @@ public class IssueDraftTests
         var laterSummary = SourceVerification.Summarise("main@def5678", [true, false]);
 
         var first = IssueDraft.Build(
-            Trace, Bug, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            Trace, Bug, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
             earlySummary, "First read of the root cause.", ["Pricing/Tiers/TierResolver.cs"]);
         var repeat = IssueDraft.Build(
-            Trace, Bug, occurrences: 42, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            Trace, Bug, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
             laterSummary, "A differently worded read of the same root cause.", ["Pricing/Tiers/TierResolver.cs"]);
 
         Assert.Equal(first.Title, repeat.Title);
     }
 
     [Fact]
-    public void BodyStatesTheOccurrenceCountAndTheVerificationSentence()
+    public void BodyStatesTheFirstSightingAndTheVerificationSentence()
     {
         var summary = SourceVerification.Summarise("main@abc1234", [true, false, false]);
 
         var draft = IssueDraft.Build(
-            Trace, Bug, occurrences: 42, DateTimeOffset.Parse("2026-08-15T00:00:00Z"),
+            Trace, Bug, DateTimeOffset.Parse("2026-08-15T00:00:00Z"),
             summary, "The tier list can be shorter than the resolved index.", ["Pricing/Tiers/TierResolver.cs"]);
 
-        Assert.Contains("42", draft.Body);
+        Assert.Contains("First seen 2026-08-15.", draft.Body);
         Assert.Contains(summary.Sentence, draft.Body);
         Assert.Contains("The tier list can be shorter than the resolved index.", draft.Body);
         Assert.Contains("Pricing/Tiers/TierResolver.cs", draft.Body);
@@ -65,7 +65,7 @@ public class IssueDraftTests
         var summary = SourceVerification.Summarise("main@abc1234", [false]);
 
         var draft = IssueDraft.Build(
-            vendorOnlyTrace, Bug, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            vendorOnlyTrace, Bug, DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
             summary, "Unclear; every frame is vendor code.", []);
 
         Assert.Equal("java.lang.NullPointerException in java.base/java.util.Objects.requireNonNull", draft.Title);
@@ -78,7 +78,7 @@ public class IssueDraftTests
         var summary = SourceVerification.Summarise("main@abc1234", []);
 
         var draft = IssueDraft.Build(
-            Trace, Bug, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"), summary, "", []);
+            Trace, Bug, DateTimeOffset.Parse("2026-09-01T00:00:00Z"), summary, "", []);
 
         Assert.DoesNotContain("Root cause", draft.Body);
         Assert.Contains("(none; no file named by the trace could be fetched)", draft.Body);

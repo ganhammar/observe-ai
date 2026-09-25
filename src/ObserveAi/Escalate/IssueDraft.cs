@@ -21,7 +21,6 @@ public static class IssueDraft
     public static Draft Build(
         ParsedTrace trace,
         double bug,
-        long occurrences,
         DateTimeOffset firstSeen,
         VerificationSummary verification,
         string rootCause,
@@ -37,9 +36,7 @@ public static class IssueDraft
         body.Append('`').Append(topFrame).Append("` threw ").Append(trace.ExceptionType)
             .Append(" (").Append(trace.Runtime).Append(").\n\n");
 
-        var times = occurrences == 1 ? "time" : "times";
-        body.Append("Seen ").Append(occurrences).Append(' ').Append(times)
-            .Append(", first on ").Append(firstSeen.ToString("yyyy-MM-dd"))
+        body.Append("First seen ").Append(firstSeen.ToString("yyyy-MM-dd"))
             .Append(". P(bug) = ").Append(bug.ToString("0.00")).Append(".\n\n");
 
         body.Append(verification.Sentence).Append("\n\n");

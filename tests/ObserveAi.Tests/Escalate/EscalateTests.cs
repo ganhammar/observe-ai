@@ -74,7 +74,6 @@ public class EscalateTests
             "acme/catalog", "abc1234", Trace, RawTrace,
             Sources: new Dictionary<string, string> { ["src/Pricing/Tiers/TierResolver.cs"] = source },
             Bug: 0.9,
-            Occurrences: 5,
             FirstSeen: DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
         var questions = new List<string>();
         var invoke = Answering(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }), questions);
@@ -95,7 +94,6 @@ public class EscalateTests
         Assert.Contains(source, call.Prompt);
 
         Assert.Equal("System.IndexOutOfRangeException in Pricing.Tiers.TierResolver.Resolve", result.Draft.Title);
-        Assert.Contains("5 times", result.Draft.Body);
         Assert.Contains("P(bug) = 0.90", result.Draft.Body);
         Assert.Contains("The tier list is shorter than the resolved index.", result.Draft.Body);
         Assert.Contains("1 of 1 matched.", result.Draft.Body);
@@ -107,7 +105,7 @@ public class EscalateTests
     {
         var request = new EscalateRequest(
             "acme/catalog", "main", Trace, RawTrace, Sources: new Dictionary<string, string>(),
-            Bug: 0.6, Occurrences: 1,
+            Bug: 0.6,
             FirstSeen: DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
         var questions = new List<string>();
         var invoke = Answering(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }), questions);

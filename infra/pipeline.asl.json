@@ -100,7 +100,6 @@
           "frames.$": "$.frames"
         },
         "bug.$": "$.verdict.probabilities[0]",
-        "occurrences.$": "$.occurrences",
         "firstSeen.$": "$.firstSeen"
       },
       "ResultPath": "$.draft",

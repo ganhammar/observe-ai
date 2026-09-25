@@ -5,7 +5,7 @@ namespace ObserveAi;
 /// <summary>Escalate's input. Sources maps each path SourceFetch.PathsFor names to its fetched contents.</summary>
 public sealed record EscalateRequest(
     string Repo, string Commitish, ParsedTrace Trace, string RawTrace, IReadOnlyDictionary<string, string> Sources,
-    double Bug, long Occurrences, DateTimeOffset FirstSeen);
+    double Bug, DateTimeOffset FirstSeen);
 
 /// <summary>Escalate's outcome: a verdict per verified frame, and the drafted issue.</summary>
 public sealed record EscalateResult(
@@ -48,7 +48,7 @@ public static class Escalation
         var rootCause = await Diagnosis.DiagnoseAsync(
             converse, diagnosisModelId, request.RawTrace, request.Sources, cancellationToken).ConfigureAwait(false);
         var draft = IssueDraft.Build(
-            request.Trace, request.Bug, request.Occurrences, request.FirstSeen, summary, rootCause,
+            request.Trace, request.Bug, request.FirstSeen, summary, rootCause,
             [.. request.Sources.Keys]);
 
         return new EscalateResult(verdicts, draft);

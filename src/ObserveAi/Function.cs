@@ -21,7 +21,6 @@ namespace ObserveAi;
 public sealed record ExecutionInput(
     [property: JsonPropertyName("repo")] string Repo,
     [property: JsonPropertyName("fingerprint")] string Fingerprint,
-    [property: JsonPropertyName("occurrences")] long Occurrences,
     [property: JsonPropertyName("firstSeen")] DateTimeOffset FirstSeen,
     [property: JsonPropertyName("logGroup")] string LogGroup,
     [property: JsonPropertyName("message")] string Message,
@@ -155,7 +154,7 @@ public static class Function
                 }
 
                 var input = new ExecutionInput(
-                    repo, fingerprint, seen.Occurrences, seen.FirstSeen, candidate.LogGroup, candidate.Message,
+                    repo, fingerprint, seen.FirstSeen, candidate.LogGroup, candidate.Message,
                     trace.Runtime, trace.ExceptionType, trace.Frames);
                 await deps.StartExecution(new StartExecutionRequest
                 {
@@ -249,7 +248,6 @@ public static class Function
         return new EscalateRequest(
             RequireString(e, "repo"), RequireString(e, "commitish"), trace, RequireString(e, "rawTrace"),
             new Dictionary<string, string>(), e.GetProperty("bug").GetDouble(),
-            e.TryGetProperty("occurrences", out var occ) ? occ.GetInt64() : 1,
             DateTimeOffset.Parse(RequireString(e, "firstSeen"), CultureInfo.InvariantCulture));
     }
 
