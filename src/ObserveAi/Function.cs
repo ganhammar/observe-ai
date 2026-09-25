@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Amazon;
 using Amazon.BedrockRuntime;
@@ -15,6 +16,18 @@ using Amazon.StepFunctions;
 using Amazon.StepFunctions.Model;
 
 namespace ObserveAi;
+
+/// <summary>Input for one triage execution: what the Kinesis consumer already computed, so the state machine never repeats it.</summary>
+public sealed record ExecutionInput(
+    [property: JsonPropertyName("repo")] string Repo,
+    [property: JsonPropertyName("fingerprint")] string Fingerprint,
+    [property: JsonPropertyName("occurrences")] long Occurrences,
+    [property: JsonPropertyName("firstSeen")] DateTimeOffset FirstSeen,
+    [property: JsonPropertyName("logGroup")] string LogGroup,
+    [property: JsonPropertyName("message")] string Message,
+    [property: JsonPropertyName("runtime")] string Runtime,
+    [property: JsonPropertyName("exceptionType")] string ExceptionType,
+    [property: JsonPropertyName("frames")] IReadOnlyList<Frame> Frames);
 
 /// <summary>
 /// Lambda entrypoint for the pipeline stages, selected by the event's required "action" field: triage,
@@ -89,7 +102,7 @@ public static class Function
         var action = RequireString(lambdaEvent, "action");
         return action switch
         {
-            "triage" => Pipeline.TriageRowAsync(lambdaEvent, deps.Invoke, RequireEnv("MODEL_ARN"), LazyTree.Value, context),
+            "triage" => RunTriageAsync(lambdaEvent, deps.Invoke, context),
             "check-rate" => RunCheckRateAsync(lambdaEvent, deps.UpdateItem),
             "escalate" => RunEscalateAsync(lambdaEvent, deps, context),
             "file-issue" => RunFileIssueAsync(lambdaEvent, deps.GitHub),
@@ -170,6 +183,28 @@ public static class Function
         return sanitised.Length > 80 ? sanitised[..80] : sanitised;
     }
 
+    /// <summary>
+    /// Scores one row with the question tree. A total scoring failure propagates, so Step Functions retries
+    /// the Triage state and the fingerprint stays undecided.
+    /// </summary>
+    private static async Task<LambdaResponse> RunTriageAsync(
+        JsonElement lambdaEvent, BedrockBackend.Invoke invoke, ILambdaContext context)
+    {
+        var id = RequireString(lambdaEvent, "id");
+        var tree = LazyTree.Value;
+        var result = await Triage.RunAsync(invoke, RequireEnv("MODEL_ARN"), lambdaEvent, tree).ConfigureAwait(false);
+        foreach (var failed in result.Answers.Where(answer => answer.Error is not null))
+        {
+            context.Logger.LogWarning($"Row {id} signal {failed.Key} failed: {failed.Error}");
+        }
+        // Mass off the option letters means the model is answering something else, as after a model swap.
+        if (result.DeclaredMass < 0.9)
+        {
+            context.Logger.LogWarning($"Row {id} declared mass below 0.9: {result.DeclaredMass:0.000}");
+        }
+        return LambdaResponse.FromTriage(result, tree);
+    }
+
     /// <summary>Buckets are keyed by hour, and a two-hour TTL always lands after the bucket's hour has ended.</summary>
     private static async Task<LambdaResponse> RunCheckRateAsync(JsonElement lambdaEvent, Dynamo.UpdateItem updateItem)
     {
@@ -184,7 +219,7 @@ public static class Function
 
     /// <summary>
     /// Fetches the files the trace names and runs the escalate stage over them. All GitHub access happens
-    /// here, so Pipeline.EscalateAsync receives the source files as data.
+    /// here, so Escalation.RunAsync receives the source files as data.
     /// </summary>
     private static async Task<LambdaResponse> RunEscalateAsync(JsonElement lambdaEvent, Dependencies deps, ILambdaContext context)
     {
@@ -192,7 +227,7 @@ public static class Function
         var paths = SourceFetch.PathsFor(request.Trace, request.RawTrace);
         var fetched = await SourceFetch.FetchAsync(deps.GitHub, request.Repo, request.Commitish, paths).ConfigureAwait(false);
 
-        var result = await Pipeline.EscalateAsync(
+        var result = await Escalation.RunAsync(
             deps.Invoke, RequireEnv("MODEL_ARN"), deps.Converse, RequireEnv("DIAGNOSIS_MODEL_ID"),
             request with { Sources = fetched.Sources }).ConfigureAwait(false);
         var matched = result.FrameVerdicts.Count(v => v.Matched);

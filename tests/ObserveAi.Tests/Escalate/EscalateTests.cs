@@ -6,7 +6,7 @@ using ObserveAi;
 namespace ObserveAi.Tests;
 
 /// <summary>
-/// Checks Pipeline.EscalateAsync: it returns the frame verdicts and a drafted
+/// Checks Escalation.RunAsync: it returns the frame verdicts and a drafted
 /// issue built from a real IssueDraft/SourceVerification pass, without ever
 /// calling GitHub itself. The per-frame "could this code throw here" question
 /// goes through a fake Invoke, and the root cause through a fake
@@ -80,7 +80,7 @@ public class EscalateTests
         var invoke = Answering(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }), questions);
         var diagnosis = new FakeDiagnosis("The tier list is shorter than the resolved index.");
 
-        var result = await Pipeline.EscalateAsync(invoke, "arn:model", diagnosis.Converse, "eu.model", request);
+        var result = await Escalation.RunAsync(invoke, "arn:model", diagnosis.Converse, "eu.model", request);
 
         // Only the frame that is both in-app and has a fetched source gets asked about.
         var verdict = Assert.Single(result.FrameVerdicts);
@@ -113,7 +113,7 @@ public class EscalateTests
         var invoke = Answering(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }), questions);
         var diagnosis = new FakeDiagnosis("Unclear without a checkout.");
 
-        var result = await Pipeline.EscalateAsync(invoke, "arn:model", diagnosis.Converse, "eu.model", request);
+        var result = await Escalation.RunAsync(invoke, "arn:model", diagnosis.Converse, "eu.model", request);
 
         Assert.Empty(result.FrameVerdicts);
         Assert.Empty(questions);

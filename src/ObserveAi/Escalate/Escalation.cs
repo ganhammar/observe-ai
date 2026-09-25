@@ -1,20 +1,6 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
-using Amazon.Lambda.Core;
 
 namespace ObserveAi;
-
-/// <summary>Input for one triage execution: what the Kinesis consumer already computed, so the state machine never repeats it.</summary>
-public sealed record ExecutionInput(
-    [property: JsonPropertyName("repo")] string Repo,
-    [property: JsonPropertyName("fingerprint")] string Fingerprint,
-    [property: JsonPropertyName("occurrences")] long Occurrences,
-    [property: JsonPropertyName("firstSeen")] DateTimeOffset FirstSeen,
-    [property: JsonPropertyName("logGroup")] string LogGroup,
-    [property: JsonPropertyName("message")] string Message,
-    [property: JsonPropertyName("runtime")] string Runtime,
-    [property: JsonPropertyName("exceptionType")] string ExceptionType,
-    [property: JsonPropertyName("frames")] IReadOnlyList<Frame> Frames);
 
 /// <summary>Escalate's input. Sources maps each path SourceFetch.PathsFor names to its fetched contents.</summary>
 public sealed record EscalateRequest(
@@ -26,42 +12,15 @@ public sealed record EscalateResult(
     [property: JsonPropertyName("frameVerdicts")] IReadOnlyList<FrameVerdict> FrameVerdicts,
     [property: JsonPropertyName("draft")] Draft Draft);
 
-/// <summary>
-/// The pipeline stages as functions over the components they are given. None of them writes anywhere;
-/// the state machine owns the flow between stages.
-/// </summary>
-public static class Pipeline
+/// <summary>The escalate stage over source files it is given as data.</summary>
+public static class Escalation
 {
-    /// <summary>
-    /// Scores one row with the question tree. A total scoring failure propagates, so Step Functions retries
-    /// the Triage state and the fingerprint stays undecided.
-    /// </summary>
-    public static async Task<LambdaResponse> TriageRowAsync(
-        JsonElement row, BedrockBackend.Invoke invoke, string modelArn, QuestionTree tree, ILambdaContext context)
-    {
-        string? rowId = row.TryGetProperty("id", out var idProperty) && idProperty.ValueKind == JsonValueKind.String
-            ? idProperty.GetString()
-            : null;
-
-        var result = await Triage.RunAsync(invoke, modelArn, row, tree).ConfigureAwait(false);
-        foreach (var failed in result.Answers.Where(answer => answer.Error is not null))
-        {
-            context.Logger.LogWarning($"Row {rowId} signal {failed.Key} failed: {failed.Error}");
-        }
-        // Mass off the option letters means the model is answering something else, as after a model swap.
-        if (result.DeclaredMass < 0.9)
-        {
-            context.Logger.LogWarning($"Row {rowId} declared mass below 0.9: {result.DeclaredMass:0.000}");
-        }
-        return LambdaResponse.FromTriage(result, tree);
-    }
-
     /// <summary>
     /// Verifies the fetched source frame by frame, asks the diagnosis model for a root cause, and drafts the
     /// issue. The per-frame "could this code throw here" questions go to the readout model; the root cause
     /// paragraph is the only generative call. Never calls GitHub.
     /// </summary>
-    public static async Task<EscalateResult> EscalateAsync(
+    public static async Task<EscalateResult> RunAsync(
         BedrockBackend.Invoke invoke, string modelArn, Diagnosis.Converse converse, string diagnosisModelId,
         EscalateRequest request, CancellationToken cancellationToken = default)
     {
@@ -77,8 +36,7 @@ public static class Pipeline
             }
 
             var row = SourceVerification.BuildRow($"verify::{i}", frame, request.Trace.ExceptionType, source);
-            var score = await BedrockBackend.ScoreAsync(
-                invoke, modelArn, row, cancellationToken).ConfigureAwait(false);
+            var score = await BedrockBackend.ScoreAsync(invoke, modelArn, row, cancellationToken).ConfigureAwait(false);
             var probabilities = score.OptionIds
                 .Zip(score.Probabilities, (id, p) => (id, p))
                 .ToDictionary(pair => pair.id, pair => pair.p);

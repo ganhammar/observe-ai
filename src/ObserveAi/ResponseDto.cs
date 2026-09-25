@@ -78,6 +78,5 @@ public sealed class LambdaResponse
     NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals)]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(LambdaResponse))]
-[JsonSerializable(typeof(EscalateResult))]
 [JsonSerializable(typeof(ExecutionInput))]
 public partial class LambdaJsonContext : JsonSerializerContext;

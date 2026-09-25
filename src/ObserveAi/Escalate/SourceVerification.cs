@@ -5,8 +5,8 @@ namespace ObserveAi;
 /// <summary>Whether the checked-out source could have produced this frame's throw.</summary>
 public sealed record FrameVerdict(Frame Frame, bool Matched);
 
-/// <summary>A whole trace's verification: frames matched, frames checked, and the sentence the issue states.</summary>
-public sealed record VerificationSummary(int Matched, int Total, string Sentence);
+/// <summary>A whole trace's verification, as the sentence the issue states.</summary>
+public sealed record VerificationSummary(string Sentence);
 
 /// <summary>
 /// Builds the "could this code throw here" question for one frame and reduces the answers to the sentence
@@ -51,7 +51,7 @@ public static class SourceVerification
         probabilities.GetValueOrDefault(Yes, 0.0) >= probabilities.GetValueOrDefault(No, 0.0);
 
     /// <summary>
-    /// Reduces the per-frame verdicts to a match count and the sentence an issue states about them. The
+    /// Reduces the per-frame verdicts to the sentence an issue states about them. The
     /// sentence carries its own caveat, so a reader knows how far to trust the checkout the root cause came from.
     /// </summary>
     public static VerificationSummary Summarise(string commitLabel, IReadOnlyList<bool> frameMatches)
@@ -64,7 +64,7 @@ public static class SourceVerification
                 ? ", so this is likely not the code that ran."
                 : ", so this may not be the code that ran.";
         var sentence = $"Analysed against {commitLabel}. Frame verification: {matched} of {total} matched{caveat}";
-        return new VerificationSummary(matched, total, sentence);
+        return new VerificationSummary(sentence);
     }
 
     private static void WriteOption(Utf8JsonWriter writer, string id, string description)

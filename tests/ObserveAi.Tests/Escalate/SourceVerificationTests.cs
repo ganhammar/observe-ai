@@ -37,8 +37,6 @@ public class SourceVerificationTests
     {
         var summary = SourceVerification.Summarise("main@abc1234", [true, true, true]);
 
-        Assert.Equal(3, summary.Matched);
-        Assert.Equal(3, summary.Total);
         Assert.Equal(
             "Analysed against main@abc1234. Frame verification: 3 of 3 matched.",
             summary.Sentence);
@@ -49,7 +47,6 @@ public class SourceVerificationTests
     {
         var summary = SourceVerification.Summarise("main@abc1234", [true, false, false]);
 
-        Assert.Equal(1, summary.Matched);
         Assert.Equal(
             "Analysed against main@abc1234. Frame verification: 1 of 3 matched, so this may not be the code that ran.",
             summary.Sentence);
@@ -60,7 +57,6 @@ public class SourceVerificationTests
     {
         var summary = SourceVerification.Summarise("main@abc1234", [false, false, false]);
 
-        Assert.Equal(0, summary.Matched);
         Assert.Equal(
             "Analysed against main@abc1234. Frame verification: 0 of 3 matched, so this is likely not the code that ran.",
             summary.Sentence);

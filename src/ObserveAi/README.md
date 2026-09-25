@@ -1,6 +1,6 @@
 # ObserveAi source layout
 
-Folders mirror the pipeline stages in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md). `Function.cs`, `Pipeline.cs`, and `ResponseDto.cs` stay at the root because they wire the stages together rather than belonging to one of them.
+Folders mirror the pipeline stages in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md). `Function.cs` and `ResponseDto.cs` stay at the root because they wire the stages together rather than belonging to one of them.
 
 - `Ingest/`: unwraps the CloudWatch Logs envelope carried by the Kinesis batch. Serves the Ingest stage.
 - `Identify/`: parses the stack trace, computes the fingerprint, and resolves the owning service and repository. Serves the Identify stage.

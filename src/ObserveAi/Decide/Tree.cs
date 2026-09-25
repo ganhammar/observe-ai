@@ -7,7 +7,10 @@ public sealed record TreeOption(string Id, string Description);
 public sealed record TreeQuestion(string Key, string Question, IReadOnlyList<TreeOption> Options);
 
 public sealed record TreeSignal(
-    string Key, string Side, string Question, IReadOnlyList<TreeOption> Options, string? DampenedBy);
+    string Key, string Side, string Question, IReadOnlyList<TreeOption> Options, string? DampenedBy)
+{
+    public TreeQuestion AsQuestion() => new(Key, Question, Options);
+}
 
 /// <summary>The combined bug-versus-downstream verdict for one triage row.</summary>
 public sealed record CombineResult(double Bug, double Downstream, bool Fallback);
@@ -60,7 +63,7 @@ public sealed class QuestionTree
     /// normalises to 1.0.
     /// </summary>
     public CombineResult Combine(
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, double>> answers, bool evidencePresent = true)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, double>> answers, bool evidencePresent)
     {
         if (!evidencePresent)
         {

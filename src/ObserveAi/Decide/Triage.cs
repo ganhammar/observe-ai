@@ -28,18 +28,14 @@ public static class Triage
         BedrockBackend.Invoke invoke, string modelArn, JsonElement row, QuestionTree tree,
         CancellationToken cancellationToken = default)
     {
-        var id = RequireString(row, "id");
-        if (!row.TryGetProperty("state", out var rawState))
-        {
-            throw new RowValidationException("Row is missing fields: ['state']");
-        }
-        var state = Derived.WithDerived(rawState);
+        var id = row.GetProperty("id").GetString()!;
+        var state = Derived.WithDerived(row.GetProperty("state"));
         var hasEvidence = QuestionTree.HasEvidence(state);
 
         // Without evidence Combine reads only the baseline, so the other eight questions are skipped.
-        var questions = hasEvidence ? SubQuestions(tree) : BaselineOnly(tree);
-        var scoring = questions.Select(sub =>
-            ScoreSubQuestionAsync(invoke, modelArn, id, state, sub.Key, sub.Question, sub.Options, cancellationToken));
+        IEnumerable<TreeQuestion> questions = hasEvidence ? SubQuestions(tree) : [tree.Baseline];
+        var scoring = questions.Select(question =>
+            ScoreSubQuestionAsync(invoke, modelArn, id, state, question, cancellationToken));
         var scored = await Task.WhenAll(scoring).ConfigureAwait(false);
         var answers = scored.Select(result => result.Answer).ToList();
 
@@ -60,56 +56,41 @@ public static class Triage
         return new TriageResult(verdict, answers, declaredMass);
     }
 
-    private static IEnumerable<(string Key, string Question, IReadOnlyList<TreeOption> Options)> BaselineOnly(
-        QuestionTree tree)
-    {
-        yield return (tree.Baseline.Key, tree.Baseline.Question, tree.Baseline.Options);
-    }
-
-    private static IEnumerable<(string Key, string Question, IReadOnlyList<TreeOption> Options)> SubQuestions(
-        QuestionTree tree)
-    {
-        yield return (tree.Baseline.Key, tree.Baseline.Question, tree.Baseline.Options);
-        yield return (tree.Surface.Key, tree.Surface.Question, tree.Surface.Options);
-        foreach (var signal in tree.Signals)
-        {
-            yield return (signal.Key, signal.Question, signal.Options);
-        }
-    }
+    private static IEnumerable<TreeQuestion> SubQuestions(QuestionTree tree) =>
+        [tree.Baseline, tree.Surface, .. tree.Signals.Select(signal => signal.AsQuestion())];
 
     private static async Task<(TriageAnswer Answer, double DeclaredMass)> ScoreSubQuestionAsync(
         BedrockBackend.Invoke invoke, string modelArn, string rowId, JsonElement state,
-        string key, string question, IReadOnlyList<TreeOption> options, CancellationToken cancellationToken)
+        TreeQuestion question, CancellationToken cancellationToken)
     {
-        var subRow = BuildSubRow(rowId, key, state, question, options);
+        var subRow = BuildSubRow(rowId, state, question);
         try
         {
             var score = await BedrockBackend.ScoreAsync(invoke, modelArn, subRow, cancellationToken).ConfigureAwait(false);
             var probabilities = score.OptionIds
                 .Zip(score.Probabilities, (optionId, probability) => (optionId, probability))
                 .ToDictionary(pair => pair.optionId, pair => pair.probability);
-            return (new TriageAnswer(key, probabilities, null), score.DeclaredMass);
+            return (new TriageAnswer(question.Key, probabilities, null), score.DeclaredMass);
         }
         catch (Exception error) when (error is RowValidationException or AmazonServiceException or AmazonClientException)
         {
             // A missing signal counts as 0.0 in Combine, the same as "no"; the error is kept for tracing.
-            return (new TriageAnswer(key, null, $"{error.GetType().Name}: {error.Message}"), 0.0);
+            return (new TriageAnswer(question.Key, null, $"{error.GetType().Name}: {error.Message}"), 0.0);
         }
     }
 
-    private static JsonElement BuildSubRow(
-        string rowId, string key, JsonElement state, string question, IReadOnlyList<TreeOption> options)
+    private static JsonElement BuildSubRow(string rowId, JsonElement state, TreeQuestion question)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartObject();
-            writer.WriteString("id", $"{rowId}::{key}");
+            writer.WriteString("id", $"{rowId}::{question.Key}");
             writer.WritePropertyName("state");
             state.WriteTo(writer);
-            writer.WriteString("question", question);
+            writer.WriteString("question", question.Question);
             writer.WriteStartArray("options");
-            foreach (var option in options)
+            foreach (var option in question.Options)
             {
                 writer.WriteStartObject();
                 writer.WriteString("id", option.Id);
@@ -121,15 +102,5 @@ public static class Triage
         }
         using var document = JsonDocument.Parse(stream.ToArray());
         return document.RootElement.Clone();
-    }
-
-    private static string RequireString(JsonElement row, string field)
-    {
-        if (!row.TryGetProperty(field, out var value) || value.ValueKind != JsonValueKind.String
-            || value.GetString() is not { Length: > 0 })
-        {
-            throw new RowValidationException($"Row is missing fields: ['{field}']");
-        }
-        return value.GetString()!;
     }
 }
