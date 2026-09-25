@@ -7,8 +7,8 @@ using ObserveAi;
 namespace ObserveAi.Tests;
 
 /// <summary>
-/// Drives Function.ScoreRowsAsync directly with a fake IBedrockInvoker, checking
-/// that a row returns the combined-verdict shape.
+/// Drives the triage action through Function.DispatchAsync with a fake
+/// IBedrockInvoker, checking the combined-verdict response shape.
 /// </summary>
 public class FunctionTests
 {
@@ -65,21 +65,21 @@ public class FunctionTests
     }
 
     [Fact]
-    public async Task ARowReturnsTheCombinedVerdictShape()
+    public async Task TriageReturnsTheCombinedVerdictAtTheTopLevel()
     {
-        var row = JsonDocument.Parse("""{"id": "row-2", "state": {"stack_trace": "boom"}}""").RootElement;
+        var evt = JsonDocument.Parse(
+            """{"action": "triage", "id": "row-2", "state": {"stack_trace": "boom"}}""").RootElement;
         var fake = new FakeInvoker(
             CompletionBody(new Dictionary<string, double> { ["A"] = -0.2, ["B"] = -1.0, ["C"] = -1.5, ["D"] = -2.0 }));
 
-        var response = await Function.ScoreRowsAsync(row, fake, "arn:model", new FakeContext());
+        var response = await Function.DispatchAsync(evt, fake, "arn:model", new FakeContext());
 
-        var result = Assert.Single(response.Results);
-        Assert.Equal("row-2", result.Id);
-        Assert.Equal(["bug", "downstream"], result.OptionIds);
-        Assert.Equal(2, result.Probabilities!.Count);
-        Assert.NotNull(result.Fallback);
+        Assert.Equal(["bug", "downstream"], response.OptionIds);
+        Assert.Equal(2, response.Probabilities!.Count);
+        Assert.NotNull(response.Fallback);
+        Assert.Equal(Math.Exp(-0.2) + Math.Exp(-1.0), response.DeclaredMass!.Value, precision: 9);
         // Without evidence only the baseline is asked, so no signal answered.
-        Assert.NotNull(result.Signals);
-        Assert.Empty(result.Signals!);
+        Assert.NotNull(response.Signals);
+        Assert.Empty(response.Signals!);
     }
 }

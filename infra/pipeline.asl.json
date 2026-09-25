@@ -31,12 +31,12 @@
       "Type": "Choice",
       "Choices": [
         {
-          "Variable": "$.verdict.results[0].probabilities[0]",
+          "Variable": "$.verdict.probabilities[0]",
           "NumericLessThan": 0.3,
           "Next": "LikelyDownstream"
         },
         {
-          "Variable": "$.verdict.results[0].probabilities[0]",
+          "Variable": "$.verdict.probabilities[0]",
           "NumericLessThan": 0.7,
           "Next": "Uncertain"
         }
@@ -100,9 +100,9 @@
           "frames.$": "$.frames"
         },
         "verdict": {
-          "bug.$": "$.verdict.results[0].probabilities[0]",
-          "downstream.$": "$.verdict.results[0].probabilities[1]",
-          "fallback.$": "$.verdict.results[0].fallback"
+          "bug.$": "$.verdict.probabilities[0]",
+          "downstream.$": "$.verdict.probabilities[1]",
+          "fallback.$": "$.verdict.fallback"
         },
         "occurrences.$": "$.occurrences"
       },

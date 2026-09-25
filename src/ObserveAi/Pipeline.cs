@@ -34,16 +34,9 @@ public static class Pipeline
     /// Scores one row with the question tree. A total scoring failure propagates, so Step Functions retries
     /// the Triage state and the fingerprint stays undecided.
     /// </summary>
-    public static async Task<RowResultDto> TriageRowAsync(
+    public static async Task<LambdaResponse> TriageRowAsync(
         JsonElement row, IBedrockInvoker client, string modelArn, QuestionTree tree, ILambdaContext context)
     {
-        if (row.ValueKind != JsonValueKind.Object)
-        {
-            var kind = DescribeKind(row);
-            context.Logger.LogWarning($"Row rejected: expected an object, got {kind}");
-            return RowResultDto.FromError(null, $"Row must be a JSON object, got {kind}");
-        }
-
         string? rowId = row.TryGetProperty("id", out var idProperty) && idProperty.ValueKind == JsonValueKind.String
             ? idProperty.GetString()
             : null;
@@ -58,18 +51,8 @@ public static class Pipeline
         {
             context.Logger.LogWarning($"Row {rowId} declared mass below 0.9: {result.DeclaredMass:0.000}");
         }
-        return RowResultDto.FromTriage(rowId, result, tree);
+        return LambdaResponse.FromTriage(result, tree);
     }
-
-    private static string DescribeKind(JsonElement element) => element.ValueKind switch
-    {
-        JsonValueKind.String => "str",
-        JsonValueKind.Number => "number",
-        JsonValueKind.True or JsonValueKind.False => "bool",
-        JsonValueKind.Array => "list",
-        JsonValueKind.Null or JsonValueKind.Undefined => "NoneType",
-        _ => element.ValueKind.ToString(),
-    };
 
     /// <summary>
     /// Verifies the fetched source frame by frame, asks the diagnosis model for a root cause, and drafts the

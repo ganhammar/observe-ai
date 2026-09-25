@@ -11,10 +11,9 @@ namespace ObserveAi.Tests;
 
 /// <summary>
 /// Checks Function.DispatchAsync's routing: each action reaches its own stage,
-/// a missing action still triages (nothing already deployed breaks), a Records
-/// array routes to start-executions ahead of the action switch since a Kinesis
-/// event carries no action field, and an unknown action is an error rather
-/// than a silent no-op.
+/// a Records array routes to start-executions ahead of the action switch since
+/// a Kinesis event carries no action field, and a missing or unknown action is
+/// an error rather than a silent no-op.
 /// </summary>
 public class DispatchTests
 {
@@ -39,12 +38,6 @@ public class DispatchTests
         public TimeSpan RemainingTime => TimeSpan.FromSeconds(30);
     }
 
-    private sealed class FakeInvoker(byte[] responseBody) : IBedrockInvoker
-    {
-        public Task<byte[]> InvokeModelAsync(string modelId, byte[] requestBody, CancellationToken cancellationToken = default) =>
-            Task.FromResult(responseBody);
-    }
-
     private sealed class NeverCalledInvoker : IBedrockInvoker
     {
         public Task<byte[]> InvokeModelAsync(string modelId, byte[] requestBody, CancellationToken cancellationToken = default) =>
@@ -59,16 +52,12 @@ public class DispatchTests
         """;
 
     [Fact]
-    public async Task AMissingActionStillTriages()
+    public async Task AMissingActionIsAnError()
     {
         var row = Parse(new JsonObject { ["id"] = "row-1", ["state"] = new JsonObject { ["stack_trace"] = "boom" } });
-        var fake = new FakeInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -2.0 }));
 
-        var response = await Function.DispatchAsync(row, fake, "arn:model", new FakeContext());
-
-        var result = Assert.Single(response.Results!);
-        Assert.Equal("row-1", result.Id);
-        Assert.Null(response.Escalate);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Function.DispatchAsync(row, new NeverCalledInvoker(), "arn:model", new FakeContext()));
     }
 
     [Fact]
@@ -112,7 +101,7 @@ public class DispatchTests
         Assert.Empty(response.Escalate.FrameVerdicts);
         Assert.Contains("Index past the end.", response.Escalate.Draft.Body);
         Assert.Single(prompts);
-        Assert.Null(response.Results);
+        Assert.Null(response.Probabilities);
     }
 
     [Fact]
@@ -348,26 +337,5 @@ public class DispatchTests
             gzip.Write(bytes, 0, bytes.Length);
         }
         return Convert.ToBase64String(output.ToArray());
-    }
-
-    private static byte[] CompletionBody(Dictionary<string, double> letterLogprobs)
-    {
-        var top = new JsonObject();
-        foreach (var (letter, logprob) in letterLogprobs)
-        {
-            top[letter] = logprob;
-        }
-        var payload = new JsonObject
-        {
-            ["choices"] = new JsonArray(new JsonObject
-            {
-                ["index"] = 0,
-                ["text"] = "A",
-                ["logprobs"] = new JsonObject { ["top_logprobs"] = new JsonArray(top) },
-                ["finish_reason"] = "stop",
-            }),
-            ["usage"] = new JsonObject { ["prompt_tokens"] = 50, ["completion_tokens"] = 1, ["total_tokens"] = 51 },
-        };
-        return Encoding.UTF8.GetBytes(payload.ToJsonString());
     }
 }

@@ -16,9 +16,9 @@ using Amazon.StepFunctions.Model;
 namespace ObserveAi;
 
 /// <summary>
-/// Lambda entrypoint for the pipeline stages, selected by the event's "action" field: triage, check-rate,
-/// escalate or file-issue. A missing action means triage. A Kinesis event has no action field and is
-/// recognised first by its top-level "Records" array; that path parses the trace, resolves the repo and
+/// Lambda entrypoint for the pipeline stages, selected by the event's required "action" field: triage,
+/// check-rate, escalate or file-issue. A Kinesis event has no action field and is recognised first by its
+/// top-level "Records" array; that path parses the trace, resolves the repo and
 /// checks the seen table, and starts an execution only when triage is warranted.
 /// </summary>
 public static class Function
@@ -59,21 +59,15 @@ public static class Function
         ReadSecret? readSecret = null, IssueFiler.CallGitHub? callGitHub = null, SeenStore.UpdateItem? recordSeen = null,
         SourceFetch.Get? getSource = null, Diagnosis.Converse? converse = null)
     {
-        if (lambdaEvent.ValueKind == JsonValueKind.Object
-            && lambdaEvent.TryGetProperty("Records", out var records) && records.ValueKind == JsonValueKind.Array)
+        if (lambdaEvent.TryGetProperty("Records", out var records))
         {
             return RunStartExecutionsAsync(records, startExecution, recordSeen, context);
         }
 
-        var action = lambdaEvent.ValueKind == JsonValueKind.Object
-            && lambdaEvent.TryGetProperty("action", out var actionProperty)
-            && actionProperty.ValueKind == JsonValueKind.String
-                ? actionProperty.GetString()!
-                : "triage";
-
+        var action = RequireString(lambdaEvent, "action");
         return action switch
         {
-            "triage" => ScoreRowsAsync(lambdaEvent, client, modelArn, context),
+            "triage" => Pipeline.TriageRowAsync(lambdaEvent, client, modelArn, LazyTree.Value, context),
             "check-rate" => RunCheckRateAsync(lambdaEvent, updateRate),
             "escalate" => RunEscalateAsync(lambdaEvent, client, modelArn, readSecret, getSource, converse, context),
             "file-issue" => RunFileIssueAsync(lambdaEvent, readSecret, callGitHub),
@@ -186,34 +180,6 @@ public static class Function
             updateRate ?? Caps.Against(LazyDynamo.Value), RequireEnv("RATE_TABLE"), repo, perRepoLimit, globalLimit,
             DateTimeOffset.UtcNow, TimeSpan.FromHours(2)).ConfigureAwait(false);
         return new LambdaResponse { Allowed = result.Allowed, Tripped = result.Tripped, Count = result.Count, Limit = result.Limit };
-    }
-
-    /// <summary>Scores a single SemIf row or a {"rows": [...]} batch and returns {"results": [...]}.</summary>
-    internal static async Task<LambdaResponse> ScoreRowsAsync(
-        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, ILambdaContext context)
-    {
-        var rows = ExtractRows(lambdaEvent);
-        var results = new List<RowResultDto>(rows.Count);
-        foreach (var row in rows)
-        {
-            results.Add(await Pipeline.TriageRowAsync(row, client, modelArn, LazyTree.Value, context).ConfigureAwait(false));
-        }
-
-        var failures = results.Count(result => result.Error is not null);
-        context.Logger.LogInformation($"Scored {results.Count} rows, {failures} rejected");
-
-        return new LambdaResponse { Results = results };
-    }
-
-    private static List<JsonElement> ExtractRows(JsonElement lambdaEvent)
-    {
-        if (lambdaEvent.ValueKind == JsonValueKind.Object
-            && lambdaEvent.TryGetProperty("rows", out var rows)
-            && rows.ValueKind == JsonValueKind.Array)
-        {
-            return [.. rows.EnumerateArray()];
-        }
-        return [lambdaEvent];
     }
 
     /// <summary>
