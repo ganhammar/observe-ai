@@ -82,6 +82,9 @@ public static class TraceParser
             var method = Normalize(match.Groups["method"].Value);
             frames.Add(new Frame(method, IsInApp(method, line, appPrefixes)));
         }
+        // Frames[0] is the throw site for every runtime. Python is the one that
+        // prints its traceback outermost first, so it is reversed to match.
+        if (spec.Name == "python") frames.Reverse();
 
         return new ParsedTrace(spec.Name, exceptionType, frames);
     }

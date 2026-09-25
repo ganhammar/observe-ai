@@ -75,9 +75,10 @@ public static class SourceFetch
             if (lastCause >= 0) lines = lines[lastCause..];
         }
 
+        // Same order as trace.Frames, so Python's outermost-first lines are reversed here too.
         var perFrame = trace.Runtime switch
         {
-            "python" => MatchLines(lines, PythonFrame),
+            "python" => Enumerable.Reverse(MatchLines(lines, PythonFrame)).ToList(),
             "java" => MatchLines(lines, JavaFrame),
             "node" => MatchLines(lines, NodeFrame),
             "dotnet" => MatchDotnetLines(lines),

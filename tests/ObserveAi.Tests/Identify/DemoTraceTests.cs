@@ -5,7 +5,7 @@ namespace ObserveAi.Tests;
 /// <summary>
 /// The exact event demo/emit-error.sh writes, which is also what the Python
 /// Lambda runtime logs for demo/pricing-demo: carriage returns between lines,
-/// /var/task as the mount, the innermost frame last.
+/// /var/task as the mount, the innermost frame printed last and parsed first.
 /// </summary>
 public class DemoTraceTests
 {
@@ -25,7 +25,7 @@ public class DemoTraceTests
         Assert.NotNull(trace);
         Assert.Equal("python", trace!.Runtime);
         Assert.Equal("KeyError", trace.ExceptionType);
-        Assert.Equal(["handler", "price_for"], trace.Frames.Select(f => f.Method));
+        Assert.Equal(["price_for", "handler"], trace.Frames.Select(f => f.Method));
         Assert.All(trace.Frames, f => Assert.True(f.InApp));
         Assert.Equal(["handler.py"], SourceFetch.PathsFor(trace, Message));
     }
