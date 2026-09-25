@@ -20,6 +20,7 @@ import re
 
 RATIO_THRESHOLD = 5.0
 FALL_THRESHOLD = 2.0
+IN_LINE_BAND = (0.5, 2.0)
 
 # Field-name pairs that mean "this happened" against "this undid it".
 ACQUIRE_RELEASE = [("opened", "disposed"), ("opened", "closed"),
@@ -78,10 +79,22 @@ def _current_versus_baseline(numbers: dict) -> list[str]:
         for name, value in readings.items():
             if stem not in name and _strip_markers(name) not in stem:
                 continue
-            sentence = _ratio_sentence(name, value, other, baseline) or _fall_sentence(name, value, other, baseline)
+            sentence = (_ratio_sentence(name, value, other, baseline)
+                        or _fall_sentence(name, value, other, baseline)
+                        or _in_line_sentence(name, value, other, baseline))
             if sentence:
                 facts.append(sentence)
     return facts
+
+
+def _in_line_sentence(name: str, value: float, baseline_name: str, baseline: float) -> str | None:
+    """A reading close to its baseline, so the absence of change is stated rather than left to inference."""
+    if baseline == 0:
+        return None
+    ratio = value / baseline
+    if not IN_LINE_BAND[0] <= ratio <= IN_LINE_BAND[1]:
+        return None
+    return f"{name} is in line with {baseline_name} ({value:g} against {baseline:g})."
 
 
 def _fall_sentence(name: str, value: float, baseline_name: str, baseline: float) -> str | None:
@@ -120,8 +133,18 @@ def _durations(numbers: dict) -> list[str]:
     return facts
 
 
+def _own_deploy(state: dict, evidence: dict) -> list[str]:
+    """Whether the deploy in the evidence is of this service, which the model does not reliably match by name."""
+    deploy = evidence.get("last_deploy")
+    if not isinstance(deploy, dict) or "service" not in deploy:
+        return []
+    if deploy["service"] == state.get("service"):
+        return [f"The last deploy described is of this service itself, at {deploy.get('at', 'an unstated time')}."]
+    return [f"The last deploy described is of {deploy['service']}, not of this service."]
+
+
 def derive(state: dict) -> list[str]:
-    """Return plain-sentence statements of the numeric relations in the evidence."""
+    """Return plain-sentence statements of the relations in the evidence."""
     evidence = state.get("evidence")
     if not isinstance(evidence, dict):
         return []
@@ -131,6 +154,7 @@ def derive(state: dict) -> list[str]:
         for fact in producer(numbers):
             if fact not in facts:
                 facts.append(fact)
+    facts.extend(_own_deploy(state, evidence))
     return facts
 
 

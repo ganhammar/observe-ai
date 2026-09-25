@@ -3,15 +3,15 @@
   "prior": 0.15,
   "baseline": {
     "key": "baseline",
-    "question": "Does this error indicate a defect in this service's own source code, or something outside its code: a dependency it calls, a caller that broke the contract, or the platform it runs on?",
+    "question": "Does this error indicate a defect in this service's own source code, or something outside its code: a dependency it calls or the platform it runs on?",
     "options": [
       {
         "id": "bug",
-        "description": "A defect in this service's own source code, including input it should have validated. Resolving it requires a change to this repository."
+        "description": "A defect in this service's own source code, including input it failed to validate or handle. Resolving it requires a change to this repository."
       },
       {
         "id": "external",
-        "description": "A failure outside this service's code: a dependency it calls, a caller violating the documented contract, or the platform it runs on. No change to this repository resolves it."
+        "description": "A failure in a dependency this service calls or in the platform it runs on, behaving in a way this code could not have prevented. No change to this repository resolves it."
       }
     ]
   },
@@ -97,7 +97,8 @@
           "id": "no",
           "description": "This service's own settings are consistent, or the evidence does not describe them."
         }
-      ]
+      ],
+      "dampened_by": "platform_intervention"
     },
     {
       "key": "repeated_work",

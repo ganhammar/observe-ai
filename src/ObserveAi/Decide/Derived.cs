@@ -15,6 +15,8 @@ public static class Derived
 {
     private const double RatioThreshold = 5.0;
     private const double FallThreshold = 2.0;
+    private const double InLineLow = 0.5;
+    private const double InLineHigh = 2.0;
 
     // Field-name pairs that mean "this happened" against "this undid it".
     private static readonly (string Up, string Down)[] AcquireReleasePairs =
@@ -46,6 +48,7 @@ public static class Derived
                 facts.Add(fact);
             }
         }
+        facts.AddRange(OwnDeploy(state, evidence));
         return facts;
     }
 
@@ -131,12 +134,48 @@ public static class Derived
                     continue;
                 }
                 var sentence = RatioSentence(name, numbers[name], other, numbers[other])
-                    ?? FallSentence(name, numbers[name], other, numbers[other]);
+                    ?? FallSentence(name, numbers[name], other, numbers[other])
+                    ?? InLineSentence(name, numbers[name], other, numbers[other]);
                 if (sentence is not null)
                 {
                     yield return sentence;
                 }
             }
+        }
+    }
+
+    /// <summary>A reading close to its baseline, so the absence of change is stated rather than left to inference.</summary>
+    private static string? InLineSentence(string name, double value, string baselineName, double baseline)
+    {
+        if (baseline == 0)
+        {
+            return null;
+        }
+        var ratio = value / baseline;
+        if (ratio < InLineLow || ratio > InLineHigh)
+        {
+            return null;
+        }
+        return $"{name} is in line with {baselineName} ({PythonFloat.FormatG(value)} against {PythonFloat.FormatG(baseline)}).";
+    }
+
+    /// <summary>Whether the deploy in the evidence is of this service, which the model does not reliably match by name.</summary>
+    private static IEnumerable<string> OwnDeploy(JsonElement state, JsonElement evidence)
+    {
+        if (!evidence.TryGetProperty("last_deploy", out var deploy) || deploy.ValueKind != JsonValueKind.Object
+            || !deploy.TryGetProperty("service", out var deployed) || deployed.ValueKind != JsonValueKind.String)
+        {
+            yield break;
+        }
+        var service = state.TryGetProperty("service", out var own) && own.ValueKind == JsonValueKind.String ? own.GetString() : null;
+        if (deployed.GetString() == service)
+        {
+            var at = deploy.TryGetProperty("at", out var when) && when.ValueKind == JsonValueKind.String ? when.GetString() : "an unstated time";
+            yield return $"The last deploy described is of this service itself, at {at}.";
+        }
+        else
+        {
+            yield return $"The last deploy described is of {deployed.GetString()}, not of this service.";
         }
     }
 

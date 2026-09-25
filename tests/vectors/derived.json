@@ -283,7 +283,9 @@
         }
       }
     },
-    "expected_facts": []
+    "expected_facts": [
+      "The last deploy described is of this service itself, at 2026-09-11T10:02Z."
+    ]
   },
   {
     "name": "fixture_am-02",
@@ -355,7 +357,9 @@
         }
       }
     },
-    "expected_facts": []
+    "expected_facts": [
+      "The last deploy described is of this service itself, at 2026-08-29T14:40Z."
+    ]
   },
   {
     "name": "acquire_release_am-05",
@@ -409,7 +413,8 @@
       }
     },
     "expected_facts": [
-      "response_content_length is 51 times prior_7d_max_content_length (4.50972e+09 against 8.8211e+07)."
+      "response_content_length is 51 times prior_7d_max_content_length (4.50972e+09 against 8.8211e+07).",
+      "The last deploy described is of this service itself, at 2026-07-02T09:15Z."
     ]
   },
   {
@@ -457,9 +462,9 @@
     "expected_facts": []
   },
   {
-    "name": "fixture_am-09",
+    "name": "current_versus_baseline_am-09",
     "id": "am-09",
-    "producer": "none",
+    "producer": "current_versus_baseline",
     "state": {
       "service": "notify-fn",
       "runtime": "node",
@@ -477,7 +482,9 @@
         "prior_ratelimit_limit": "500 until 2026-09-24T02:00Z"
       }
     },
-    "expected_facts": []
+    "expected_facts": [
+      "our_send_rate_per_min is in line with our_send_rate_per_min_7d_avg (180 against 178)."
+    ]
   },
   {
     "name": "fixture_am-10",
@@ -537,7 +544,9 @@
         }
       }
     },
-    "expected_facts": []
+    "expected_facts": [
+      "The last deploy described is of this service itself, at 2026-09-11T10:02Z."
+    ]
   },
   {
     "name": "current_versus_baseline_am-12",
@@ -593,13 +602,14 @@
       }
     },
     "expected_facts": [
-      "memory_limit_mb is 2 times below prior_memory_limit_mb (512 against 1024)."
+      "memory_limit_mb is 2 times below prior_memory_limit_mb (512 against 1024).",
+      "input_rows is in line with input_rows_7d_avg (41200 against 39800)."
     ]
   },
   {
-    "name": "fixture_am-14",
+    "name": "current_versus_baseline_am-14",
     "id": "am-14",
-    "producer": "none",
+    "producer": "current_versus_baseline",
     "state": {
       "service": "web-bff",
       "runtime": "node",
@@ -626,12 +636,16 @@
         "errors_started_at": "2026-09-24T09:21Z"
       }
     },
-    "expected_facts": []
+    "expected_facts": [
+      "memory_limit_mb is in line with prior_memory_limit_mb (1024 against 1024).",
+      "requests_in_flight is in line with requests_in_flight_7d_avg (3 against 4).",
+      "The last deploy described is of this service itself, at 2026-09-24T09:02Z."
+    ]
   },
   {
-    "name": "fixture_am-15",
+    "name": "current_versus_baseline_am-15",
     "id": "am-15",
-    "producer": "none",
+    "producer": "current_versus_baseline",
     "state": {
       "service": "checkout-api",
       "runtime": "dotnet",
@@ -650,12 +664,14 @@
         "errors_started_at": "2026-09-24T09:31Z"
       }
     },
-    "expected_facts": []
+    "expected_facts": [
+      "this_service_disk_writes_mb_last_hour is in line with this_service_disk_writes_mb_7d_avg (3 against 3)."
+    ]
   },
   {
-    "name": "fixture_am-16",
+    "name": "current_versus_baseline_am-16",
     "id": "am-16",
-    "producer": "none",
+    "producer": "current_versus_baseline",
     "state": {
       "service": "ingest-worker",
       "runtime": "go",
@@ -671,7 +687,9 @@
         "destination_health": "forwarder targets healthy from other hosts"
       }
     },
-    "expected_facts": []
+    "expected_facts": [
+      "this_service_outbound_rps is in line with this_service_outbound_rps_7d_avg (40 against 42)."
+    ]
   },
   {
     "name": "fixture_am-17",
@@ -698,7 +716,9 @@
         "errors_started_at": "2026-09-24T07:31Z"
       }
     },
-    "expected_facts": []
+    "expected_facts": [
+      "The last deploy described is of this service itself, at 2026-09-24T07:30Z."
+    ]
   },
   {
     "name": "fixture_am-18",
@@ -725,6 +745,8 @@
         }
       }
     },
-    "expected_facts": []
+    "expected_facts": [
+      "The last deploy described is of this service itself, at 2026-09-02T14:10Z."
+    ]
   }
 ]
