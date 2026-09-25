@@ -2,7 +2,8 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   observe-ai ingestion. Captures every log group in the account into a Kinesis
   stream. Separate from the application stack because it is account-wide and
-  deployed once, while the application stack changes with every release.
+  rarely changes; the Deploy workflow deploys it ahead of the application
+  stack, which is a no-op when nothing here changed.
 
 Parameters:
   ShardCount:

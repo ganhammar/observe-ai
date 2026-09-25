@@ -55,6 +55,22 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: eu-central-1
 
+      - name: Deploy ingest stack
+        # Account-wide capture into the Kinesis stream the app stack consumes.
+        # Deployed first so its stream ARN can be handed to the app stack, and
+        # a no-op when the template is unchanged.
+        run: |
+          aws cloudformation deploy \
+            --stack-name observe-ai-ingest \
+            --template-file infra/ingest.yaml \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+          LOG_STREAM_ARN="$(aws cloudformation describe-stacks \
+            --stack-name observe-ai-ingest \
+            --query "Stacks[0].Outputs[?OutputKey=='LogStreamArn'].OutputValue | [0]" \
+            --output text)"
+          echo "LOG_STREAM_ARN=$LOG_STREAM_ARN" >> "$GITHUB_ENV"
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -121,4 +137,28 @@ jobs:
           sam deploy \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
-            --parameter-overrides "ModelArn=$MODEL_ARN" "GitHubOrg=${ORG:-ganhammar}"
+            --parameter-overrides "ModelArn=$MODEL_ARN" "GitHubOrg=${ORG:-ganhammar}" "LogStreamArn=$LOG_STREAM_ARN"
+
+      - name: Store GitHub token
+        # The stack owns the secret; this writes the repository secret into it,
+        # only when it differs from what is stored, so an unchanged token does
+        # not mint a new secret version on every deploy.
+        env:
+          TOKEN: ${{ secrets.GH_ISSUES_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::GH_ISSUES_TOKEN is not set; the pipeline cannot read source or file issues until it is."
+            exit 0
+          fi
+          SECRET_ARN="$(aws cloudformation describe-stacks \
+            --stack-name observe-ai \
+            --query "Stacks[0].Outputs[?OutputKey=='GitHubTokenSecretArn'].OutputValue | [0]" \
+            --output text)"
+          CURRENT="$(aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" \
+            --query SecretString --output text 2>/dev/null || true)"
+          if [ "$CURRENT" = "$TOKEN" ]; then
+            echo "Token unchanged"
+          else
+            aws secretsmanager put-secret-value --secret-id "$SECRET_ARN" --secret-string "$TOKEN" >/dev/null
+            echo "Token stored"
+          fi

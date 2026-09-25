@@ -11,7 +11,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 
 if ! gh repo view "$target" >/dev/null 2>&1; then
   echo "Repository $target does not exist. Create it first, for example:" >&2
-  echo "  gh repo create $target --public --description 'Demo service for observe-ai'" >&2
+  echo "  gh repo create $target --private --description 'Demo service for observe-ai'" >&2
   exit 1
 fi
 

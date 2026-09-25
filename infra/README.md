@@ -12,9 +12,11 @@ Everything except the model import runs on push to `main`. Nothing is created by
 
    The environment form is required because both workflows declare `environment: production`. The `production` environment is restricted to the `main` branch, so no other ref can mint that claim.
 
-2. Run the **Import Model** workflow from the Actions tab. It deploys the bootstrap stack, downloads the weights, stages them, starts the Bedrock import job and polls it to completion.
+2. Create a fine-grained GitHub token with Contents read and Issues write on the repositories the pipeline may file against, and set it as the repository secret `GH_ISSUES_TOKEN`. Deploy writes it into the stack's secret; without it the pipeline triages but cannot read source or file.
 
-3. Push to `main`, or run **Deploy**.
+3. Run the **Import Model** workflow from the Actions tab. It deploys the bootstrap stack, downloads the weights, stages them, starts the Bedrock import job and polls it to completion.
+
+4. Push to `main`, or run **Deploy**.
 
 ## Workflows
 
@@ -22,7 +24,7 @@ Everything except the model import runs on push to `main`. Nothing is created by
 |---|---|---|
 | PR | pull_request | Tests |
 | Import Model | manual | Bootstrap stack, then the one-time model import |
-| Deploy | push to `main`, manual | Resolves the model by name, then deploys the app stack |
+| Deploy | push to `main`, manual | Ingest stack, then resolves the model by name, then the app stack, then stores the GitHub token |
 
 Import Model is manual because it downloads several GB and produces a resource that bills monthly. Re-running it is safe: it exits early when a model of that name already exists.
 
@@ -36,7 +38,7 @@ Deploy looks the model up by name at deploy time rather than reading a stored AR
 | `observe-ai-ingest` | `infra/ingest.yaml` | Kinesis stream, delivery role, account capture policy |
 | `observe-ai` | `infra/template.yaml` | The triage Lambda, its tables and IAM |
 
-They are separate because their lifecycles differ. The bootstrap has to exist before an imported model does, and the app stack cannot deploy until that model exists. Ingestion is account-wide and deployed once, so an application release should not tear it down and recreate it. The imported model itself sits between them and is not a stack resource: AWS does not support Custom Model Import in CloudFormation.
+They are separate because their lifecycles differ. The bootstrap has to exist before an imported model does, and the app stack cannot deploy until that model exists. Ingestion is account-wide and rarely changes, so it deploys ahead of the app stack in the same workflow and is a no-op when unchanged. The imported model itself sits between them and is not a stack resource: AWS does not support Custom Model Import in CloudFormation.
 
 Staged weights expire after 7 days by a lifecycle rule. Bedrock copies them during import, so they are only needed while a job runs.
 
@@ -47,6 +49,8 @@ The deploy role is assumed by both workflows and needs, beyond ordinary CloudFor
 | Action | Used by |
 |---|---|
 | `bedrock:ListImportedModels` | Deploy, Import Model |
+| `kinesis:*`, `logs:PutAccountPolicy`, `logs:DescribeAccountPolicies`, `logs:DeleteAccountPolicy`, `iam:*Role*` on the delivery role | Deploy, through CloudFormation for the ingest stack |
+| `secretsmanager:CreateSecret`, `GetSecretValue`, `PutSecretValue` on `observe-ai/github-token` | Deploy |
 | `bedrock:CreateModelImportJob` | Import Model |
 | `bedrock:GetModelImportJob` | Import Model |
 | `s3:PutObject`, `s3:ListBucket` on the staging bucket | Import Model |

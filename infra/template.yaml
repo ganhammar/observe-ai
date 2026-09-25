@@ -71,17 +71,6 @@ Parameters:
       without the Kinesis trigger rather than failing.
     AllowedPattern: '^$|^arn:aws:kinesis:[a-z0-9-]+:[0-9]{12}:stream/.+$'
     ConstraintDescription: Must be empty or a Kinesis stream ARN.
-  GitHubTokenSecretArn:
-    Type: String
-    Default: ''
-    Description: >
-      ARN of the Secrets Manager secret holding the GitHub token IssueFiler
-      uses to file and comment on issues. Created out of band; this stack
-      only reads it. Empty means no token is configured, in which case the
-      function deploys without permission to read one and filing is not
-      permitted rather than the stack refusing to deploy.
-    AllowedPattern: '^$|^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+$'
-    ConstraintDescription: Must be empty or a Secrets Manager secret ARN.
   GitHubOrg:
     Type: String
     Default: ganhammar
@@ -92,7 +81,6 @@ Parameters:
 
 Conditions:
   HasLogStream: !Not [!Equals [!Ref LogStreamArn, '']]
-  HasGitHubToken: !Not [!Equals [!Ref GitHubTokenSecretArn, '']]
 
 Resources:
   TriageFunction:
@@ -147,7 +135,7 @@ Resources:
           # two resources circular. TriagePipeline's explicit Name below is what
           # makes this ARN predictable without one.
           PIPELINE_ARN: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-TriagePipeline
-          GITHUB_TOKEN_SECRET_ARN: !Ref GitHubTokenSecretArn
+          GITHUB_TOKEN_SECRET_ARN: !Ref GitHubToken
       # No Events here: SAM's Events sugar only makes an event source
       # conditional by way of the function resource's own Condition, not a
       # Condition on the individual event, so it cannot express "this
@@ -176,6 +164,11 @@ Resources:
                 - !Sub
                   - arn:aws:bedrock:eu-*::foundation-model/${FoundationModelId}
                   - FoundationModelId: !Select [1, !Split ['eu.', !Ref DiagnosisModelId]]
+            - Sid: ReadGitHubTokenOnly
+              Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref GitHubToken
             - Sid: CountOccurrencesOnly
               Effect: Allow
               Action:
@@ -302,26 +295,16 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${TriageFunction}
       RetentionInDays: 30
 
-  # A Policies entry on the function itself cannot carry a Condition, only the
-  # whole statement list can be included or not, so the GitHub token read is
-  # its own resource instead. Without a token this is skipped entirely and
-  # TriageFunction's role has no secretsmanager access at all, which is what
-  # makes filing unpermitted rather than the stack failing to deploy.
-  TriageFunctionGitHubTokenPolicy:
-    Type: AWS::IAM::Policy
-    Condition: HasGitHubToken
+  # The GitHub token IssueFiler files with and SourceFetch reads with. The
+  # stack creates the secret with no value; the Deploy workflow writes the
+  # token into it from the repository secret GH_ISSUES_TOKEN. With no value
+  # stored, reading it fails and filing fails with that error, which is the
+  # honest outcome when nobody has configured a token.
+  GitHubToken:
+    Type: AWS::SecretsManager::Secret
     Properties:
-      PolicyName: ReadGitHubTokenOnly
-      Roles:
-        - !Ref TriageFunctionRole
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: ReadGitHubTokenOnly
-            Effect: Allow
-            Action:
-              - secretsmanager:GetSecretValue
-            Resource: !Ref GitHubTokenSecretArn
+      Name: !Sub ${AWS::StackName}/github-token
+      Description: Fine-grained GitHub token with Contents read and Issues write on the repositories this pipeline files against.
 
   # Drives one log event from ingest to an issue, or to a stop with a reason
   # (infra/pipeline.asl.json). STANDARD, not EXPRESS, because the execution
@@ -399,3 +382,6 @@ Outputs:
   TriagePipelineArn:
     Description: ARN of the triage pipeline state machine.
     Value: !Ref TriagePipeline
+  GitHubTokenSecretArn:
+    Description: Secret the Deploy workflow writes the GitHub token into.
+    Value: !Ref GitHubToken

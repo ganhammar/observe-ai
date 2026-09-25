@@ -4,7 +4,7 @@
 
 Order matters: publish the repository first, then produce the error. Escalation fetches source from GitHub, so an error that arrives before the repository exists ends in an issue with no root cause.
 
-1. Create `<org>/pricing-demo` on GitHub, then `demo/publish.sh` to push this folder to it.
+1. Create `<org>/pricing-demo` on GitHub (private is fine; the token reads it), then `demo/publish.sh` to push this folder to it.
 2. Produce the error, either way:
    - `demo/emit-error.sh` writes one event in the Python runtime's exact log shape into `/aws/lambda/pricing-demo`. Nothing is deployed.
    - Or deploy `pricing-demo/` with `sam deploy --guided` and invoke it with `{"tier": "enterprise"}`, which is the real thing end to end.
