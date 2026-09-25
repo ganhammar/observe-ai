@@ -17,6 +17,7 @@ magnitudes legible.
 from __future__ import annotations
 
 import re
+from datetime import datetime
 
 RATIO_THRESHOLD = 5.0
 FALL_THRESHOLD = 2.0
@@ -133,14 +134,38 @@ def _durations(numbers: dict) -> list[str]:
     return facts
 
 
+ERROR_TIME_KEYS = ("errors_started_at", "observed_at")
+
+
+def _parse_time(text) -> datetime | None:
+    if not isinstance(text, str):
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 def _own_deploy(state: dict, evidence: dict) -> list[str]:
-    """Whether the deploy in the evidence is of this service, which the model does not reliably match by name."""
+    """Whether the deploy in the evidence is of this service and how long before the errors it happened.
+
+    The model does not reliably match the deploy's service name to the state's, and cannot subtract times.
+    """
     deploy = evidence.get("last_deploy")
     if not isinstance(deploy, dict) or "service" not in deploy:
         return []
-    if deploy["service"] == state.get("service"):
-        return [f"The last deploy described is of this service itself, at {deploy.get('at', 'an unstated time')}."]
-    return [f"The last deploy described is of {deploy['service']}, not of this service."]
+    if deploy["service"] != state.get("service"):
+        return [f"The last deploy described is of {deploy['service']}, not of this service."]
+    deployed = _parse_time(deploy.get("at"))
+    started = next((t for t in (_parse_time(evidence.get(k)) for k in ERROR_TIME_KEYS) if t), None)
+    if deployed is None or started is None or started < deployed:
+        return []
+    seconds = int((started - deployed).total_seconds())
+    if seconds < 3600:
+        return [f"This service itself was deployed {seconds // 60} minutes before the errors started."]
+    if seconds < 86400:
+        return [f"This service itself was deployed {seconds // 3600} hours before the errors started."]
+    return [f"This service itself was last deployed {seconds // 86400} days before the errors started."]
 
 
 def derive(state: dict) -> list[str]:

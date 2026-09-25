@@ -283,9 +283,7 @@
         }
       }
     },
-    "expected_facts": [
-      "The last deploy described is of this service itself, at 2026-09-11T10:02Z."
-    ]
+    "expected_facts": []
   },
   {
     "name": "fixture_am-02",
@@ -357,9 +355,7 @@
         }
       }
     },
-    "expected_facts": [
-      "The last deploy described is of this service itself, at 2026-08-29T14:40Z."
-    ]
+    "expected_facts": []
   },
   {
     "name": "acquire_release_am-05",
@@ -413,8 +409,7 @@
       }
     },
     "expected_facts": [
-      "response_content_length is 51 times prior_7d_max_content_length (4.50972e+09 against 8.8211e+07).",
-      "The last deploy described is of this service itself, at 2026-07-02T09:15Z."
+      "response_content_length is 51 times prior_7d_max_content_length (4.50972e+09 against 8.8211e+07)."
     ]
   },
   {
@@ -545,7 +540,7 @@
       }
     },
     "expected_facts": [
-      "The last deploy described is of this service itself, at 2026-09-11T10:02Z."
+      "This service itself was last deployed 12 days before the errors started."
     ]
   },
   {
@@ -639,7 +634,7 @@
     "expected_facts": [
       "memory_limit_mb is in line with prior_memory_limit_mb (1024 against 1024).",
       "requests_in_flight is in line with requests_in_flight_7d_avg (3 against 4).",
-      "The last deploy described is of this service itself, at 2026-09-24T09:02Z."
+      "This service itself was deployed 19 minutes before the errors started."
     ]
   },
   {
@@ -717,7 +712,7 @@
       }
     },
     "expected_facts": [
-      "The last deploy described is of this service itself, at 2026-09-24T07:30Z."
+      "This service itself was deployed 1 minutes before the errors started."
     ]
   },
   {
@@ -746,7 +741,7 @@
       }
     },
     "expected_facts": [
-      "The last deploy described is of this service itself, at 2026-09-02T14:10Z."
+      "This service itself was last deployed 21 days before the errors started."
     ]
   }
 ]

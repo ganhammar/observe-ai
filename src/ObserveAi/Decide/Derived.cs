@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -159,7 +160,12 @@ public static class Derived
         return $"{name} is in line with {baselineName} ({PythonFloat.FormatG(value)} against {PythonFloat.FormatG(baseline)}).";
     }
 
-    /// <summary>Whether the deploy in the evidence is of this service, which the model does not reliably match by name.</summary>
+    private static readonly string[] ErrorTimeKeys = ["errors_started_at", "observed_at"];
+
+    /// <summary>
+    /// Whether the deploy in the evidence is of this service and how long before the errors it happened. The
+    /// model does not reliably match the deploy's service name to the state's, and cannot subtract times.
+    /// </summary>
     private static IEnumerable<string> OwnDeploy(JsonElement state, JsonElement evidence)
     {
         if (!evidence.TryGetProperty("last_deploy", out var deploy) || deploy.ValueKind != JsonValueKind.Object
@@ -168,16 +174,33 @@ public static class Derived
             yield break;
         }
         var service = state.TryGetProperty("service", out var own) && own.ValueKind == JsonValueKind.String ? own.GetString() : null;
-        if (deployed.GetString() == service)
-        {
-            var at = deploy.TryGetProperty("at", out var when) && when.ValueKind == JsonValueKind.String ? when.GetString() : "an unstated time";
-            yield return $"The last deploy described is of this service itself, at {at}.";
-        }
-        else
+        if (deployed.GetString() != service)
         {
             yield return $"The last deploy described is of {deployed.GetString()}, not of this service.";
+            yield break;
         }
+        var deployedAt = deploy.TryGetProperty("at", out var at) ? ParseTime(at) : null;
+        var startedAt = ErrorTimeKeys
+            .Select(key => evidence.TryGetProperty(key, out var value) ? ParseTime(value) : null)
+            .FirstOrDefault(time => time is not null);
+        if (deployedAt is null || startedAt is null || startedAt < deployedAt)
+        {
+            yield break;
+        }
+        var seconds = (long)(startedAt.Value - deployedAt.Value).TotalSeconds;
+        yield return seconds switch
+        {
+            < 3600 => $"This service itself was deployed {seconds / 60} minutes before the errors started.",
+            < 86400 => $"This service itself was deployed {seconds / 3600} hours before the errors started.",
+            _ => $"This service itself was last deployed {seconds / 86400} days before the errors started.",
+        };
     }
+
+    private static DateTimeOffset? ParseTime(JsonElement value) =>
+        value.ValueKind == JsonValueKind.String
+        && DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var time)
+            ? time
+            : null;
 
     /// <summary>A reading that fell well below its baseline, such as a limit that was lowered.</summary>
     private static string? FallSentence(string name, double value, string baselineName, double baseline)
