@@ -39,6 +39,11 @@ jobs:
     name: Deploy
     needs: test
     runs-on: ubuntu-24.04-arm
+    # Two pushes in quick succession would otherwise race on the same stack,
+    # and CloudFormation refuses an update while one is in progress.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     # Requires a GitHub Environment named "production" in this repository's
     # settings. Add required reviewers there to gate deploys on approval.
     environment: production
