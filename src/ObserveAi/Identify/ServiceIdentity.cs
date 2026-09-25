@@ -21,8 +21,9 @@ public static class ServiceIdentity
 
     /// <summary>
     /// The owning repository by convention: the GitHub organisation plus the log group's resource name
-    /// (/aws/lambda/billing-sync -> {org}/billing-sync). Returns null for an unrecognised log group, so the
-    /// state machine stops at UnknownRepo. The result is wrong for a service named differently from its repository.
+    /// (/aws/lambda/billing-sync -> {org}/billing-sync). Returns null for an unrecognised log group, which the
+    /// Kinesis consumer counts as no repo. The result is wrong for a service named differently from its
+    /// repository.
     /// </summary>
     public static string? ConventionalRepo(string logGroupName, string githubOrg)
     {

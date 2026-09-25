@@ -36,7 +36,7 @@ Deploy looks the model up by name rather than reading a stored ARN, so the stack
 |---|---|---|
 | `observe-ai-bootstrap` | `infra/bootstrap.yaml` | Staging bucket, Bedrock import role |
 | `observe-ai-ingest` | `infra/ingest.yaml` | Kinesis stream, delivery role, account capture policy |
-| `observe-ai` | `infra/template.yaml` | The triage Lambda, its tables and IAM |
+| `observe-ai` | `infra/template.yaml`, `infra/pipeline.asl.json` | The triage Lambda, the state machine that drives it, their tables and IAM |
 
 The stacks are separate because their lifecycles differ. The bootstrap has to exist before an imported model does, and the app stack cannot deploy until that model exists. The model sits between them and is not a stack resource, because CloudFormation does not support Custom Model Import. Ingestion is account-wide and rarely changes; it deploys ahead of the app stack in the same workflow and is a no-op when unchanged.
 

@@ -114,9 +114,9 @@ public static class Function
     private static readonly Regex UnsafeExecutionNameChars = new(@"[^A-Za-z0-9\-_.]", RegexOptions.Compiled);
 
     /// <summary>
-    /// Handles a Kinesis batch: parses each log event's trace, resolves its repo and checks SeenTable, and starts
-    /// an execution only for a fingerprint's first sighting. Skipped events are counted, and the counts are the only
-    /// record a skipped event leaves.
+    /// Handles a Kinesis batch: parses each log event's trace, resolves its repo and checks SeenTable, and
+    /// starts an execution only for a fingerprint's first sighting. Skipped events are counted, and the counts
+    /// are the only record a skipped event leaves.
     /// </summary>
     private static async Task<LambdaResponse> RunStartExecutionsAsync(JsonElement records, Dependencies deps, ILambdaContext context)
     {

@@ -14,7 +14,7 @@ flowchart TB
     subgraph identify[Identify]
         BATCH --> PARSE[Parse trace<br/>regex per runtime]
         PARSE --> FP[Fingerprint<br/>type + in-app frames]
-        FP --> REPO[Resolve repo<br/>tag, then cache, then model]
+        FP --> REPO[Resolve repo<br/>org + log group name]
     end
 
     subgraph dedupe[Deduplicate]
@@ -46,7 +46,7 @@ flowchart TB
     end
 
     classDef model fill:#2d3f5e,stroke:#5b7bb5,color:#fff
-    class REPO,TREE,VERIFY,DRAFT model
+    class TREE,VERIFY,DRAFT model
 ```
 
 Shaded steps call a model.
@@ -59,13 +59,10 @@ As measured, the model is reliable at "does this text have property P" and "do t
 
 | Step | Question | Why not code |
 |---|---|---|
-| Resolve repo | Which repository owns `Orders.PaymentService`? | Only when the resource carries no tag. Cached per namespace, so it runs once per new namespace, not per log. |
-| Classify frames | Is this frame application code or a library? | Otherwise needs a hand-maintained namespace config per service. Cached the same way. |
-| Parse fallback | What is the exception type and the top frames? | Only when no runtime parser matches. Covers the long tail without a parser per format. |
 | Triage tree | 7 grounded signals over the evidence | The measured core. See [FINDINGS.md](FINDINGS.md). |
 | Verify source | Could this code throw this exception here? | Detects a stale checkout without resolving a commit. |
 
-Stack trace formats are distinctive enough for a regex to identify the runtime, so there is no language detection step.
+Stack trace formats are distinctive enough for a regex to identify the runtime, so there is no language detection step. The repository is the GitHub organisation plus the log group's resource name, which is wrong for a service named differently from its repository; a model call cached per namespace is the path to resolving those.
 
 ## Self-ingestion and blast radius
 

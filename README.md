@@ -42,7 +42,7 @@ Letting Bedrock apply the template server-side to `messages` reintroduces the pr
 
 Constrained decoding hides the chat path's failure: masking to the option letters still returns a confident-looking letter, drawn from a renormalised tail. `declared_mass` exists to detect this, and at least one pass should run with `--unconstrained`.
 
-`SEMIF_API` switches the deployed function between `completion` and `chat` without a code change, so the two can be compared on a live model.
+`eval/run_bedrock.py --api` switches between `completion` and `chat`, so the two can be compared on a live model.
 
 ## Evaluation
 
