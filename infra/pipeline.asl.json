@@ -1,122 +1,13 @@
 {
-  "Comment": "One log event from ingest to an issue, or to a stop with a reason. Every branch ends in a terminal state so the execution history answers why a log did or did not become an issue.",
-  "StartAt": "Identify",
+  "Comment": "One log event already identified, resolved to a repo, and confirmed worth triaging by the Kinesis consumer, run through triage to an issue or a stop with a reason. Every branch ends in a terminal state so the execution history answers why a log did or did not become an issue.",
+  "StartAt": "Triage",
   "States": {
-    "Identify": {
-      "Type": "Task",
-      "Resource": "${TriageFunctionArn}",
-      "Parameters": {
-        "action": "identify",
-        "message.$": "$.message",
-        "logGroupName.$": "$.logGroup"
-      },
-      "ResultPath": "$.identity",
-      "Retry": [
-        {
-          "ErrorEquals": [
-            "Lambda.TooManyRequestsException",
-            "Lambda.ServiceException"
-          ],
-          "IntervalSeconds": 2,
-          "MaxAttempts": 3,
-          "BackoffRate": 2
-        }
-      ],
-      "Next": "Parsed?",
-      "Comment": "ResultPath binds the whole response, so the stage's own fields sit one level down under identify."
-    },
-    "Parsed?": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Variable": "$.identity.identify.parsed",
-          "BooleanEquals": false,
-          "Next": "Unparseable"
-        }
-      ],
-      "Default": "ResolveRepo"
-    },
-    "Unparseable": {
-      "Type": "Succeed",
-      "Comment": "A line with no recognisable trace is ordinary, not a failure. The model fallback for unknown formats belongs here when it exists."
-    },
-    "ResolveRepo": {
-      "Type": "Task",
-      "Resource": "${TriageFunctionArn}",
-      "Parameters": {
-        "action": "resolve-repo",
-        "logGroupName.$": "$.logGroup"
-      },
-      "ResultPath": "$.repo",
-      "Next": "Repo known?"
-    },
-    "Repo known?": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Variable": "$.repo.repo",
-          "IsPresent": false,
-          "Next": "UnknownRepo"
-        }
-      ],
-      "Default": "CountOccurrence"
-    },
-    "UnknownRepo": {
-      "Type": "Succeed",
-      "Comment": "Nothing to file against. Tagging the resource is the fix, so this is a stop rather than an error."
-    },
-    "CountOccurrence": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::aws-sdk:dynamodb:updateItem",
-      "Parameters": {
-        "TableName": "${SeenTable}",
-        "Key": {
-          "repo": {
-            "S.$": "$.repo.repo"
-          },
-          "fingerprint": {
-            "S.$": "$.identity.identify.fingerprint"
-          }
-        },
-        "UpdateExpression": "ADD occurrences :one SET last_seen = :now",
-        "ExpressionAttributeValues": {
-          ":one": {
-            "N": "1"
-          },
-          ":now": {
-            "S.$": "$$.State.EnteredTime"
-          }
-        },
-        "ReturnValues": "ALL_NEW"
-      },
-      "ResultSelector": {
-        "occurrences.$": "States.StringToJson($.Attributes.occurrences.N)"
-      },
-      "ResultPath": "$.seen",
-      "Comment": "Counting is a direct SDK call rather than a Lambda, so the cheap path that almost every log takes costs no invocation at all.",
-      "Next": "First sighting?"
-    },
-    "First sighting?": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Variable": "$.seen.occurrences",
-          "NumericGreaterThan": 1,
-          "Next": "AlreadyKnown"
-        }
-      ],
-      "Default": "Triage"
-    },
-    "AlreadyKnown": {
-      "Type": "Succeed",
-      "Comment": "The common case by a wide margin, and the reason nine model calls per distinct failure is affordable."
-    },
     "Triage": {
       "Type": "Task",
       "Resource": "${TriageFunctionArn}",
       "Parameters": {
         "action": "triage",
-        "id.$": "$.identity.identify.fingerprint",
+        "id.$": "$.fingerprint",
         "state": {
           "service.$": "$.logGroup",
           "stack_trace.$": "$.message"
@@ -133,7 +24,8 @@
           "BackoffRate": 2
         }
       ],
-      "Next": "Confident it is ours?"
+      "Next": "Confident it is ours?",
+      "Comment": "id, state.service and state.stack_trace are exactly what the Kinesis consumer already computed; a row where every sub-question fails throws instead of returning an errored result, so a Bedrock outage lands here as a retry rather than a fingerprint wrongly marked decided."
     },
     "Confident it is ours?": {
       "Type": "Choice",
@@ -165,7 +57,7 @@
       "Resource": "${TriageFunctionArn}",
       "Parameters": {
         "action": "check-rate",
-        "repo.$": "$.repo.repo"
+        "repo.$": "$.repo"
       },
       "ResultPath": "$.rate",
       "Next": "Under the cap?"
@@ -199,20 +91,20 @@
       "Resource": "${TriageFunctionArn}",
       "Parameters": {
         "action": "escalate",
-        "repo.$": "$.repo.repo",
+        "repo.$": "$.repo",
         "commitish": "main",
         "rawTrace.$": "$.message",
         "trace": {
-          "runtime.$": "$.identity.identify.runtime",
-          "exceptionType.$": "$.identity.identify.exceptionType",
-          "frames.$": "$.identity.identify.frames"
+          "runtime.$": "$.runtime",
+          "exceptionType.$": "$.exceptionType",
+          "frames.$": "$.frames"
         },
         "verdict": {
           "bug.$": "$.verdict.results[0].probabilities[0]",
           "downstream.$": "$.verdict.results[0].probabilities[1]",
           "fallback.$": "$.verdict.results[0].fallback"
         },
-        "occurrences.$": "$.seen.occurrences"
+        "occurrences.$": "$.occurrences"
       },
       "ResultPath": "$.draft",
       "Catch": [
@@ -236,7 +128,7 @@
       "Resource": "${TriageFunctionArn}",
       "Parameters": {
         "action": "file-issue",
-        "repo.$": "$.repo.repo",
+        "repo.$": "$.repo",
         "title.$": "$.draft.escalate.draft.title",
         "body.$": "$.draft.escalate.draft.body"
       },

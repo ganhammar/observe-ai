@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Amazon;
 using Amazon.BedrockRuntime;
 using Amazon.DynamoDBv2;
@@ -19,8 +20,8 @@ namespace ObserveAi;
 /// by an "action" field on the event: identify, resolve-repo, triage, check-rate, escalate, or
 /// file-issue (a missing action means triage). The Kinesis event source that actually feeds this
 /// pipeline carries no action field at all; a top-level "Records" array is how that shape is told
-/// apart from everything else, ahead of the action switch. One deployment, one binary; the flow
-/// between stages lives in the state machine, not here.
+/// apart from everything else, ahead of the action switch. That path runs identify, repo
+/// resolution and the seen check itself, starting an execution only when triage is warranted.
 /// </summary>
 public static class Function
 {
@@ -64,12 +65,12 @@ public static class Function
     internal static Task<LambdaResponse> DispatchAsync(
         JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, ILambdaContext context,
         Caps.UpdateItem? updateRate = null, StartExecution? startExecution = null,
-        ReadSecret? readSecret = null, IssueFiler.CallGitHub? callGitHub = null)
+        ReadSecret? readSecret = null, IssueFiler.CallGitHub? callGitHub = null, SeenStore.UpdateItem? recordSeen = null)
     {
         if (lambdaEvent.ValueKind == JsonValueKind.Object
             && lambdaEvent.TryGetProperty("Records", out var records) && records.ValueKind == JsonValueKind.Array)
         {
-            return RunStartExecutionsAsync(records, startExecution, context);
+            return RunStartExecutionsAsync(records, startExecution, recordSeen, context);
         }
 
         var action = lambdaEvent.ValueKind == JsonValueKind.Object
@@ -90,33 +91,97 @@ public static class Function
         };
     }
 
+    private static readonly TimeSpan SeenRetention = TimeSpan.FromDays(30);
+    private static readonly Regex UnsafeExecutionNameChars = new(@"[^A-Za-z0-9\-_.]", RegexOptions.Compiled);
+
     /// <summary>
-    /// What the Kinesis event source actually invokes: each record batches many
-    /// CloudWatch Logs events, LogEnvelope.Unpack turns each into one candidate
-    /// execution, and every candidate starts its own run of the pipeline rather
-    /// than being triaged inline.
+    /// What the Kinesis event source invokes: identify, resolve the repo and check
+    /// SeenTable right here, so only a log worth triaging starts an execution.
+    /// Every other outcome is counted rather than silently dropped, since that
+    /// count is now the only trace a skipped log leaves behind.
     /// </summary>
     private static async Task<LambdaResponse> RunStartExecutionsAsync(
-        JsonElement records, StartExecution? startExecution, ILambdaContext context)
+        JsonElement records, StartExecution? startExecution, SeenStore.UpdateItem? recordSeen, ILambdaContext context)
     {
         var pipelineArn = RequireEnv("PIPELINE_ARN");
+        var githubOrg = RequireEnv("GITHUB_ORG");
+        var seenTable = RequireEnv("SEEN_TABLE");
         var start = startExecution ?? RealStartExecutionAsync;
-        var started = 0L;
-        foreach (var record in records.EnumerateArray())
+        var record = recordSeen ?? SeenStore.Against(LazyDynamo.Value);
+        var now = DateTimeOffset.UtcNow;
+
+        long started = 0, alreadyKnown = 0, unparseable = 0, noRepo = 0;
+        foreach (var kinesisRecord in records.EnumerateArray())
         {
-            var data = record.GetProperty("kinesis").GetProperty("data").GetString()!;
-            foreach (var execution in LogEnvelope.Unpack(data))
+            var data = kinesisRecord.GetProperty("kinesis").GetProperty("data").GetString()!;
+            foreach (var candidate in LogEnvelope.Unpack(data))
             {
+                var identity = Pipeline.Identify(candidate.LogGroup, candidate.Message, []);
+                if (!identity.Parsed)
+                {
+                    unparseable++;
+                    continue;
+                }
+
+                var repo = ServiceIdentity.ConventionalRepo(candidate.LogGroup, githubOrg);
+                if (repo is null)
+                {
+                    noRepo++;
+                    continue;
+                }
+
+                var signature = EvidenceSignature.Compute(TriageState(candidate.LogGroup, candidate.Message));
+                var seen = await SeenStore.RecordAsync(record, seenTable, repo, identity.Fingerprint!, now, SeenRetention, signature)
+                    .ConfigureAwait(false);
+                if (!seen.ShouldTriage)
+                {
+                    alreadyKnown++;
+                    continue;
+                }
+
+                var input = new ExecutionInput(
+                    repo, identity.Fingerprint!, seen.Occurrences, candidate.LogGroup, candidate.Message,
+                    identity.Runtime!, identity.ExceptionType!, identity.Frames!);
                 await start(new StartExecutionRequest
                 {
                     StateMachineArn = pipelineArn,
-                    Input = JsonSerializer.Serialize(execution, LambdaJsonContext.Default.ExecutionInput),
+                    Name = SanitiseExecutionName(candidate.Id),
+                    Input = JsonSerializer.Serialize(input, LambdaJsonContext.Default.ExecutionInput),
                 }, default).ConfigureAwait(false);
                 started++;
             }
         }
-        context.Logger.LogInformation($"Started {started} execution(s)");
-        return new LambdaResponse { Started = started };
+
+        context.Logger.LogInformation(
+            $"Started {started}, already known {alreadyKnown}, unparseable {unparseable}, no repo {noRepo}");
+        return new LambdaResponse { Started = started, AlreadyKnown = alreadyKnown, Unparseable = unparseable, NoRepo = noRepo };
+    }
+
+    /// <summary>The state infra/pipeline.asl.json's Triage state builds from $.logGroup and $.message, so the signature hashes what triage will actually score.</summary>
+    private static JsonElement TriageState(string logGroup, string message)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("service", logGroup);
+            writer.WriteString("stack_trace", message);
+            writer.WriteEndObject();
+        }
+        using var document = JsonDocument.Parse(stream.ToArray());
+        return document.RootElement.Clone();
+    }
+
+    /// <summary>
+    /// Step Functions deduplicates by execution name, so naming it after the log
+    /// event's own id makes StartExecution idempotent for free against a Kinesis
+    /// retry. Execution names allow at most 80 characters and reject whitespace,
+    /// wildcards, brackets and several punctuation marks.
+    /// </summary>
+    private static string SanitiseExecutionName(string id)
+    {
+        var sanitised = UnsafeExecutionNameChars.Replace(id, "_");
+        return sanitised.Length > 80 ? sanitised[..80] : sanitised;
     }
 
     private static Task<StartExecutionResponse> RealStartExecutionAsync(StartExecutionRequest request, CancellationToken cancellationToken) =>

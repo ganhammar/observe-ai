@@ -51,26 +51,37 @@ Parameters:
       instead.
   LogStreamArn:
     Type: String
+    Default: ''
     Description: >
       ARN of the ingest stack's Kinesis stream (infra/ingest.yaml's
       LogStreamArn output). Taken as a parameter rather than imported since
-      the ingest and application stacks deploy independently.
-    AllowedPattern: '^arn:aws:kinesis:[a-z0-9-]+:[0-9]{12}:stream/.+$'
-    ConstraintDescription: Must be a Kinesis stream ARN.
+      the ingest and application stacks deploy independently. Empty when the
+      ingest stack does not exist yet, in which case the function deploys
+      without the Kinesis trigger rather than failing.
+    AllowedPattern: '^$|^arn:aws:kinesis:[a-z0-9-]+:[0-9]{12}:stream/.+$'
+    ConstraintDescription: Must be empty or a Kinesis stream ARN.
   GitHubTokenSecretArn:
     Type: String
+    Default: ''
     Description: >
       ARN of the Secrets Manager secret holding the GitHub token IssueFiler
       uses to file and comment on issues. Created out of band; this stack
-      only reads it.
-    AllowedPattern: '^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+$'
-    ConstraintDescription: Must be a Secrets Manager secret ARN.
+      only reads it. Empty means no token is configured, in which case the
+      function deploys without permission to read one and filing is not
+      permitted rather than the stack refusing to deploy.
+    AllowedPattern: '^$|^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+$'
+    ConstraintDescription: Must be empty or a Secrets Manager secret ARN.
   GitHubOrg:
     Type: String
+    Default: ganhammar
     Description: >
       GitHub organisation ServiceIdentity.ConventionalRepo combines with a
       log group's own resource name to name the repository owning it, for
       example {GitHubOrg}/billing-sync for /aws/lambda/billing-sync.
+
+Conditions:
+  HasLogStream: !Not [!Equals [!Ref LogStreamArn, '']]
+  HasGitHubToken: !Not [!Equals [!Ref GitHubTokenSecretArn, '']]
 
 Resources:
   TriageFunction:
@@ -81,6 +92,12 @@ Resources:
       BuildMethod: makefile
     Properties:
       CodeUri: ../src/ObserveAi
+      # Explicit rather than SAM-generated, so the log group this function
+      # writes to (named from it below) is known at template-authoring time
+      # instead of only after deploy. infra/ingest.yaml's account capture
+      # policy excludes that log group by exact name, which only works if
+      # the name is predictable.
+      FunctionName: !Sub ${AWS::StackName}-TriageFunction
       # provided.al2023 ignores Handler and runs the bootstrap binary, but
       # CloudFormation still requires the property to be present.
       Handler: bootstrap
@@ -118,20 +135,13 @@ Resources:
           # makes this ARN predictable without one.
           PIPELINE_ARN: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-TriagePipeline
           GITHUB_TOKEN_SECRET_ARN: !Ref GitHubTokenSecretArn
-      Events:
-        # CloudWatch Logs delivers into this stream account-wide
-        # (infra/ingest.yaml); each record can batch many log events, and
-        # LogEnvelope.Unpack turns each into one pipeline execution. A
-        # poisonous record bisects out of its batch and is retried at most
-        # twice, rather than blocking everything behind it on the shard.
-        LogStream:
-          Type: Kinesis
-          Properties:
-            Stream: !Ref LogStreamArn
-            BatchSize: 10
-            StartingPosition: LATEST
-            BisectBatchOnFunctionError: true
-            MaximumRetryAttempts: 2
+      # No Events here: SAM's Events sugar only makes an event source
+      # conditional by way of the function resource's own Condition, not a
+      # Condition on the individual event, so it cannot express "this
+      # function always exists, but its Kinesis trigger only exists when a
+      # stream is configured". TriageFunctionLogStreamMapping below is that
+      # trigger, written as a plain CloudFormation resource so its own
+      # Condition applies to it directly.
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -158,15 +168,10 @@ Resources:
               Action:
                 - states:StartExecution
               Resource: !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-TriagePipeline
-            - Sid: ReadGitHubTokenOnly
-              Effect: Allow
-              Action:
-                - secretsmanager:GetSecretValue
-              Resource: !Ref GitHubTokenSecretArn
-      # Beyond the Kinesis trigger above, the only other caller is the state
-      # machine invoking this function directly through the Invoke API, not a
-      # public HTTP endpoint. Add a key under Events above only if that stops
-      # being true, for example:
+      # Beyond the Kinesis trigger (TriageFunctionLogStreamMapping below), the
+      # only other caller is the state machine invoking this function directly
+      # through the Invoke API, not a public HTTP endpoint. Add a key under
+      # Events above only if that stops being true, for example:
       #
       # TriageApi:
       #   Type: Api
@@ -182,6 +187,48 @@ Resources:
       # FunctionUrlConfig:
       #   AuthType: AWS_IAM
 
+  # CloudWatch Logs delivers into this stream account-wide (infra/ingest.yaml);
+  # each record can batch many log events, and LogEnvelope.Unpack turns each
+  # into one pipeline execution. A poisonous record bisects out of its batch
+  # and is retried at most twice, rather than blocking everything behind it on
+  # the shard. Absent, rather than deploy failing, when no stream is
+  # configured yet.
+  TriageFunctionLogStreamMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Condition: HasLogStream
+    Properties:
+      EventSourceArn: !Ref LogStreamArn
+      FunctionName: !Ref TriageFunction
+      BatchSize: 10
+      StartingPosition: LATEST
+      BisectBatchOnFunctionError: true
+      MaximumRetryAttempts: 2
+
+  # The permissions a polling Kinesis event source mapping needs to read the
+  # stream, scoped to it rather than the AWSLambdaKinesisExecutionRole managed
+  # policy's "*" resource. Its own resource, conditioned the same way as the
+  # mapping above, for the same reason a Policies statement cannot carry a
+  # Condition by itself.
+  TriageFunctionKinesisPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasLogStream
+    Properties:
+      PolicyName: PollLogStreamOnly
+      Roles:
+        - !Ref TriageFunctionRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PollLogStreamOnly
+            Effect: Allow
+            Action:
+              - kinesis:DescribeStream
+              - kinesis:DescribeStreamSummary
+              - kinesis:GetRecords
+              - kinesis:GetShardIterator
+              - kinesis:ListShards
+              - kinesis:ListStreams
+            Resource: !Ref LogStreamArn
 
   # Counts occurrences per distinct failure. The triage tree costs nine model
   # calls, so it runs on first sighting only; every repeat after that is an
@@ -229,6 +276,27 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${TriageFunction}
       RetentionInDays: 30
 
+  # A Policies entry on the function itself cannot carry a Condition, only the
+  # whole statement list can be included or not, so the GitHub token read is
+  # its own resource instead. Without a token this is skipped entirely and
+  # TriageFunction's role has no secretsmanager access at all, which is what
+  # makes filing unpermitted rather than the stack failing to deploy.
+  TriageFunctionGitHubTokenPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasGitHubToken
+    Properties:
+      PolicyName: ReadGitHubTokenOnly
+      Roles:
+        - !Ref TriageFunctionRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ReadGitHubTokenOnly
+            Effect: Allow
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: !Ref GitHubTokenSecretArn
+
   # Drives one log event from ingest to an issue, or to a stop with a reason
   # (infra/pipeline.asl.json). STANDARD, not EXPRESS, because the execution
   # history is the audit trail for why a log did or did not become an issue,
@@ -248,10 +316,14 @@ Resources:
       DefinitionUri: pipeline.asl.json
       DefinitionSubstitutions:
         TriageFunctionArn: !GetAtt TriageFunction.Arn
-        SeenTable: !Ref SeenTable
       Logging:
         Level: ALL
-        IncludeExecutionData: true
+        # Off deliberately: the execution input is the log line that started
+        # this execution, and logging it back out is what closes the
+        # self-ingestion loop even with the account policy's exclusions in
+        # place. State transitions are still recorded at ALL level; only the
+        # payload carried between them is not.
+        IncludeExecutionData: false
         Destinations:
           - CloudWatchLogsLogGroup:
               LogGroupArn: !GetAtt TriagePipelineLogGroup.Arn

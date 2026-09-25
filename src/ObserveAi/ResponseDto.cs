@@ -163,9 +163,10 @@ public sealed class EscalateResultDto
 /// The Lambda response shape. Only Results is set for triage, keeping that
 /// action's wire format exactly as it was before identify and escalate existed;
 /// Identify and Escalate are each set only by their own action. Repo/ResolvedBy
-/// (resolve-repo), Allowed/Tripped/Count/Limit (check-rate), Started
-/// (start-executions), and Outcome/IssueNumber (file-issue) stay flat here
-/// rather than nested under their own key, because the state machine reads
+/// (resolve-repo), Allowed/Tripped/Count/Limit (check-rate), Started/AlreadyKnown/
+/// Unparseable/NoRepo (start-executions, the audit trail for the log events that
+/// never become an execution), and Outcome/IssueNumber (file-issue) stay flat
+/// here rather than nested under their own key, because the state machine reads
 /// them straight off the ResultPath it assigns their task to (for example
 /// $.repo.repo, $.rate.tripped), the same way $.verdict.results[0] reads
 /// Results.
@@ -201,6 +202,15 @@ public sealed class LambdaResponse
 
     [JsonPropertyName("started")]
     public long? Started { get; init; }
+
+    [JsonPropertyName("alreadyKnown")]
+    public long? AlreadyKnown { get; init; }
+
+    [JsonPropertyName("unparseable")]
+    public long? Unparseable { get; init; }
+
+    [JsonPropertyName("noRepo")]
+    public long? NoRepo { get; init; }
 
     [JsonPropertyName("outcome")]
     public string? Outcome { get; init; }

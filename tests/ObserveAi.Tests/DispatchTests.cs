@@ -270,37 +270,77 @@ public class DispatchTests
             () => Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext()));
     }
 
-    [Fact]
-    public async Task ARecordsArrayStartsOneExecutionPerLogEventAcrossEveryRecord()
+    private const string PipelineArn = "arn:aws:states:eu-central-1:1:stateMachine:pipeline";
+
+    /// <summary>A SeenTable backing store that behaves the way DynamoDB's ADD plus if_not_exists does.</summary>
+    private static SeenStore.UpdateItem SeenCounter(Dictionary<string, (long Count, string? Signature)> store) => (request, _) =>
     {
-        Environment.SetEnvironmentVariable("PIPELINE_ARN", "arn:aws:states:eu-central-1:1:stateMachine:pipeline");
+        var key = $"{request.Key["repo"].S}/{request.Key["fingerprint"].S}";
+        var incoming = request.ExpressionAttributeValues[":sig"].S;
+        var (count, storedSignature) = store.GetValueOrDefault(key, (0, null));
+        store[key] = (count + 1, incoming);
+        return Task.FromResult(new UpdateItemResponse
+        {
+            Attributes = new Dictionary<string, AttributeValue>
+            {
+                ["occurrences"] = new() { N = (count + 1).ToString() },
+                ["previous_signature"] = new(storedSignature ?? incoming),
+            },
+        });
+    };
+
+    /// <summary>
+    /// One batch exercising every start-executions outcome at once: an
+    /// unparseable line, a parseable one in a log group with no repo
+    /// convention, a first sighting, and a repeat of that same sighting. The
+    /// first sighting's execution is named after its own sanitised id.
+    /// </summary>
+    [Fact]
+    public async Task StartExecutionsCountsEveryOutcomeAndNamesTheExecutionAfterTheLogEventId()
+    {
+        Environment.SetEnvironmentVariable("PIPELINE_ARN", PipelineArn);
+        Environment.SetEnvironmentVariable("GITHUB_ORG", "acme");
+        Environment.SetEnvironmentVariable("SEEN_TABLE", "seen-table");
         try
         {
             var evt = Parse(new JsonObject
             {
                 ["Records"] = new JsonArray(
-                    new JsonObject { ["kinesis"] = new JsonObject { ["data"] = KinesisEnvelope("/aws/lambda/checkout-api", "first error") } },
-                    new JsonObject { ["kinesis"] = new JsonObject { ["data"] = KinesisEnvelope("/aws/lambda/orders", "second error", "third error") } }),
+                    new JsonObject
+                    {
+                        ["kinesis"] = new JsonObject
+                        {
+                            ["data"] = KinesisEnvelope(
+                                "/aws/lambda/checkout-api",
+                                ("1", "nothing here looks like a stack trace"),
+                                ("2:with/slash", DotnetTrace),
+                                ("3", DotnetTrace)),
+                        },
+                    },
+                    new JsonObject { ["kinesis"] = new JsonObject { ["data"] = KinesisEnvelope("some-custom-log-group", DotnetTrace) } }),
             });
             var started = new List<StartExecutionRequest>();
-            Function.StartExecution startExecution = (request, _) =>
-            {
-                started.Add(request);
-                return Task.FromResult(new StartExecutionResponse());
-            };
+            Function.StartExecution startExecution = (request, _) => { started.Add(request); return Task.FromResult(new StartExecutionResponse()); };
 
             var response = await Function.DispatchAsync(
-                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(), startExecution: startExecution);
+                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(),
+                startExecution: startExecution, recordSeen: SeenCounter([]));
 
-            Assert.Equal(3, response.Started);
-            Assert.Equal(3, started.Count);
-            Assert.All(started, r => Assert.Equal("arn:aws:states:eu-central-1:1:stateMachine:pipeline", r.StateMachineArn));
-            Assert.Contains("\"logGroup\":\"/aws/lambda/checkout-api\"", started[0].Input);
-            Assert.Contains("\"message\":\"first error\"", started[0].Input);
+            Assert.Equal(1, response.Started);
+            Assert.Equal(1, response.AlreadyKnown);
+            Assert.Equal(1, response.Unparseable);
+            Assert.Equal(1, response.NoRepo);
+            var request = Assert.Single(started);
+            Assert.Equal(PipelineArn, request.StateMachineArn);
+            Assert.Equal("2_with_slash", request.Name);
+            Assert.Contains("\"repo\":\"acme/checkout-api\"", request.Input);
+            Assert.Contains("\"occurrences\":1", request.Input);
         }
         finally
         {
             Environment.SetEnvironmentVariable("PIPELINE_ARN", null);
+            Environment.SetEnvironmentVariable("GITHUB_ORG", null);
+            Environment.SetEnvironmentVariable("SEEN_TABLE", null);
         }
     }
 
@@ -346,17 +386,25 @@ public class DispatchTests
     }
 
     /// <summary>Builds the gzipped base64 envelope a CloudWatch Logs subscription delivers as one Kinesis record's data.</summary>
-    private static string KinesisEnvelope(string logGroup, params string[] messages)
+    private static string KinesisEnvelope(string logGroup, params string[] messages) =>
+        KinesisEnvelope(logGroup, messages.Select((message, i) => (i.ToString(), message)).ToArray());
+
+    /// <summary>As above, with an explicit id per log event rather than one assigned by index.</summary>
+    private static string KinesisEnvelope(string logGroup, params (string Id, string Message)[] events)
     {
-        var events = string.Join(",", messages.Select((message, i) => $$"""{"id":"{{i}}","timestamp":1440442987000,"message":"{{message}}"}"""));
-        var json = $$"""
-            {"messageType":"DATA_MESSAGE","owner":"123456789012","logGroup":"{{logGroup}}","logStream":"testStream","subscriptionFilters":["f"],"logEvents":[{{events}}]}
-            """;
+        var envelope = new JsonObject
+        {
+            ["messageType"] = "DATA_MESSAGE",
+            ["logGroup"] = logGroup,
+            ["logEvents"] = new JsonArray(events
+                .Select(e => new JsonObject { ["id"] = e.Id, ["timestamp"] = 1440442987000, ["message"] = e.Message })
+                .ToArray()),
+        };
 
         using var output = new MemoryStream();
         using (var gzip = new GZipStream(output, CompressionMode.Compress, leaveOpen: true))
         {
-            var bytes = Encoding.UTF8.GetBytes(json);
+            var bytes = Encoding.UTF8.GetBytes(envelope.ToJsonString());
             gzip.Write(bytes, 0, bytes.Length);
         }
         return Convert.ToBase64String(output.ToArray());

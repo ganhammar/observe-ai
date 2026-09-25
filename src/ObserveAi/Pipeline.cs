@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Amazon.Lambda.Core;
 using Amazon.Runtime;
 
@@ -9,6 +10,21 @@ public sealed record IdentifyResult(
     bool Parsed, string? Runtime, string? ExceptionType, string? Fingerprint, string? Signature,
     string? NamespacePrefix, LogGroupKind? ResourceKind, string? ResourceName,
     IReadOnlyList<Frame>? Frames, string? Error);
+
+/// <summary>
+/// What starts one triage execution: everything the Kinesis consumer already
+/// worked out (identify, repo resolution, the occurrence count), so the state
+/// machine itself never redoes any of it.
+/// </summary>
+public sealed record ExecutionInput(
+    [property: JsonPropertyName("repo")] string Repo,
+    [property: JsonPropertyName("fingerprint")] string Fingerprint,
+    [property: JsonPropertyName("occurrences")] long Occurrences,
+    [property: JsonPropertyName("logGroup")] string LogGroup,
+    [property: JsonPropertyName("message")] string Message,
+    [property: JsonPropertyName("runtime")] string Runtime,
+    [property: JsonPropertyName("exceptionType")] string ExceptionType,
+    [property: JsonPropertyName("frames")] IReadOnlyList<Frame> Frames);
 
 /// <summary>
 /// What escalate needs. FrameSources[i] is the fetched span for Trace.Frames[i],
@@ -63,7 +79,12 @@ public static class Pipeline
     public static string? ResolveRepo(string logGroupName, string githubOrg) =>
         ServiceIdentity.ConventionalRepo(logGroupName, githubOrg);
 
-    /// <summary>The existing tree/flat scoring path for one row, relocated rather than changed so triage keeps today's behaviour.</summary>
+    /// <summary>
+    /// The tree/flat scoring path for one row. Only the flat path catches a
+    /// rejected row here: tree mode lets a total scoring failure reach the
+    /// caller uncaught, so Step Functions retries the triage state instead of
+    /// treating the fingerprint as decided.
+    /// </summary>
     public static async Task<RowResultDto> TriageRowAsync(
         JsonElement row, IBedrockInvoker client, string modelArn, string mode,
         Lazy<QuestionTree> lazyTree, ILambdaContext context)
@@ -79,27 +100,27 @@ public static class Pipeline
             ? idProperty.GetString()
             : null;
 
-        try
+        if (mode == "flat")
         {
-            if (mode == "flat")
+            try
             {
                 var score = await BedrockBackend.ScoreAsync(client, modelArn, row).ConfigureAwait(false);
                 return RowResultDto.FromScore(score);
             }
-
-            var tree = lazyTree.Value;
-            var result = await Triage.RunAsync(client, modelArn, row, tree).ConfigureAwait(false);
-            foreach (var failed in result.Answers.Where(answer => answer.Error is not null))
+            catch (Exception error) when (error is RowValidationException or AmazonServiceException or AmazonClientException)
             {
-                context.Logger.LogWarning($"Row {rowId} signal {failed.Key} failed: {failed.Error}");
+                context.Logger.LogWarning($"Row {rowId} rejected: {error.GetType().Name}: {error.Message}");
+                return RowResultDto.FromError(rowId, $"{error.GetType().Name}: {error.Message}");
             }
-            return RowResultDto.FromTriage(rowId, result, tree);
         }
-        catch (Exception error) when (error is RowValidationException or AmazonServiceException or AmazonClientException)
+
+        var tree = lazyTree.Value;
+        var result = await Triage.RunAsync(client, modelArn, row, tree).ConfigureAwait(false);
+        foreach (var failed in result.Answers.Where(answer => answer.Error is not null))
         {
-            context.Logger.LogWarning($"Row {rowId} rejected: {error.GetType().Name}: {error.Message}");
-            return RowResultDto.FromError(rowId, $"{error.GetType().Name}: {error.Message}");
+            context.Logger.LogWarning($"Row {rowId} signal {failed.Key} failed: {failed.Error}");
         }
+        return RowResultDto.FromTriage(rowId, result, tree);
     }
 
     private static string DescribeKind(JsonElement element) => element.ValueKind switch

@@ -159,20 +159,35 @@ public class TriageTests
     }
 
     [Fact]
-    public async Task NoEvidenceRowRoutesToBaseline()
+    public async Task NoEvidenceRowIssuesOnlyTheBaselineQuestion()
     {
         var fake = new FakeInvoker
         {
-            // Baseline answers almost entirely "bug" (option A); every other
-            // sub-question gets the generic response, which must be ignored.
+            // Baseline answers almost entirely "bug" (option A); anything else
+            // would mean a sub-question the row's lack of evidence should have skipped.
             RespondTo = prompt => prompt.Contains(Tree.Baseline.Question)
                 ? CompletionBody(new Dictionary<string, double> { ["A"] = 0.0, ["B"] = -10.0 })
-                : DefaultResponse(),
+                : throw new InvalidOperationException($"unexpected sub-question call: {prompt}"),
         };
 
         var result = await Triage.RunAsync(fake, "arn:model", RowWithoutEvidence("row-4"), Tree);
 
+        Assert.Single(fake.Prompts);
         Assert.True(result.Verdict.Fallback);
         Assert.True(result.Verdict.Bug > 0.99, $"expected the baseline's bug answer to carry the verdict, got {result.Verdict.Bug}");
+    }
+
+    [Fact]
+    public async Task ThrowsWhenEverySubQuestionFails()
+    {
+        var fake = new FakeInvoker
+        {
+            RespondTo = _ => throw new AmazonServiceException("model not ready: endpoint scaled to zero"),
+        };
+
+        var error = await Assert.ThrowsAsync<RowValidationException>(
+            () => Triage.RunAsync(fake, "arn:model", RowWithEvidence("row-5"), Tree));
+
+        Assert.Contains("Every sub-question failed", error.Message);
     }
 }

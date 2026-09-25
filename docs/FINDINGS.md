@@ -95,7 +95,7 @@ Replacing one causal question with seven grounded ones plus a combining rule in 
 | 4B, tree v1 | 0.800 | 0.800 | 0.500 | 0.688 | 0.168 |
 | 4B, tree v2 | 0.800 | 0.800 | 0.833 | 0.812 | 0.186 |
 | **4B, tree v3** | **1.000** | **1.000** | **0.833** | **0.938** | **0.102** |
-| 32B, one question | 1.000 | 1.000 | 0.500 | 0.812 | — |
+| 32B, one question | 1.000 | 1.000 | 0.500 | 0.812 | n/a |
 | Jev, one question | 1.000 | 0.900 | 0.667 | 0.844 | 0.095 |
 
 Restructuring the question was worth **+41.6 points** on the ambiguous band. Multiplying parameters by eight was worth **+8.3**.
@@ -142,6 +142,14 @@ On the OpenAI Completions request shape, `logprobs` is an integer count. Sending
 | `logprobs: 20` | 20 |
 
 With one candidate there is no distribution, so every option but the argmax reads as missing and the probabilities are meaningless while still looking plausible. The Chat Completions shape genuinely does use the boolean plus a separate count, so the two paths need different parameters.
+
+## The measured advantage is not available in production yet
+
+The tree's 0.833 on the ambiguous band comes from rows carrying an `evidence` field: connection counts, token lifetimes, request rates against their own baseline. Those fields were authored by hand for the fixture.
+
+**Nothing in the pipeline produces them.** A CloudWatch log event carries a message and a log group, so the deployed triage sees a stack trace and nothing else, the evidence check is false, and the verdict falls back to the single baseline question. That is the 0.417 path.
+
+Gathering evidence is unstarted work and it is not small: it means correlating a trace with metrics, recent deploys, dependency health and the service's own history at the moment the error fired. Until it exists the decomposition is a measured result rather than a deployed capability, and the honest claim is about what the approach can do given evidence, not about what this system currently does.
 
 ## What these numbers do not support
 

@@ -1,29 +1,28 @@
 using System.IO.Compression;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace ObserveAi;
 
 /// <summary>
-/// One candidate pipeline execution, shaped as infra/pipeline.asl.json's
-/// Identify step reads its raw input: $.logGroup and $.message.
+/// One raw log event out of a CloudWatch Logs subscription payload, before the
+/// consumer decides whether it is worth an execution: the id CloudWatch itself
+/// assigned it (the source for a stable execution name), the log group, and
+/// the message.
 /// </summary>
-public sealed record ExecutionInput(
-    [property: JsonPropertyName("logGroup")] string LogGroup,
-    [property: JsonPropertyName("message")] string Message);
+public sealed record LogCandidate(string Id, string LogGroup, string Message);
 
 /// <summary>
 /// Unpacks a CloudWatch Logs subscription payload as it arrives on Kinesis:
 /// base64 over gzip over a `{messageType, logGroup, logStream, logEvents:
 /// [{id, timestamp, message}]}` envelope. One Kinesis record batches many log
-/// events, and each becomes a candidate pipeline execution.
+/// events, and each becomes a candidate the consumer decides on.
 /// </summary>
 public static class LogEnvelope
 {
     private const string ControlMessage = "CONTROL_MESSAGE";
 
     /// <summary>
-    /// Unpacks one record's payload into the executions it starts. A
+    /// Unpacks one record's payload into the candidates it carries. A
     /// CONTROL_MESSAGE envelope is CloudWatch's own subscription health check,
     /// carries no log data, and yields nothing.
     ///
@@ -38,7 +37,7 @@ public static class LogEnvelope
     /// lines together, which is worse than leaving each line to fingerprint
     /// on its own.
     /// </summary>
-    public static IReadOnlyList<ExecutionInput> Unpack(string base64Payload)
+    public static IReadOnlyList<LogCandidate> Unpack(string base64Payload)
     {
         var compressed = Convert.FromBase64String(base64Payload);
         using var buffer = new MemoryStream(compressed);
@@ -52,11 +51,12 @@ public static class LogEnvelope
         }
 
         var logGroup = root.GetProperty("logGroup").GetString()!;
-        var executions = new List<ExecutionInput>();
+        var candidates = new List<LogCandidate>();
         foreach (var logEvent in root.GetProperty("logEvents").EnumerateArray())
         {
-            executions.Add(new ExecutionInput(logGroup, logEvent.GetProperty("message").GetString()!));
+            candidates.Add(new LogCandidate(
+                logEvent.GetProperty("id").GetString()!, logGroup, logEvent.GetProperty("message").GetString()!));
         }
-        return executions;
+        return candidates;
     }
 }

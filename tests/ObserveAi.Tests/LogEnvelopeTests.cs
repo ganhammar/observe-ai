@@ -27,16 +27,18 @@ public class LogEnvelopeTests
     }
 
     [Fact]
-    public void TwoLogEventsYieldTwoExecutionInputsWithTheRightLogGroupAndMessages()
+    public void TwoLogEventsYieldTwoCandidatesWithTheRightIdLogGroupAndMessage()
     {
         var payload = Envelope("DATA_MESSAGE", "/aws/lambda/orders", "first error", "second error");
 
-        var executions = LogEnvelope.Unpack(payload);
+        var candidates = LogEnvelope.Unpack(payload);
 
-        Assert.Equal(2, executions.Count);
-        Assert.All(executions, execution => Assert.Equal("/aws/lambda/orders", execution.LogGroup));
-        Assert.Equal("first error", executions[0].Message);
-        Assert.Equal("second error", executions[1].Message);
+        Assert.Equal(2, candidates.Count);
+        Assert.All(candidates, candidate => Assert.Equal("/aws/lambda/orders", candidate.LogGroup));
+        Assert.Equal("first error", candidates[0].Message);
+        Assert.Equal("second error", candidates[1].Message);
+        Assert.Equal("0", candidates[0].Id);
+        Assert.Equal("1", candidates[1].Id);
     }
 
     [Fact]

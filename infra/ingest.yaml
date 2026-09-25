@@ -11,12 +11,16 @@ Parameters:
     MinValue: 1
     Description: >
       One shard carries 1 MB/s or 1000 records/s. Raise it for a noisy account.
-  ExcludedLogGroupPrefix:
-    Type: String
-    Default: /aws/lambda/observe-ai
+  ExcludedLogGroupNames:
+    Type: CommaDelimitedList
+    Default: /aws/lambda/observe-ai-TriageFunction,/aws/vendedlogs/states/observe-ai-TriagePipeline
     Description: >
-      Log groups under this prefix are not captured. This is the recursion
-      guard and it is a parameter so it can be widened without a code change.
+      Exact log group names not captured. This is the recursion guard. It is a
+      parameter, rather than a prefix computed here, because this stack does
+      not know the application stack's resource names; the default is what
+      infra/template.yaml's TriageFunction and TriagePipeline create under the
+      default stack name observe-ai, and it must be overridden to match if
+      either is deployed under a different stack name.
   RetentionHours:
     Type: Number
     Default: 24
@@ -64,19 +68,24 @@ Resources:
   # after this deploys, which is what makes the service work without being told
   # about each service.
   #
-  # The exclusion is the important part. This pipeline writes logs of its own,
-  # and capturing them would mean triaging a log produces a log that triggers
-  # triage. AWS documents that recursion as a way to run up ingestion billing.
-  # Our own log groups are therefore excluded here, and the service reads its
-  # own logs on a schedule instead, because a poll cannot feed itself while a
-  # filter is one typo away from doing so.
+  # The exclusion is the important part. This pipeline writes logs of its own:
+  # the triage Lambda's own log group, and the state machine's execution log
+  # group. Capturing either would mean triaging a log produces a log that
+  # triggers triage, which AWS documents as a way to run up ingestion billing.
+  # Both are excluded here by exact name.
   CaptureAllLogGroups:
     Type: AWS::Logs::AccountPolicy
     Properties:
       PolicyName: observe-ai-capture
       PolicyType: SUBSCRIPTION_FILTER_POLICY
       Scope: ALL
-      SelectionCriteria: !Sub 'LogGroupName NOT IN ["${ExcludedLogGroupPrefix}"]'
+      SelectionCriteria: !Join
+        - ''
+        - - 'LogGroupName NOT IN ["'
+          - !Join
+              - '", "'
+              - !Ref ExcludedLogGroupNames
+          - '"]'
       PolicyDocument: !Sub |
         {
           "DestinationArn": "${LogStream.Arn}",

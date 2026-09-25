@@ -115,8 +115,10 @@ jobs:
           echo "MODEL_ARN=$MODEL_ARN" >> "$GITHUB_ENV"
 
       - name: sam deploy
+        env:
+          ORG: ${{ vars.GITHUB_ORG }}
         run: |
           sam deploy \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
-            --parameter-overrides "ModelArn=$MODEL_ARN"
+            --parameter-overrides "ModelArn=$MODEL_ARN" "GitHubOrg=${ORG:-ganhammar}"

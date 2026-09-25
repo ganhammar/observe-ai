@@ -71,7 +71,7 @@ Language detection is deliberately absent: stack trace formats are distinctive e
 
 **Self-ingestion.** The pipeline writes logs. If the account policy captured them, triaging would generate logs that trigger triage. AWS documents this as a recursion that runs up ingestion billing.
 
-Our log groups are excluded from the account policy through `selectionCriteria`. Self-triage instead runs on a **schedule that queries those groups**, so the loop is broken structurally rather than by a filter that one typo could undo.
+Both log groups this pipeline writes to are named predictably from the stack name (the triage function's `FunctionName` and the state machine's `Name`) and excluded from the account policy by exact name, through `SelectionCriteria`'s `NOT IN` list (`infra/ingest.yaml`'s `ExcludedLogGroupNames` parameter). The state machine's own logging additionally runs with `IncludeExecutionData` off: the execution input is the log line that started it, so logging that input back out is what closes the loop even with the exclusions in place, and losing it is the right trade against a billing incident. State transitions are still recorded.
 
 **Blast radius.** A bad deploy breaks fifty services at once. Unchecked, that is fifty issues and thousands of model calls while nobody is watching. Three brakes:
 

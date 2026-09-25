@@ -39,8 +39,12 @@ public static class Triage
             throw new RowValidationException("Row is missing fields: ['state']");
         }
         var state = Derived.WithDerived(rawState);
+        var hasEvidence = QuestionTree.HasEvidence(state);
 
-        var scoring = SubQuestions(tree).Select(sub =>
+        // With nothing for the signal questions to read, Combine below falls back to
+        // the baseline alone, so the other eight calls would only be scored and discarded.
+        var questions = hasEvidence ? SubQuestions(tree) : BaselineOnly(tree);
+        var scoring = questions.Select(sub =>
             ScoreSubQuestionAsync(client, modelArn, id, state, sub.Key, sub.Question, sub.Options, cancellationToken));
         var answers = await Task.WhenAll(scoring).ConfigureAwait(false);
 
@@ -58,8 +62,15 @@ public static class Triage
                 $"Every sub-question failed, so there is no verdict: {string.Join("; ", reasons)}");
         }
 
-        var verdict = tree.Combine(byKey, QuestionTree.HasEvidence(state));
+        var verdict = tree.Combine(byKey, hasEvidence);
         return new TriageResult(verdict, answers);
+    }
+
+    /// <summary>The baseline alone: all Combine reads when there is no evidence for the rest to score.</summary>
+    private static IEnumerable<(string Key, string Question, IReadOnlyList<TreeOption> Options)> BaselineOnly(
+        QuestionTree tree)
+    {
+        yield return (tree.Baseline.Key, tree.Baseline.Question, tree.Baseline.Options);
     }
 
     /// <summary>The tree's individual decision rows: baseline, surface, then every signal.</summary>
