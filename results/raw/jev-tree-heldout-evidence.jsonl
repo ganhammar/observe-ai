@@ -1,0 +1,12 @@
+{"id": "ho-01", "option_ids": ["bug", "external"], "probabilities": [0.1364894654042037, 0.8635105345957962], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.6039764870001818}
+{"id": "ho-02", "option_ids": ["bug", "external"], "probabilities": [0.7908606085956291, 0.20913939140437104], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.5161374980016262}
+{"id": "ho-03", "option_ids": ["bug", "external"], "probabilities": [0.8778625954198472, 0.12213740458015267], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.5149400150003203}
+{"id": "ho-04", "option_ids": ["bug", "external"], "probabilities": [0.12213740458015267, 0.8778625954198472], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.5310208030023205}
+{"id": "ho-05", "option_ids": ["bug", "external"], "probabilities": [0.8744432342167296, 0.12555676578327019], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.5259439299989026}
+{"id": "ho-06", "option_ids": ["bug", "external"], "probabilities": [0.11538461538461538, 0.8846153846153845], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.5223253429976467}
+{"id": "ho-07", "option_ids": ["bug", "external"], "probabilities": [0.11755678330263962, 0.8824432166973601], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.5073698480009625}
+{"id": "ho-08", "option_ids": ["bug", "external"], "probabilities": [0.875318036414926, 0.12468196358507402], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.5482626990014978}
+{"id": "ho-09", "option_ids": ["bug", "external"], "probabilities": [0.8554662510718806, 0.14453374892811935], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.5296292589991936}
+{"id": "ho-10", "option_ids": ["bug", "external"], "probabilities": [0.11538807702692619, 0.8846119229730739], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.5271753900015028}
+{"id": "ho-11", "option_ids": ["bug", "external"], "probabilities": [0.11538461538461538, 0.8846153846153845], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.5593356690005749}
+{"id": "ho-12", "option_ids": ["bug", "external"], "probabilities": [0.53125, 0.46875], "missing_options": [], "abstained": false, "fallback": false, "total_seconds": 0.5090267080013291}

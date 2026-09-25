@@ -136,13 +136,47 @@ The model is reliable at "does this text have property P" and "do these two thin
 
 The model is then a cheap semantic operator called several times per item inside deterministic code, which is a different architecture from one where the model triages the log.
 
+## Held-out rows and Jev through the tree
+
+Twelve ambiguous rows (`eval/heldout.py`, six bug and six external) were written after the tree was last changed and never used to tune it: an expired partner certificate, a supplier's documented-optional field, a retry storm of our own, a table whose capacity another team lowered, a zero window from our own config, a carrier outage, a retired vendor domain, an encoding mismatch between our own writer and reader, an outbound timeout we tightened below the dependency's steady latency, a managed cache failover, a read-only filesystem policy, and a background thread we added. Jev was also run through the same eight-signal tree, all questions in one request, which is how its API is meant to be used.
+
+| | tuned 38, evidence | tuned 38, no evidence | held-out 12, evidence | held-out 12, no evidence |
+|---|---:|---:|---:|---:|
+| Qwen3-4B, single question | 81.6% | 73.7% | 9/12 | 9/12 |
+| Qwen3-4B, tree | 92.1% | 73.7% | **8/12** | 9/12 |
+| Jev, single question | 81.6% | 73.7% | **12/12** | 10/12 |
+| Jev, tree | 92.1% | 73.7% | 12/12 | 10/12 |
+
+On the rows the tree was tuned against, the 4B and Jev are level, single question against single question and tree against tree, and the tree is worth ten points to either. On the held-out rows the picture separates. Jev reads the evidence and gets every row from the single question; the tree adds nothing it needs. The 4B tree scores below the trace alone: with the evidence present it does worse than without it.
+
+The 4B's failure is consistent across its four misses. Anything in the evidence that changed is attributed to an external party: our own deploy two minutes before the errors (ho-02), our own retry policy at sixty times the outbound baseline (ho-03), our own timeout lowered from ten seconds to two (ho-09). `external_change` answers yes on all three, `self_inflicted_load` answers no on ho-03 with the derived sentence "3900 is 60 times 65" in front of it, and on ho-09 `platform_intervention` fires on our own config change. The model reads that something changed and does not read who changed it. Stating agency in code helped on the tuned rows and did not generalise; Jev resolves it from the same text.
+
+So the earlier "decomposition beats scale" result stands only on the rows it was fitted to. What the readout mechanism on a 4B can be said to do, on evidence it has not seen, is match the purpose-trained model without evidence and fall behind it with evidence. Calibration follows the same line: Jev's ECE on the held-out rows is 0.058, the 4B tree's 0.258.
+
+## Cost
+
+Custom Model Import in Frankfurt bills $0.07144 per Custom Model Unit per minute while a model copy is awake, in five-minute windows, plus $1.95 per CMU per month for storage. Qwen3-4B is one CMU, so an awake copy costs $4.29 an hour and the smallest possible charge for a single decision after idle is one window, $0.36. Jev bills $0.042 per million input tokens and nothing for output; a ten-question tree request measured 1,450 input tokens, about $0.00006, and a single question about a third of that.
+
+The 4B's cost is therefore a function of how often the copy is awake, not of how many decisions it makes:
+
+| duty cycle | Qwen3-4B per month | at 10,000 decisions per month | Jev, tree, same volume |
+|---|---:|---:|---:|
+| a trickle that never lets the copy sleep | $3,090 | $0.31 per decision | $0.60 total |
+| drained once an hour, each drain inside one window | $257 | $0.026 per decision | $0.60 total |
+| continuously loaded | $3,090 | break-even with Jev at about 50 million decisions, if one copy sustains 19 a second, which was not measured | |
+
+Jev is cheaper per decision at every volume this project can attest to. What the 4B buys is not price: the weights, the prompt, the chat template and the region are ours, the request never leaves eu-central-1, and the readout exposes the mass before renormalisation, which is what caught Mistral answering the wrong question.
+
 ## Latency and operational notes
 
 | | median | p95 |
 |---|---:|---:|
-| Qwen3-4B on Bedrock | 0.22s | 0.30s |
-| Qwen3-32B on Bedrock | 0.16s | 0.24s |
-| Jev (hosted, from eu-central-1) | 0.54s | 0.58s |
+| Qwen3-4B on Bedrock, one question, warm | 0.10s | 0.20s |
+| Qwen3-4B on Bedrock, ten questions in sequence | 0.78s | 0.97s |
+| Qwen3-32B on Bedrock, one question | 0.16s | 0.24s |
+| Jev (hosted, from eu-central-1), one or ten questions in one request | 0.53s | 0.57s |
+
+The 0.22s median reported on 2026-09-24 included a share of cold-copy calls; the warm figure is 0.10s. The deployed Lambda issues the ten questions concurrently, so a tree decision there costs one round trip, not ten.
 
 The 32B being faster than the 4B presumably reflects provisioning per model copy rather than model efficiency.
 
@@ -169,7 +203,7 @@ Evidence gathering has not been started and is not small: it means correlating a
 ## What these numbers do not support
 
 - The fixture is synthetic and small: twelve ambiguous rows, written by the same process being tested.
-- The tree was iterated three times against those twelve rows, so some of the 0.833 is fitted. The proper test is a held-out set the design never saw, and it has not been run.
+- The tree was iterated three times against those twelve rows, and the held-out section shows how much of the 0.833 was fitted: on twelve rows the design never saw, the 4B tree scores 8/12 against Jev's 12/12.
 - The Jev comparison is not controlled. Jev received the raw state through its own prompting; our path used a frozen prompt. It is a reference point, not a like-for-like benchmark. Read "competitive with" rather than "beats".
 - One domain: log triage over five runtimes. Nothing here generalises to other decision tasks without measurement.
 

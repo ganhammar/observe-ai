@@ -1,0 +1,62 @@
+{
+  "ho-01": {
+    "label": "external",
+    "band": "held_out",
+    "runtime": "dotnet"
+  },
+  "ho-02": {
+    "label": "bug",
+    "band": "held_out",
+    "runtime": "java"
+  },
+  "ho-03": {
+    "label": "bug",
+    "band": "held_out",
+    "runtime": "node"
+  },
+  "ho-04": {
+    "label": "external",
+    "band": "held_out",
+    "runtime": "python"
+  },
+  "ho-05": {
+    "label": "bug",
+    "band": "held_out",
+    "runtime": "go"
+  },
+  "ho-06": {
+    "label": "external",
+    "band": "held_out",
+    "runtime": "dotnet"
+  },
+  "ho-07": {
+    "label": "external",
+    "band": "held_out",
+    "runtime": "node"
+  },
+  "ho-08": {
+    "label": "bug",
+    "band": "held_out",
+    "runtime": "python"
+  },
+  "ho-09": {
+    "label": "bug",
+    "band": "held_out",
+    "runtime": "dotnet"
+  },
+  "ho-10": {
+    "label": "external",
+    "band": "held_out",
+    "runtime": "go"
+  },
+  "ho-11": {
+    "label": "external",
+    "band": "held_out",
+    "runtime": "python"
+  },
+  "ho-12": {
+    "label": "bug",
+    "band": "held_out",
+    "runtime": "java"
+  }
+}

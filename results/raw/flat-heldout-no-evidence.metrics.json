@@ -1,0 +1,210 @@
+{
+  "overall": {
+    "row_count": 12,
+    "skipped_error_rows": 0,
+    "abstained_count": 0,
+    "scored_row_count": 12,
+    "missing_options_count": 1,
+    "accuracy": 0.75,
+    "balanced_accuracy": 0.75,
+    "macro_precision": 0.8333333333333333,
+    "macro_recall": 0.75,
+    "macro_f1": 0.7894736842105263
+  },
+  "per_band": {
+    "clear_bug": {
+      "accuracy": null,
+      "balanced_accuracy": null,
+      "count": 0
+    },
+    "clear_external": {
+      "accuracy": null,
+      "balanced_accuracy": null,
+      "count": 0
+    },
+    "ambiguous": {
+      "accuracy": null,
+      "balanced_accuracy": null,
+      "count": 0
+    },
+    "held_out": {
+      "accuracy": 0.75,
+      "balanced_accuracy": 0.75,
+      "count": 12
+    }
+  },
+  "per_runtime": {
+    "dotnet": {
+      "accuracy": 0.6666666666666666,
+      "count": 3
+    },
+    "java": {
+      "accuracy": 1.0,
+      "count": 2
+    },
+    "node": {
+      "accuracy": 0.5,
+      "count": 2
+    },
+    "python": {
+      "accuracy": 0.6666666666666666,
+      "count": 3
+    },
+    "go": {
+      "accuracy": 1.0,
+      "count": 2
+    }
+  },
+  "confusion_matrix": {
+    "tp": 3,
+    "fp": 0,
+    "fn": 3,
+    "tn": 6
+  },
+  "calibration": {
+    "ece": 0.24999998063891946,
+    "bins": [
+      {
+        "bin": 0,
+        "range": "0.00-0.10",
+        "count": 9,
+        "mean_confidence": 2.7138413959901772e-08,
+        "observed_bug_rate": 0.3333333333333333
+      },
+      {
+        "bin": 9,
+        "range": "0.90-1.00",
+        "count": 3,
+        "mean_confidence": 0.9999999960290803,
+        "observed_bug_rate": 1.0
+      }
+    ]
+  },
+  "threshold_sweep": [
+    {
+      "threshold": 0.05,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.1,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.15000000000000002,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.2,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.25,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.30000000000000004,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.35000000000000003,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.4,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.45,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.5,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.55,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.6000000000000001,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.65,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.7000000000000001,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.75,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.8,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.8500000000000001,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.9,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.9500000000000001,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    }
+  ],
+  "threshold_for_95_recall": null,
+  "declared_mass": {
+    "min": 0.9999997614000359,
+    "median": 1.0000000000083114,
+    "mean": 0.9999999617419144,
+    "p10": 0.9999997671842742
+  },
+  "timing": {
+    "mean": 0.08764938750027795,
+    "p95": 0.1604084700011299
+  }
+}

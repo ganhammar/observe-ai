@@ -394,7 +394,7 @@ def main():
         bands_data[band]["pred"].append(pred_label)
 
     band_metrics = {}
-    for band in ["clear_bug", "clear_external", "ambiguous"]:
+    for band in ["clear_bug", "clear_external", "ambiguous", "held_out"]:
         if band in bands_data:
             data = bands_data[band]
             acc = compute_accuracy(data["true"], data["pred"])
@@ -472,7 +472,7 @@ def main():
     print("\n" + "=" * 60)
     print("PER BAND")
     print("=" * 60)
-    band_order = ["clear_bug", "clear_external", "ambiguous"]
+    band_order = ["clear_bug", "clear_external", "ambiguous", "held_out"]
     for band in band_order:
         if band in band_metrics:
             m = band_metrics[band]

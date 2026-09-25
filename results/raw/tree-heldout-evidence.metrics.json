@@ -1,0 +1,218 @@
+{
+  "overall": {
+    "row_count": 12,
+    "skipped_error_rows": 0,
+    "abstained_count": 0,
+    "scored_row_count": 12,
+    "missing_options_count": 0,
+    "accuracy": 0.6666666666666666,
+    "balanced_accuracy": 0.6666666666666666,
+    "macro_precision": 0.8,
+    "macro_recall": 0.6666666666666666,
+    "macro_f1": 0.7272727272727272
+  },
+  "per_band": {
+    "clear_bug": {
+      "accuracy": null,
+      "balanced_accuracy": null,
+      "count": 0
+    },
+    "clear_external": {
+      "accuracy": null,
+      "balanced_accuracy": null,
+      "count": 0
+    },
+    "ambiguous": {
+      "accuracy": null,
+      "balanced_accuracy": null,
+      "count": 0
+    },
+    "held_out": {
+      "accuracy": 0.6666666666666666,
+      "balanced_accuracy": 0.6666666666666666,
+      "count": 12
+    }
+  },
+  "per_runtime": {
+    "dotnet": {
+      "accuracy": 0.6666666666666666,
+      "count": 3
+    },
+    "java": {
+      "accuracy": 0.5,
+      "count": 2
+    },
+    "node": {
+      "accuracy": 0.5,
+      "count": 2
+    },
+    "python": {
+      "accuracy": 0.6666666666666666,
+      "count": 3
+    },
+    "go": {
+      "accuracy": 1.0,
+      "count": 2
+    }
+  },
+  "confusion_matrix": {
+    "tp": 2,
+    "fp": 0,
+    "fn": 4,
+    "tn": 6
+  },
+  "calibration": {
+    "ece": 0.2576655981410229,
+    "bins": [
+      {
+        "bin": 1,
+        "range": "0.10-0.20",
+        "count": 9,
+        "mean_confidence": 0.11800499577347295,
+        "observed_bug_rate": 0.3333333333333333
+      },
+      {
+        "bin": 4,
+        "range": "0.40-0.50",
+        "count": 1,
+        "mean_confidence": 0.41899897622162846,
+        "observed_bug_rate": 1.0
+      },
+      {
+        "bin": 5,
+        "range": "0.50-0.60",
+        "count": 1,
+        "mean_confidence": 0.5445073948044552,
+        "observed_bug_rate": 1.0
+      },
+      {
+        "bin": 8,
+        "range": "0.80-0.90",
+        "count": 1,
+        "mean_confidence": 0.8824614893203845,
+        "observed_bug_rate": 1.0
+      }
+    ]
+  },
+  "threshold_sweep": [
+    {
+      "threshold": 0.05,
+      "precision": 0.5,
+      "recall": 1.0,
+      "forwarded": 12
+    },
+    {
+      "threshold": 0.1,
+      "precision": 0.5,
+      "recall": 1.0,
+      "forwarded": 12
+    },
+    {
+      "threshold": 0.15000000000000002,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.2,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.25,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.30000000000000004,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.35000000000000003,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.4,
+      "precision": 1.0,
+      "recall": 0.5,
+      "forwarded": 3
+    },
+    {
+      "threshold": 0.45,
+      "precision": 1.0,
+      "recall": 0.3333333333333333,
+      "forwarded": 2
+    },
+    {
+      "threshold": 0.5,
+      "precision": 1.0,
+      "recall": 0.3333333333333333,
+      "forwarded": 2
+    },
+    {
+      "threshold": 0.55,
+      "precision": 1.0,
+      "recall": 0.16666666666666666,
+      "forwarded": 1
+    },
+    {
+      "threshold": 0.6000000000000001,
+      "precision": 1.0,
+      "recall": 0.16666666666666666,
+      "forwarded": 1
+    },
+    {
+      "threshold": 0.65,
+      "precision": 1.0,
+      "recall": 0.16666666666666666,
+      "forwarded": 1
+    },
+    {
+      "threshold": 0.7000000000000001,
+      "precision": 1.0,
+      "recall": 0.16666666666666666,
+      "forwarded": 1
+    },
+    {
+      "threshold": 0.75,
+      "precision": 1.0,
+      "recall": 0.16666666666666666,
+      "forwarded": 1
+    },
+    {
+      "threshold": 0.8,
+      "precision": 1.0,
+      "recall": 0.16666666666666666,
+      "forwarded": 1
+    },
+    {
+      "threshold": 0.8500000000000001,
+      "precision": 1.0,
+      "recall": 0.16666666666666666,
+      "forwarded": 1
+    },
+    {
+      "threshold": 0.9,
+      "precision": NaN,
+      "recall": 0.0,
+      "forwarded": 0
+    },
+    {
+      "threshold": 0.9500000000000001,
+      "precision": NaN,
+      "recall": 0.0,
+      "forwarded": 0
+    }
+  ],
+  "threshold_for_95_recall": 0.1,
+  "timing": {
+    "mean": 1.4223460220003592,
+    "p95": 1.9211096489998454
+  }
+}

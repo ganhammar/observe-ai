@@ -1,0 +1,120 @@
+{"row": "ho-01", "signal": "baseline", "probabilities": {"bug": 0.01, "external": 0.99}, "usage": {"input_tokens": 1413, "output_tokens": 323}}
+{"row": "ho-01", "signal": "surface", "probabilities": {"network": 1.0, "resource": 0.0, "data": 0.0, "logic": 0.0}, "usage": {"input_tokens": 1413, "output_tokens": 323}}
+{"row": "ho-01", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1413, "output_tokens": 323}}
+{"row": "ho-01", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1413, "output_tokens": 323}}
+{"row": "ho-01", "signal": "invalid_value_sent", "probabilities": {"yes": 0.01, "no": 0.99}, "usage": {"input_tokens": 1413, "output_tokens": 323}}
+{"row": "ho-01", "signal": "internal_inconsistency", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1413, "output_tokens": 323}}
+{"row": "ho-01", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1413, "output_tokens": 323}}
+{"row": "ho-01", "signal": "external_change", "probabilities": {"yes": 0.03, "no": 0.97}, "usage": {"input_tokens": 1413, "output_tokens": 323}}
+{"row": "ho-01", "signal": "external_unavailable", "probabilities": {"yes": 0.51, "no": 0.49}, "usage": {"input_tokens": 1413, "output_tokens": 323}}
+{"row": "ho-01", "signal": "platform_intervention", "probabilities": {"yes": 0.01, "no": 0.99}, "usage": {"input_tokens": 1413, "output_tokens": 323}}
+{"row": "ho-02", "signal": "baseline", "probabilities": {"bug": 1.0, "external": 0.0}, "usage": {"input_tokens": 1372, "output_tokens": 323}}
+{"row": "ho-02", "signal": "surface", "probabilities": {"network": 0.0, "resource": 0.0, "data": 0.44, "logic": 0.56}, "usage": {"input_tokens": 1372, "output_tokens": 323}}
+{"row": "ho-02", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1372, "output_tokens": 323}}
+{"row": "ho-02", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1372, "output_tokens": 323}}
+{"row": "ho-02", "signal": "invalid_value_sent", "probabilities": {"yes": 0.04, "no": 0.96}, "usage": {"input_tokens": 1372, "output_tokens": 323}}
+{"row": "ho-02", "signal": "internal_inconsistency", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1372, "output_tokens": 323}}
+{"row": "ho-02", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1372, "output_tokens": 323}}
+{"row": "ho-02", "signal": "external_change", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1372, "output_tokens": 323}}
+{"row": "ho-02", "signal": "external_unavailable", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1372, "output_tokens": 323}}
+{"row": "ho-02", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1372, "output_tokens": 323}}
+{"row": "ho-03", "signal": "baseline", "probabilities": {"bug": 0.02, "external": 0.98}, "usage": {"input_tokens": 1374, "output_tokens": 323}}
+{"row": "ho-03", "signal": "surface", "probabilities": {"network": 1.0, "resource": 0.0, "data": 0.0, "logic": 0.0}, "usage": {"input_tokens": 1374, "output_tokens": 323}}
+{"row": "ho-03", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1374, "output_tokens": 323}}
+{"row": "ho-03", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1374, "output_tokens": 323}}
+{"row": "ho-03", "signal": "invalid_value_sent", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1374, "output_tokens": 323}}
+{"row": "ho-03", "signal": "internal_inconsistency", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1374, "output_tokens": 323}}
+{"row": "ho-03", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1374, "output_tokens": 323}}
+{"row": "ho-03", "signal": "external_change", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1374, "output_tokens": 323}}
+{"row": "ho-03", "signal": "external_unavailable", "probabilities": {"yes": 0.88, "no": 0.12}, "usage": {"input_tokens": 1374, "output_tokens": 323}}
+{"row": "ho-03", "signal": "platform_intervention", "probabilities": {"yes": 0.01, "no": 0.99}, "usage": {"input_tokens": 1374, "output_tokens": 323}}
+{"row": "ho-04", "signal": "baseline", "probabilities": {"bug": 0.02, "external": 0.98}, "usage": {"input_tokens": 1370, "output_tokens": 323}}
+{"row": "ho-04", "signal": "surface", "probabilities": {"network": 0.87, "resource": 0.13, "data": 0.0, "logic": 0.0}, "usage": {"input_tokens": 1370, "output_tokens": 323}}
+{"row": "ho-04", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1370, "output_tokens": 323}}
+{"row": "ho-04", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1370, "output_tokens": 323}}
+{"row": "ho-04", "signal": "invalid_value_sent", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1370, "output_tokens": 323}}
+{"row": "ho-04", "signal": "internal_inconsistency", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1370, "output_tokens": 323}}
+{"row": "ho-04", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1370, "output_tokens": 323}}
+{"row": "ho-04", "signal": "external_change", "probabilities": {"yes": 0.01, "no": 0.99}, "usage": {"input_tokens": 1370, "output_tokens": 323}}
+{"row": "ho-04", "signal": "external_unavailable", "probabilities": {"yes": 0.5, "no": 0.5}, "usage": {"input_tokens": 1370, "output_tokens": 323}}
+{"row": "ho-04", "signal": "platform_intervention", "probabilities": {"yes": 0.1, "no": 0.9}, "usage": {"input_tokens": 1370, "output_tokens": 323}}
+{"row": "ho-05", "signal": "baseline", "probabilities": {"bug": 1.0, "external": 0.0}, "usage": {"input_tokens": 1378, "output_tokens": 323}}
+{"row": "ho-05", "signal": "surface", "probabilities": {"network": 0.0, "resource": 0.0, "data": 0.0, "logic": 1.0}, "usage": {"input_tokens": 1378, "output_tokens": 323}}
+{"row": "ho-05", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1378, "output_tokens": 323}}
+{"row": "ho-05", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1378, "output_tokens": 323}}
+{"row": "ho-05", "signal": "invalid_value_sent", "probabilities": {"yes": 0.01, "no": 0.99}, "usage": {"input_tokens": 1378, "output_tokens": 323}}
+{"row": "ho-05", "signal": "internal_inconsistency", "probabilities": {"yes": 0.01, "no": 0.99}, "usage": {"input_tokens": 1378, "output_tokens": 323}}
+{"row": "ho-05", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1378, "output_tokens": 323}}
+{"row": "ho-05", "signal": "external_change", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1378, "output_tokens": 323}}
+{"row": "ho-05", "signal": "external_unavailable", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1378, "output_tokens": 323}}
+{"row": "ho-05", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1378, "output_tokens": 323}}
+{"row": "ho-06", "signal": "baseline", "probabilities": {"bug": 0.0, "external": 1.0}, "usage": {"input_tokens": 1388, "output_tokens": 323}}
+{"row": "ho-06", "signal": "surface", "probabilities": {"network": 1.0, "resource": 0.0, "data": 0.0, "logic": 0.0}, "usage": {"input_tokens": 1388, "output_tokens": 323}}
+{"row": "ho-06", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1388, "output_tokens": 323}}
+{"row": "ho-06", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1388, "output_tokens": 323}}
+{"row": "ho-06", "signal": "invalid_value_sent", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1388, "output_tokens": 323}}
+{"row": "ho-06", "signal": "internal_inconsistency", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1388, "output_tokens": 323}}
+{"row": "ho-06", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1388, "output_tokens": 323}}
+{"row": "ho-06", "signal": "external_change", "probabilities": {"yes": 0.01, "no": 0.99}, "usage": {"input_tokens": 1388, "output_tokens": 323}}
+{"row": "ho-06", "signal": "external_unavailable", "probabilities": {"yes": 0.97, "no": 0.03}, "usage": {"input_tokens": 1388, "output_tokens": 323}}
+{"row": "ho-06", "signal": "platform_intervention", "probabilities": {"yes": 0.06, "no": 0.94}, "usage": {"input_tokens": 1388, "output_tokens": 323}}
+{"row": "ho-07", "signal": "baseline", "probabilities": {"bug": 0.03, "external": 0.97}, "usage": {"input_tokens": 1363, "output_tokens": 323}}
+{"row": "ho-07", "signal": "surface", "probabilities": {"network": 1.0, "resource": 0.0, "data": 0.0, "logic": 0.0}, "usage": {"input_tokens": 1363, "output_tokens": 323}}
+{"row": "ho-07", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1363, "output_tokens": 323}}
+{"row": "ho-07", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1363, "output_tokens": 323}}
+{"row": "ho-07", "signal": "invalid_value_sent", "probabilities": {"yes": 0.28, "no": 0.72}, "usage": {"input_tokens": 1363, "output_tokens": 323}}
+{"row": "ho-07", "signal": "internal_inconsistency", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1363, "output_tokens": 323}}
+{"row": "ho-07", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1363, "output_tokens": 323}}
+{"row": "ho-07", "signal": "external_change", "probabilities": {"yes": 0.01, "no": 0.99}, "usage": {"input_tokens": 1363, "output_tokens": 323}}
+{"row": "ho-07", "signal": "external_unavailable", "probabilities": {"yes": 0.78, "no": 0.22}, "usage": {"input_tokens": 1363, "output_tokens": 323}}
+{"row": "ho-07", "signal": "platform_intervention", "probabilities": {"yes": 0.02, "no": 0.98}, "usage": {"input_tokens": 1363, "output_tokens": 323}}
+{"row": "ho-08", "signal": "baseline", "probabilities": {"bug": 0.8, "external": 0.2}, "usage": {"input_tokens": 1348, "output_tokens": 323}}
+{"row": "ho-08", "signal": "surface", "probabilities": {"network": 0.0, "resource": 0.0, "data": 1.0, "logic": 0.0}, "usage": {"input_tokens": 1348, "output_tokens": 323}}
+{"row": "ho-08", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1348, "output_tokens": 323}}
+{"row": "ho-08", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1348, "output_tokens": 323}}
+{"row": "ho-08", "signal": "invalid_value_sent", "probabilities": {"yes": 0.01, "no": 0.99}, "usage": {"input_tokens": 1348, "output_tokens": 323}}
+{"row": "ho-08", "signal": "internal_inconsistency", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1348, "output_tokens": 323}}
+{"row": "ho-08", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1348, "output_tokens": 323}}
+{"row": "ho-08", "signal": "external_change", "probabilities": {"yes": 0.01, "no": 0.99}, "usage": {"input_tokens": 1348, "output_tokens": 323}}
+{"row": "ho-08", "signal": "external_unavailable", "probabilities": {"yes": 0.06, "no": 0.94}, "usage": {"input_tokens": 1348, "output_tokens": 323}}
+{"row": "ho-08", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1348, "output_tokens": 323}}
+{"row": "ho-09", "signal": "baseline", "probabilities": {"bug": 0.32, "external": 0.68}, "usage": {"input_tokens": 1452, "output_tokens": 323}}
+{"row": "ho-09", "signal": "surface", "probabilities": {"network": 1.0, "resource": 0.0, "data": 0.0, "logic": 0.0}, "usage": {"input_tokens": 1452, "output_tokens": 323}}
+{"row": "ho-09", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1452, "output_tokens": 323}}
+{"row": "ho-09", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1452, "output_tokens": 323}}
+{"row": "ho-09", "signal": "invalid_value_sent", "probabilities": {"yes": 0.06, "no": 0.94}, "usage": {"input_tokens": 1452, "output_tokens": 323}}
+{"row": "ho-09", "signal": "internal_inconsistency", "probabilities": {"yes": 0.05, "no": 0.95}, "usage": {"input_tokens": 1452, "output_tokens": 323}}
+{"row": "ho-09", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1452, "output_tokens": 323}}
+{"row": "ho-09", "signal": "external_change", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1452, "output_tokens": 323}}
+{"row": "ho-09", "signal": "external_unavailable", "probabilities": {"yes": 0.28, "no": 0.72}, "usage": {"input_tokens": 1452, "output_tokens": 323}}
+{"row": "ho-09", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1452, "output_tokens": 323}}
+{"row": "ho-10", "signal": "baseline", "probabilities": {"bug": 0.07, "external": 0.93}, "usage": {"input_tokens": 1420, "output_tokens": 323}}
+{"row": "ho-10", "signal": "surface", "probabilities": {"network": 1.0, "resource": 0.0, "data": 0.0, "logic": 0.0}, "usage": {"input_tokens": 1420, "output_tokens": 323}}
+{"row": "ho-10", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1420, "output_tokens": 323}}
+{"row": "ho-10", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1420, "output_tokens": 323}}
+{"row": "ho-10", "signal": "invalid_value_sent", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1420, "output_tokens": 323}}
+{"row": "ho-10", "signal": "internal_inconsistency", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1420, "output_tokens": 323}}
+{"row": "ho-10", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1420, "output_tokens": 323}}
+{"row": "ho-10", "signal": "external_change", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1420, "output_tokens": 323}}
+{"row": "ho-10", "signal": "external_unavailable", "probabilities": {"yes": 0.74, "no": 0.26}, "usage": {"input_tokens": 1420, "output_tokens": 323}}
+{"row": "ho-10", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1420, "output_tokens": 323}}
+{"row": "ho-11", "signal": "baseline", "probabilities": {"bug": 0.13, "external": 0.87}, "usage": {"input_tokens": 1360, "output_tokens": 323}}
+{"row": "ho-11", "signal": "surface", "probabilities": {"network": 0.0, "resource": 0.96, "data": 0.0, "logic": 0.04}, "usage": {"input_tokens": 1360, "output_tokens": 323}}
+{"row": "ho-11", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1360, "output_tokens": 323}}
+{"row": "ho-11", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1360, "output_tokens": 323}}
+{"row": "ho-11", "signal": "invalid_value_sent", "probabilities": {"yes": 0.09, "no": 0.91}, "usage": {"input_tokens": 1360, "output_tokens": 323}}
+{"row": "ho-11", "signal": "internal_inconsistency", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1360, "output_tokens": 323}}
+{"row": "ho-11", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1360, "output_tokens": 323}}
+{"row": "ho-11", "signal": "external_change", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1360, "output_tokens": 323}}
+{"row": "ho-11", "signal": "external_unavailable", "probabilities": {"yes": 0.04, "no": 0.96}, "usage": {"input_tokens": 1360, "output_tokens": 323}}
+{"row": "ho-11", "signal": "platform_intervention", "probabilities": {"yes": 0.01, "no": 0.99}, "usage": {"input_tokens": 1360, "output_tokens": 323}}
+{"row": "ho-12", "signal": "baseline", "probabilities": {"bug": 1.0, "external": 0.0}, "usage": {"input_tokens": 1367, "output_tokens": 323}}
+{"row": "ho-12", "signal": "surface", "probabilities": {"network": 0.0, "resource": 0.0, "data": 0.0, "logic": 1.0}, "usage": {"input_tokens": 1367, "output_tokens": 323}}
+{"row": "ho-12", "signal": "unreleased_resource", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1367, "output_tokens": 323}}
+{"row": "ho-12", "signal": "self_inflicted_load", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1367, "output_tokens": 323}}
+{"row": "ho-12", "signal": "invalid_value_sent", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1367, "output_tokens": 323}}
+{"row": "ho-12", "signal": "internal_inconsistency", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1367, "output_tokens": 323}}
+{"row": "ho-12", "signal": "repeated_work", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1367, "output_tokens": 323}}
+{"row": "ho-12", "signal": "external_change", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1367, "output_tokens": 323}}
+{"row": "ho-12", "signal": "external_unavailable", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1367, "output_tokens": 323}}
+{"row": "ho-12", "signal": "platform_intervention", "probabilities": {"yes": 0.0, "no": 1.0}, "usage": {"input_tokens": 1367, "output_tokens": 323}}

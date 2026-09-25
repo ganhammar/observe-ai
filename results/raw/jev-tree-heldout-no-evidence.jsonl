@@ -1,0 +1,12 @@
+{"id": "ho-01", "option_ids": ["bug", "external"], "probabilities": [0.01, 0.99], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.5556714200029091}
+{"id": "ho-02", "option_ids": ["bug", "external"], "probabilities": [1.0, 0.0], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.5238756259968795}
+{"id": "ho-03", "option_ids": ["bug", "external"], "probabilities": [0.02, 0.98], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.5379438309973921}
+{"id": "ho-04", "option_ids": ["bug", "external"], "probabilities": [0.02, 0.98], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.5348887229993124}
+{"id": "ho-05", "option_ids": ["bug", "external"], "probabilities": [1.0, 0.0], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.5237916039986885}
+{"id": "ho-06", "option_ids": ["bug", "external"], "probabilities": [0.0, 1.0], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.5805871970005683}
+{"id": "ho-07", "option_ids": ["bug", "external"], "probabilities": [0.03, 0.97], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.5374583099983283}
+{"id": "ho-08", "option_ids": ["bug", "external"], "probabilities": [0.8, 0.19999999999999996], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.5501403289999871}
+{"id": "ho-09", "option_ids": ["bug", "external"], "probabilities": [0.32, 0.6799999999999999], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.5492315989977214}
+{"id": "ho-10", "option_ids": ["bug", "external"], "probabilities": [0.07, 0.9299999999999999], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.6140128560000448}
+{"id": "ho-11", "option_ids": ["bug", "external"], "probabilities": [0.13, 0.87], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.5278315059986198}
+{"id": "ho-12", "option_ids": ["bug", "external"], "probabilities": [1.0, 0.0], "missing_options": [], "abstained": false, "fallback": true, "total_seconds": 0.5368415800003277}

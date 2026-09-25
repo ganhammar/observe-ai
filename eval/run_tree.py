@@ -22,12 +22,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from observe_ai.bedrock_backend import score  # noqa: E402
 from derived import with_derived  # noqa: E402
+from run_jev import score_tree as jev_score_tree  # noqa: E402
 from tree import combine, has_evidence, rows_for  # noqa: E402
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model-arn", required=True)
+    parser.add_argument("--backend", choices=("bedrock", "jev"), default="bedrock",
+                        help="bedrock scores each sub-question by logit readout; jev sends all of a row's sub-questions in one request")
+    parser.add_argument("--model-arn", help="Imported model ARN (bedrock backend)")
+    parser.add_argument("--jev-model", default="jev-latest")
     parser.add_argument("--region", default="eu-central-1")
     parser.add_argument("--input", type=Path, default=Path(__file__).parent / "logs.jsonl")
     parser.add_argument("--output", type=Path, default=Path("tree-results.jsonl"))
@@ -35,14 +39,22 @@ def main() -> None:
     parser.add_argument("--limit", type=int)
     args = parser.parse_args()
 
-    import boto3
-    from botocore.config import Config
+    if args.backend == "bedrock":
+        if not args.model_arn:
+            parser.error("--model-arn is required for the bedrock backend")
+        import boto3
+        from botocore.config import Config
 
-    client = boto3.client(
-        "bedrock-runtime",
-        region_name=args.region,
-        config=Config(retries={"total_max_attempts": 10, "mode": "standard"}),
-    )
+        client = boto3.client(
+            "bedrock-runtime",
+            region_name=args.region,
+            config=Config(retries={"total_max_attempts": 10, "mode": "standard"}),
+        )
+    else:
+        import os
+        api_key = os.environ.get("TYPESAFE_API_KEY")
+        if not api_key:
+            parser.error("TYPESAFE_API_KEY is not set")
 
     rows = [json.loads(line) for line in args.input.read_text().splitlines() if line.strip()]
     if args.limit:
@@ -56,20 +68,31 @@ def main() -> None:
             started = time.perf_counter()
             answers, errors = {}, []
             enriched = dict(row, state=with_derived(row["state"]))
-            for sub in rows_for(enriched):
-                key = sub["id"].split("::", 1)[1]
+            subs = rows_for(enriched)
+            if args.backend == "jev":
                 try:
-                    result = score(client, args.model_arn, sub, top_logprobs=args.top_logprobs,
-                                   constrain=False)
+                    answers, seconds, usage = jev_score_tree(api_key, enriched["state"], subs, args.jev_model, 60.0)
                     calls += 1
+                    for key, probabilities in answers.items():
+                        detail.write(json.dumps({"row": row["id"], "signal": key, "probabilities": probabilities,
+                                                 "usage": usage}, ensure_ascii=False) + "\n")
                 except Exception as error:
-                    errors.append(f"{key}: {type(error).__name__}: {error}")
-                    continue
-                answers[key] = dict(zip(result["option_ids"], result["probabilities"]))
-                detail.write(json.dumps({"row": row["id"], "signal": key,
-                                         "probabilities": answers[key],
-                                         "declared_mass": result.get("declared_mass")},
-                                        ensure_ascii=False) + "\n")
+                    errors.append(f"tree: {type(error).__name__}: {error}")
+            else:
+                for sub in subs:
+                    key = sub["id"].split("::", 1)[1]
+                    try:
+                        result = score(client, args.model_arn, sub, top_logprobs=args.top_logprobs,
+                                       constrain=False)
+                        calls += 1
+                    except Exception as error:
+                        errors.append(f"{key}: {type(error).__name__}: {error}")
+                        continue
+                    answers[key] = dict(zip(result["option_ids"], result["probabilities"]))
+                    detail.write(json.dumps({"row": row["id"], "signal": key,
+                                             "probabilities": answers[key],
+                                             "declared_mass": result.get("declared_mass")},
+                                            ensure_ascii=False) + "\n")
             if errors:
                 record = {"id": row["id"], "error": "; ".join(errors)[:400]}
             else:

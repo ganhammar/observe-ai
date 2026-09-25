@@ -67,6 +67,43 @@ def score(api_key: str, row: dict, model: str, timeout: float) -> dict:
     }
 
 
+def score_tree(api_key: str, state: dict, subs: list[dict], model: str, timeout: float) -> tuple[dict, float, dict]:
+    """Ask every sub-question of one row in a single request, since Jev accepts several questions per state.
+
+    Returns the answers keyed by sub-question key, the elapsed seconds, and whatever usage the response reports.
+    """
+    payload = {
+        "model": model,
+        "state": json.dumps(state, ensure_ascii=False),
+        "questions": {
+            sub["id"].split("::", 1)[1]: {
+                "type": "choice",
+                "instructions": sub["question"],
+                "criteria": {option["id"]: option["description"] for option in sub["options"]},
+            }
+            for sub in subs
+        },
+    }
+    request = urllib.request.Request(
+        ENDPOINT,
+        data=json.dumps(payload).encode(),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    started = time.perf_counter()
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        body = json.loads(response.read())
+    elapsed = time.perf_counter() - started
+    answers = body.get("answers", body)
+    out = {}
+    for sub in subs:
+        key = sub["id"].split("::", 1)[1]
+        answer = answers.get(key) or {}
+        probabilities = answer.get("probabilities") or {}
+        out[key] = {option["id"]: float(probabilities.get(option["id"], 0.0)) for option in sub["options"]}
+    return out, elapsed, body.get("usage") or {}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=Path(__file__).parent / "logs.jsonl")

@@ -12,6 +12,8 @@ log event ──> Lambda ──> Bedrock (imported Qwen3) ──> logprobs over 
 
 ## Status
 
+On twelve held-out rows the 4B tree scores 8/12 and Jev, from a single question, 12/12; the decomposition result below held only on the rows it was tuned against. See the held-out and cost sections of [docs/FINDINGS.md](docs/FINDINGS.md) before reading the table.
+
 Measured against Qwen3-4B imported into Bedrock, on the 32 row fixture. Raw outputs and metrics are in [results/raw](results/raw).
 
 Declared mass is 1.0000 at the median and 0.9996 at the minimum: nearly all next-token probability lands on the declared option letters, so reading a decision off the logits is sound.

@@ -9,6 +9,7 @@ points the other.
 import json
 
 from ambiguous import AMBIGUOUS
+from heldout import HELDOUT
 from tree import BASELINE
 
 # (id, band, label, service, runtime, level, message, stack)
@@ -173,15 +174,17 @@ QUESTION = BASELINE["question"]
 OPTIONS = BASELINE["options"]
 
 
-def build(include_evidence: bool = True):
+def build(include_evidence: bool = True, held_out: bool = False):
     """Return SemIf rows and their labels.
 
     include_evidence controls whether ambiguous rows carry their surrounding
     signals. Withholding it asks whether the trace alone is enough; including
     it asks whether the signals a log pipeline already has close the gap.
+    held_out selects the ambiguous rows written after the tree was fixed, in
+    place of the clear bands and the rows it was tuned on.
     """
     rows, labels = [], {}
-    for rid, band, label, service, runtime, level, message, stack in ROWS:
+    for rid, band, label, service, runtime, level, message, stack in ([] if held_out else ROWS):
         rows.append({
             "id": rid,
             "state": {
@@ -195,7 +198,7 @@ def build(include_evidence: bool = True):
             "options": OPTIONS,
         })
         labels[rid] = {"label": label, "band": band, "runtime": runtime}
-    for rid, label, service, runtime, message, stack, evidence in AMBIGUOUS:
+    for rid, label, service, runtime, message, stack, evidence in (HELDOUT if held_out else AMBIGUOUS):
         state = {
             "service": service,
             "runtime": runtime,
@@ -211,7 +214,7 @@ def build(include_evidence: bool = True):
             "question": QUESTION,
             "options": OPTIONS,
         })
-        labels[rid] = {"label": label, "band": "ambiguous", "runtime": runtime}
+        labels[rid] = {"label": label, "band": "held_out" if held_out else "ambiguous", "runtime": runtime}
     return rows, labels
 
 
@@ -222,21 +225,24 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--no-evidence", action="store_true",
                         help="Omit the evidence field from ambiguous rows")
-    parser.add_argument("--output", type=pathlib.Path,
-                        default=pathlib.Path(__file__).parent / "logs.jsonl")
+    parser.add_argument("--held-out", action="store_true",
+                        help="Emit the held-out ambiguous rows instead, to logs-heldout*.jsonl and labels-heldout.json")
+    parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args()
 
-    rows, labels = build(include_evidence=not args.no_evidence)
+    rows, labels = build(include_evidence=not args.no_evidence, held_out=args.held_out)
     out = pathlib.Path(__file__).parent
-    with args.output.open("w") as fh:
+    stem = "logs-heldout" if args.held_out else "logs"
+    output = args.output or out / f"{stem}{'-no-evidence' if args.no_evidence else ''}.jsonl"
+    with output.open("w") as fh:
         for row in rows:
             fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-    (out / "labels.json").write_text(json.dumps(labels, indent=2))
+    (out / ("labels-heldout.json" if args.held_out else "labels.json")).write_text(json.dumps(labels, indent=2))
     counts = {}
     for meta in labels.values():
         key = (meta["band"], meta["label"])
         counts[key] = counts.get(key, 0) + 1
     evidence = "without" if args.no_evidence else "with"
-    print(f"{len(rows)} rows -> {args.output} ({evidence} evidence on ambiguous rows)")
+    print(f"{len(rows)} rows -> {output} ({evidence} evidence on ambiguous rows)")
     for key in sorted(counts):
         print(f"  {key[0]:<17} {key[1]:<11} {counts[key]}")
