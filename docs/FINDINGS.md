@@ -1,6 +1,6 @@
 # Findings
 
-Measurements from 2026-09-24, on a 32 row synthetic fixture: 10 `clear_bug`, 10 `clear_downstream`, 12 `ambiguous`. Raw outputs and per-run metrics are in [../results/raw](../results/raw), and every figure here is reproducible from them.
+Measurements from 2026-09-24, on a 32 row synthetic fixture: 10 `clear_bug`, 10 `clear_downstream`, 12 `ambiguous`. The label has since been renamed `external` and widened to cover a caller breaking the contract and the platform the service runs on, with an eighth signal (`platform_intervention`) and six more ambiguous rows for those cases; the raw files keep the names and rows as measured, and the new rows are not yet measured. Raw outputs and per-run metrics are in [../results/raw](../results/raw), and every figure here is reproducible from them.
 
 The question throughout is whether an open model reading typed option logits can decide if an error log is a defect in our own code or a failure in something we call, well enough and cheaply enough to gate a triage pipeline.
 
@@ -87,7 +87,7 @@ Rephrasing to state the comparison explicitly ("is X more than ten times Y") did
 
 ## Question tree against scale
 
-Replacing one causal question with seven grounded ones plus a combining rule in code:
+Replacing one causal question with seven grounded ones (eight since the platform signal was added) plus a combining rule in code:
 
 | approach | clear_bug | clear_dn | ambiguous | overall | ECE |
 |---|---:|---:|---:|---:|---:|

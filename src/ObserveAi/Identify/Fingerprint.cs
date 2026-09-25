@@ -4,7 +4,7 @@ using System.Text;
 namespace ObserveAi;
 
 /// <summary>
-/// Collapses a parsed trace to a stable identifier for one defect. The triage tree costs up to nine Bedrock
+/// Collapses a parsed trace to a stable identifier for one defect. The triage tree costs up to ten Bedrock
 /// calls, so it runs once per fingerprint.
 /// </summary>
 public static class Fingerprint

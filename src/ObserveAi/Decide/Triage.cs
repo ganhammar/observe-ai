@@ -19,7 +19,7 @@ public sealed record TriageResult(CombineResult Verdict, IReadOnlyList<TriageAns
 
 /// <summary>
 /// Runs the question tree against one row: adds derived facts to its state, scores the baseline, surface
-/// and signal questions concurrently, and combines the answers into a bug-versus-downstream verdict.
+/// and signal questions concurrently, and combines the answers into a bug-versus-external verdict.
 /// Mirrors eval/run_tree.py, which scores sequentially; no sub-question depends on another's answer.
 /// </summary>
 public static class Triage

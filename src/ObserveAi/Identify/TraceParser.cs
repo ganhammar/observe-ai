@@ -32,7 +32,7 @@ public static class TraceParser
     private sealed record RuntimeSpec(string Name, Func<string[], bool> Detect, Func<string, Match> MatchFrame, Func<string[], string> ExceptionType);
 
     private static readonly Regex PythonFrame = new(@"^\s*File ""[^""]+"", line \d+, in (?<method>.+)$", RegexOptions.Compiled);
-    private static readonly Regex GoFrame = new(@"^(?<method>[A-Za-z_]\w*(?:\.\(\*?[A-Za-z_]\w*\))?\.[A-Za-z_]\w*)\(", RegexOptions.Compiled);
+    private static readonly Regex GoFrame = new(@"^(?<method>[A-Za-z_][\w./-]*(?:\.\(\*?[A-Za-z_]\w*\))?\.[A-Za-z_]\w*)\(", RegexOptions.Compiled);
     private static readonly Regex JavaFrame = new(@"^\s*at (?<method>[\w.$/]+)\(.*\.java:\d+\)", RegexOptions.Compiled);
     private static readonly Regex DotnetFrameWithLine = new(@"^\s*at (?<method>[^\s(]+)\(.*\) in .+:line \d+", RegexOptions.Compiled);
     private static readonly Regex DotnetFramePlain = new(@"^\s*at (?<method>[A-Z][\w.<>`\[\]]*)\(", RegexOptions.Compiled);

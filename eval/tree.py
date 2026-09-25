@@ -27,8 +27,8 @@ PRIOR = _DEFINITION["prior"]
 BASELINE = _DEFINITION["baseline"]
 SURFACE = _DEFINITION["surface"]
 BUG_SIGNALS = [s for s in _DEFINITION["signals"] if s["side"] == "bug"]
-DOWNSTREAM_SIGNALS = [s for s in _DEFINITION["signals"] if s["side"] == "downstream"]
-STAGE2 = BUG_SIGNALS + DOWNSTREAM_SIGNALS
+EXTERNAL_SIGNALS = [s for s in _DEFINITION["signals"] if s["side"] == "external"]
+STAGE2 = BUG_SIGNALS + EXTERNAL_SIGNALS
 
 def rows_for(row: dict) -> list[dict]:
     """Expand one triage row into the tree's individual decision rows."""
@@ -75,7 +75,7 @@ def has_evidence(state: dict) -> bool:
 
 
 def combine(answers: dict, evidence_present: bool = True) -> dict:
-    """Turn the tree's typed answers into a bug versus downstream probability.
+    """Turn the tree's typed answers into a bug versus external probability.
 
     A noisy-OR over each side treats the signals as independent evidence, so
     one confident signal decides while several weak ones accumulate.
@@ -93,7 +93,7 @@ def combine(answers: dict, evidence_present: bool = True) -> dict:
         # already reads better, so the flat answer is used directly.
         flat = answers.get(BASELINE["key"], {})
         bug_p = float(flat.get("bug", 0.5))
-        return {"bug": bug_p, "downstream": 1.0 - bug_p, "fallback": True}
+        return {"bug": bug_p, "external": 1.0 - bug_p, "fallback": True}
 
     bug_values = []
     for signal in BUG_SIGNALS:
@@ -106,15 +106,15 @@ def combine(answers: dict, evidence_present: bool = True) -> dict:
             value *= (1.0 - _yes(answers, dampener))
         bug_values.append(value)
     bug = _noisy_or(bug_values)
-    downstream = _noisy_or([_yes(answers, signal["key"]) for signal in DOWNSTREAM_SIGNALS])
-    total = bug + downstream
+    external = _noisy_or([_yes(answers, signal["key"]) for signal in EXTERNAL_SIGNALS])
+    total = bug + external
     if total == 0.0:
         # Nothing fired either way. Fall back to the surface reading, which the
         # baseline already answers reliably: a failure that surfaced on a call
         # out is more often the other side's, anything else more often ours.
         surface = answers.get(SURFACE["key"], {})
         network = float(surface.get("network", 0.0))
-        return {"bug": 1.0 - network, "downstream": network, "fallback": True}
-    return {"bug": (bug + PRIOR) / (bug + downstream + 2 * PRIOR),
-            "downstream": (downstream + PRIOR) / (bug + downstream + 2 * PRIOR),
+        return {"bug": 1.0 - network, "external": network, "fallback": True}
+    return {"bug": (bug + PRIOR) / (bug + external + 2 * PRIOR),
+            "external": (external + PRIOR) / (bug + external + 2 * PRIOR),
             "fallback": False}

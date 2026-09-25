@@ -19,7 +19,7 @@ public sealed record FetchResult(IReadOnlyDictionary<string, string> Sources, IR
 public static class SourceFetch
 {
     private static readonly Regex PythonFrame = new(@"^\s*File ""(?<path>[^""]+)"", line \d+, in .+$", RegexOptions.Compiled);
-    private static readonly Regex GoFrameLine = new(@"^[A-Za-z_]\w*(?:\.\(\*?[A-Za-z_]\w*\))?\.[A-Za-z_]\w*\(", RegexOptions.Compiled);
+    private static readonly Regex GoFrameLine = new(@"^[A-Za-z_][\w./-]*(?:\.\(\*?[A-Za-z_]\w*\))?\.[A-Za-z_]\w*\(", RegexOptions.Compiled);
     private static readonly Regex GoPathLine = new(@"^\s*(?<path>\S+\.go):\d+", RegexOptions.Compiled);
     private static readonly Regex JavaFrame = new(@"^\s*at [\w.$/]+\((?<path>[^:()]+\.java):\d+\)", RegexOptions.Compiled);
     private static readonly Regex DotnetWithLine = new(@"^\s*at [^\s(]+\(.*\) in (?<path>.+):line \d+", RegexOptions.Compiled);

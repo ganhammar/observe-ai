@@ -36,8 +36,8 @@ from typing import Dict, List, Optional, Tuple
 @dataclass
 class LabelInfo:
     """Information about a single labeled example."""
-    label: str  # "bug" or "downstream"
-    band: str   # "clear_bug", "clear_downstream", "ambiguous"
+    label: str  # "bug" or "external"
+    band: str   # "clear_bug", "clear_external", "ambiguous"
     runtime: str
 
 
@@ -189,14 +189,14 @@ def compute_balanced_accuracy(true_labels: List[str], pred_labels: List[str]) ->
 
 
 def compute_confusion_matrix(true_labels: List[str], pred_labels: List[str]) -> Tuple[int, int, int, int]:
-    """Compute 2x2 confusion matrix for binary classification (bug vs downstream).
+    """Compute 2x2 confusion matrix for binary classification (bug vs external).
 
     Returns: (TP, FP, FN, TN) where positive class is "bug"
     """
     tp = sum(1 for t, p in zip(true_labels, pred_labels) if t == "bug" and p == "bug")
-    fp = sum(1 for t, p in zip(true_labels, pred_labels) if t == "downstream" and p == "bug")
-    fn = sum(1 for t, p in zip(true_labels, pred_labels) if t == "bug" and p == "downstream")
-    tn = sum(1 for t, p in zip(true_labels, pred_labels) if t == "downstream" and p == "downstream")
+    fp = sum(1 for t, p in zip(true_labels, pred_labels) if t == "external" and p == "bug")
+    fn = sum(1 for t, p in zip(true_labels, pred_labels) if t == "bug" and p == "external")
+    tn = sum(1 for t, p in zip(true_labels, pred_labels) if t == "external" and p == "external")
     return tp, fp, fn, tn
 
 
@@ -243,11 +243,11 @@ def compute_threshold_sweep(true_labels: List[str], pred_probs: List[float]) -> 
     results = []
 
     for threshold in thresholds:
-        pred_labels = ["bug" if prob >= threshold else "downstream" for prob in pred_probs]
+        pred_labels = ["bug" if prob >= threshold else "external" for prob in pred_probs]
 
         tp = sum(1 for t, p in zip(true_labels, pred_labels) if t == "bug" and p == "bug")
-        fp = sum(1 for t, p in zip(true_labels, pred_labels) if t == "downstream" and p == "bug")
-        fn = sum(1 for t, p in zip(true_labels, pred_labels) if t == "bug" and p == "downstream")
+        fp = sum(1 for t, p in zip(true_labels, pred_labels) if t == "external" and p == "bug")
+        fn = sum(1 for t, p in zip(true_labels, pred_labels) if t == "bug" and p == "external")
 
         # Precision is undefined when the threshold forwards nothing.
         precision = tp / (tp + fp) if (tp + fp) > 0 else float("nan")
@@ -371,16 +371,16 @@ def main():
 
     # Macro precision, recall, F1
     bug_precision = compute_per_class_precision(true_labels, pred_labels, "bug")
-    downstream_precision = compute_per_class_precision(true_labels, pred_labels, "downstream")
+    external_precision = compute_per_class_precision(true_labels, pred_labels, "external")
     bug_recall = compute_per_class_recall(true_labels, pred_labels, "bug")
-    downstream_recall = compute_per_class_recall(true_labels, pred_labels, "downstream")
+    external_recall = compute_per_class_recall(true_labels, pred_labels, "external")
 
     # Average only the classes with a defined (finite) value. A class with no
     # true instances is excluded, so it does not drag the average toward
     # zero. Reports n/a (NaN) when neither class has one.
-    finite_precisions = [p for p in (bug_precision, downstream_precision) if not math.isnan(p)]
+    finite_precisions = [p for p in (bug_precision, external_precision) if not math.isnan(p)]
     macro_precision = compute_mean(finite_precisions) if finite_precisions else float("nan")
-    finite_recalls = [r for r in (bug_recall, downstream_recall) if not math.isnan(r)]
+    finite_recalls = [r for r in (bug_recall, external_recall) if not math.isnan(r)]
     macro_recall = compute_mean(finite_recalls) if finite_recalls else float("nan")
     macro_f1 = 2 * (macro_precision * macro_recall) / (macro_precision + macro_recall) if (macro_precision + macro_recall) > 0 else 0.0
 
@@ -394,7 +394,7 @@ def main():
         bands_data[band]["pred"].append(pred_label)
 
     band_metrics = {}
-    for band in ["clear_bug", "clear_downstream", "ambiguous"]:
+    for band in ["clear_bug", "clear_external", "ambiguous"]:
         if band in bands_data:
             data = bands_data[band]
             acc = compute_accuracy(data["true"], data["pred"])
@@ -472,7 +472,7 @@ def main():
     print("\n" + "=" * 60)
     print("PER BAND")
     print("=" * 60)
-    band_order = ["clear_bug", "clear_downstream", "ambiguous"]
+    band_order = ["clear_bug", "clear_external", "ambiguous"]
     for band in band_order:
         if band in band_metrics:
             m = band_metrics[band]
@@ -493,9 +493,9 @@ def main():
     print("\n" + "=" * 60)
     print("CONFUSION MATRIX")
     print("=" * 60)
-    print(f"                Predicted: bug  Predicted: downstream")
+    print(f"                Predicted: bug  Predicted: external  ")
     print(f"Actual: bug              {tp:4d}              {fn:4d}")
-    print(f"Actual: downstream       {fp:4d}              {tn:4d}")
+    print(f"Actual: external         {fp:4d}              {tn:4d}")
 
     print("\n" + "=" * 60)
     print("CALIBRATION")

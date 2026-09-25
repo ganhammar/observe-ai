@@ -82,7 +82,7 @@ public class FunctionTests
             Environment.SetEnvironmentVariable("MODEL_ARN", null);
         }
 
-        Assert.Equal(["bug", "downstream"], verdict.OptionIds);
+        Assert.Equal(["bug", "external"], verdict.OptionIds);
         Assert.Equal(2, verdict.Probabilities!.Count);
         Assert.NotNull(verdict.Fallback);
         Assert.Equal(Math.Exp(-0.2) + Math.Exp(-1.0), verdict.DeclaredMass!.Value, precision: 9);

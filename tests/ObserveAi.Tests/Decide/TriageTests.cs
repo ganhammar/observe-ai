@@ -9,7 +9,7 @@ namespace ObserveAi.Tests;
 
 /// <summary>
 /// Exercises Triage.RunAsync against a fake Invoke, checking that it issues all
-/// nine of the tree's sub-questions concurrently, that one failing sub-question
+/// ten of the tree's sub-questions concurrently, that one failing sub-question
 /// does not fail the row, and that a row with no evidence routes to the baseline
 /// answer.
 /// </summary>
@@ -84,17 +84,17 @@ public class TriageTests
     private static readonly string[] ExpectedKeys =
     [
         "baseline", "surface", "unreleased_resource", "self_inflicted_load", "invalid_value_sent",
-        "internal_inconsistency", "repeated_work", "external_change", "external_unavailable",
+        "internal_inconsistency", "repeated_work", "external_change", "external_unavailable", "platform_intervention",
     ];
 
     [Fact]
-    public async Task IssuesAllNineSubQuestions()
+    public async Task IssuesAllTenSubQuestions()
     {
         var prompts = new List<string>();
 
         var result = await Triage.RunAsync(Fake(prompts), "arn:model", RowWithEvidence("row-1"), Tree);
 
-        Assert.Equal(9, prompts.Count);
+        Assert.Equal(10, prompts.Count);
         Assert.Equal(ExpectedKeys.OrderBy(k => k), result.Answers.Select(a => a.Key).OrderBy(k => k));
         Assert.All(result.Answers, answer => Assert.Null(answer.Error));
     }
@@ -111,7 +111,7 @@ public class TriageTests
     [Fact]
     public async Task SubQuestionsRunConcurrentlyNotSequentially()
     {
-        // A constrained thread pool can delay how quickly nine queued Task.Delay
+        // A constrained thread pool can delay how quickly ten queued Task.Delay
         // continuations get serviced, which would make this flaky on a wall-clock
         // threshold alone; raising the minimum thread count removes that noise so
         // MaxInFlight reflects concurrency rather than scheduling lag.
@@ -135,7 +135,7 @@ public class TriageTests
         await Triage.RunAsync(invoke, "arn:model", RowWithEvidence("row-2"), Tree);
 
         stopwatch.Stop();
-        // Nine sequential 150ms round trips would take ~1350ms; concurrent ones
+        // Ten sequential 150ms round trips would take ~1500ms; concurrent ones
         // should finish in roughly one round trip's worth of time.
         Assert.True(stopwatch.ElapsedMilliseconds < 1000,
             $"expected concurrent scoring to finish well under 1000ms, took {stopwatch.ElapsedMilliseconds}ms");
@@ -152,7 +152,7 @@ public class TriageTests
 
         var result = await Triage.RunAsync(invoke, "arn:model", RowWithEvidence("row-3"), Tree);
 
-        Assert.Equal(9, result.Answers.Count);
+        Assert.Equal(10, result.Answers.Count);
         var failed = result.Answers.Single(a => a.Key == "repeated_work");
         Assert.NotNull(failed.Error);
         Assert.Null(failed.Probabilities);

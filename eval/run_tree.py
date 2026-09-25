@@ -2,7 +2,7 @@
 
 Each input row becomes several independent decisions against the same state.
 The model answers those; combine() in tree.py turns them into the bug versus
-downstream probability. Output matches the single-question runner's shape, so
+external probability. Output matches the single-question runner's shape, so
 eval/evaluate.py scores both the same way.
 
 Writes a sidecar .tree.jsonl holding every sub-answer, so a wrong verdict can
@@ -76,8 +76,8 @@ def main() -> None:
                 verdict = combine(answers, has_evidence(enriched["state"]))
                 record = {
                     "id": row["id"],
-                    "option_ids": ["bug", "downstream"],
-                    "probabilities": [verdict["bug"], verdict["downstream"]],
+                    "option_ids": ["bug", "external"],
+                    "probabilities": [verdict["bug"], verdict["external"]],
                     "missing_options": [],
                     "abstained": False,
                     "fallback": verdict["fallback"],

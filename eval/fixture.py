@@ -1,4 +1,4 @@
-"""Synthetic log-triage fixture: stack traces labelled bug vs downstream.
+"""Synthetic log-triage fixture: stack traces labelled bug vs external.
 
 Three bands. `clear_*` rows are solvable by an exception-type lookup table and
 exist as a floor check. `ambiguous` rows test whether a model can separate
@@ -9,11 +9,12 @@ points the other.
 import json
 
 from ambiguous import AMBIGUOUS
+from tree import BASELINE
 
 # (id, band, label, service, runtime, level, message, stack)
 ROWS = [
-    # ---------- clear downstream ----------
-    ("dn-01", "clear_downstream", "downstream", "checkout-api", "dotnet", "ERROR",
+    # ---------- clear external ----------
+    ("dn-01", "clear_external", "external", "checkout-api", "dotnet", "ERROR",
      "System.Net.Http.HttpRequestException: Connection refused (payments.internal:8443)",
      """System.Net.Http.HttpRequestException: Connection refused (payments.internal:8443)
  ---> System.Net.Sockets.SocketException (111): Connection refused
@@ -23,7 +24,7 @@ ROWS = [
    at Checkout.Handlers.CheckoutHandler.HandleAsync(CheckoutCommand cmd, CancellationToken ct)
    at Checkout.Api.CheckoutController.Post(CheckoutRequest body, CancellationToken ct)"""),
 
-    ("dn-02", "clear_downstream", "downstream", "order-worker", "java", "ERROR",
+    ("dn-02", "clear_external", "external", "order-worker", "java", "ERROR",
      "java.net.SocketTimeoutException: Read timed out",
      """java.net.SocketTimeoutException: Read timed out
 \tat java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:288)
@@ -32,7 +33,7 @@ ROWS = [
 \tat com.acme.orders.OrderWorker.process(OrderWorker.java:141)
 \tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)"""),
 
-    ("dn-03", "clear_downstream", "downstream", "search-api", "python", "ERROR",
+    ("dn-03", "clear_external", "external", "search-api", "python", "ERROR",
      "elasticsearch.exceptions.ConnectionError: ConnectionTimeout caused by ReadTimeoutError",
      """Traceback (most recent call last):
   File "/app/search/handlers.py", line 62, in query
@@ -41,14 +42,14 @@ ROWS = [
     return api(*args, **kwargs)
 elasticsearch.exceptions.ConnectionError: ConnectionTimeout caused by - ReadTimeoutError(HTTPSConnectionPool(host='es.internal', port=9243): Read timed out. (read timeout=10))"""),
 
-    ("dn-04", "clear_downstream", "downstream", "billing-sync", "dotnet", "ERROR",
+    ("dn-04", "clear_external", "external", "billing-sync", "dotnet", "ERROR",
      "Npgsql.NpgsqlException: The connection pool has been exhausted",
      """Npgsql.NpgsqlException (0x80004005): The connection pool has been exhausted, either raise MaxPoolSize (currently 100) or Timeout (currently 15 seconds)
    at Npgsql.ConnectorPool.RentAsync(NpgsqlConnection conn, NpgsqlTimeout timeout, Boolean async, CancellationToken cancellationToken)
    at Billing.Data.LedgerRepository.GetOpenEntriesAsync(Guid accountId, CancellationToken ct)
    at Billing.Sync.LedgerSyncJob.RunAsync(CancellationToken ct)"""),
 
-    ("dn-05", "clear_downstream", "downstream", "notify-fn", "node", "ERROR",
+    ("dn-05", "clear_external", "external", "notify-fn", "node", "ERROR",
      "Error: getaddrinfo EAI_AGAIN smtp.provider.example",
      """Error: getaddrinfo EAI_AGAIN smtp.provider.example
     at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:120:26)
@@ -56,14 +57,14 @@ elasticsearch.exceptions.ConnectionError: ConnectionTimeout caused by - ReadTime
     at sendDigest (/app/src/notify/digest.js:58:11)
     at async handler (/app/src/index.js:22:5)"""),
 
-    ("dn-06", "clear_downstream", "downstream", "checkout-api", "dotnet", "ERROR",
+    ("dn-06", "clear_external", "external", "checkout-api", "dotnet", "ERROR",
      "Polly.CircuitBreaker.BrokenCircuitException: The circuit is now open",
      """Polly.CircuitBreaker.BrokenCircuitException: The circuit is now open and is not allowing calls.
    at Polly.CircuitBreaker.CircuitStateController`1.OnActionPreExecute()
    at Checkout.Clients.ShippingClient.QuoteAsync(QuoteRequest request, CancellationToken ct)
    at Checkout.Handlers.QuoteHandler.HandleAsync(QuoteCommand cmd, CancellationToken ct)"""),
 
-    ("dn-07", "clear_downstream", "downstream", "ingest-worker", "go", "ERROR",
+    ("dn-07", "clear_external", "external", "ingest-worker", "go", "ERROR",
      "rpc error: code = Unavailable desc = connection error",
      """rpc error: code = Unavailable desc = connection error: desc = "transport: Error while dialing dial tcp 10.4.2.19:50051: i/o timeout"
 goroutine 412 [running]:
@@ -72,21 +73,21 @@ main.(*Ingestor).push(0xc0000b4000, 0xc0001a2100)
 main.(*Ingestor).Run(0xc0000b4000)
 \t/app/ingest/run.go:38 +0x9c"""),
 
-    ("dn-08", "clear_downstream", "downstream", "auth-api", "java", "ERROR",
+    ("dn-08", "clear_external", "external", "auth-api", "java", "ERROR",
      "org.springframework.web.client.HttpServerErrorException$ServiceUnavailable: 503",
      """org.springframework.web.client.HttpServerErrorException$ServiceUnavailable: 503 Service Unavailable: "upstream connect error or disconnect/reset before headers"
 \tat org.springframework.web.client.DefaultResponseErrorHandler.handleError(DefaultResponseErrorHandler.java:187)
 \tat com.acme.auth.client.DirectoryClient.lookup(DirectoryClient.java:71)
 \tat com.acme.auth.LoginService.authenticate(LoginService.java:118)"""),
 
-    ("dn-09", "clear_downstream", "downstream", "report-fn", "python", "ERROR",
+    ("dn-09", "clear_external", "external", "report-fn", "python", "ERROR",
      "botocore.exceptions.ClientError: ThrottlingException: Rate exceeded",
      """Traceback (most recent call last):
   File "/var/task/report/export.py", line 91, in write_batch
     self.ddb.batch_write_item(RequestItems=payload)
 botocore.exceptions.ClientError: An error occurred (ThrottlingException) when calling the BatchWriteItem operation (reached max retries: 4): Rate exceeded"""),
 
-    ("dn-10", "clear_downstream", "downstream", "order-worker", "java", "ERROR",
+    ("dn-10", "clear_external", "external", "order-worker", "java", "ERROR",
      "org.apache.kafka.common.errors.TimeoutException: Topic not present in metadata after 60000 ms",
      """org.apache.kafka.common.errors.TimeoutException: Topic orders.v2 not present in metadata after 60000 ms.
 \tat org.apache.kafka.clients.producer.KafkaProducer.waitOnMetadata(KafkaProducer.java:1088)
@@ -168,15 +169,8 @@ AttributeError: 'NoneType' object has no attribute 'lower'"""),
 ]
 
 
-QUESTION = ("Does this error indicate a defect in this service's own source code, "
-            "or a failure in an external dependency or infrastructure it calls?")
-
-OPTIONS = [
-    {"id": "bug",
-     "description": "A defect in this service's own source code. Resolving it requires a change to this repository."},
-    {"id": "downstream",
-     "description": "A failure in an external dependency or in infrastructure this service calls. This service's own code is behaving correctly."},
-]
+QUESTION = BASELINE["question"]
+OPTIONS = BASELINE["options"]
 
 
 def build(include_evidence: bool = True):

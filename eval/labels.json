@@ -1,52 +1,52 @@
 {
   "dn-01": {
-    "label": "downstream",
-    "band": "clear_downstream",
+    "label": "external",
+    "band": "clear_external",
     "runtime": "dotnet"
   },
   "dn-02": {
-    "label": "downstream",
-    "band": "clear_downstream",
+    "label": "external",
+    "band": "clear_external",
     "runtime": "java"
   },
   "dn-03": {
-    "label": "downstream",
-    "band": "clear_downstream",
+    "label": "external",
+    "band": "clear_external",
     "runtime": "python"
   },
   "dn-04": {
-    "label": "downstream",
-    "band": "clear_downstream",
+    "label": "external",
+    "band": "clear_external",
     "runtime": "dotnet"
   },
   "dn-05": {
-    "label": "downstream",
-    "band": "clear_downstream",
+    "label": "external",
+    "band": "clear_external",
     "runtime": "node"
   },
   "dn-06": {
-    "label": "downstream",
-    "band": "clear_downstream",
+    "label": "external",
+    "band": "clear_external",
     "runtime": "dotnet"
   },
   "dn-07": {
-    "label": "downstream",
-    "band": "clear_downstream",
+    "label": "external",
+    "band": "clear_external",
     "runtime": "go"
   },
   "dn-08": {
-    "label": "downstream",
-    "band": "clear_downstream",
+    "label": "external",
+    "band": "clear_external",
     "runtime": "java"
   },
   "dn-09": {
-    "label": "downstream",
-    "band": "clear_downstream",
+    "label": "external",
+    "band": "clear_external",
     "runtime": "python"
   },
   "dn-10": {
-    "label": "downstream",
-    "band": "clear_downstream",
+    "label": "external",
+    "band": "clear_external",
     "runtime": "java"
   },
   "bg-01": {
@@ -100,7 +100,7 @@
     "runtime": "node"
   },
   "am-01": {
-    "label": "downstream",
+    "label": "external",
     "band": "ambiguous",
     "runtime": "dotnet"
   },
@@ -115,7 +115,7 @@
     "runtime": "python"
   },
   "am-04": {
-    "label": "downstream",
+    "label": "external",
     "band": "ambiguous",
     "runtime": "java"
   },
@@ -125,7 +125,7 @@
     "runtime": "dotnet"
   },
   "am-06": {
-    "label": "downstream",
+    "label": "external",
     "band": "ambiguous",
     "runtime": "go"
   },
@@ -140,7 +140,7 @@
     "runtime": "dotnet"
   },
   "am-09": {
-    "label": "downstream",
+    "label": "external",
     "band": "ambiguous",
     "runtime": "node"
   },
@@ -150,7 +150,7 @@
     "runtime": "dotnet"
   },
   "am-11": {
-    "label": "downstream",
+    "label": "external",
     "band": "ambiguous",
     "runtime": "dotnet"
   },
@@ -158,5 +158,35 @@
     "label": "bug",
     "band": "ambiguous",
     "runtime": "java"
+  },
+  "am-13": {
+    "label": "external",
+    "band": "ambiguous",
+    "runtime": "python"
+  },
+  "am-14": {
+    "label": "bug",
+    "band": "ambiguous",
+    "runtime": "node"
+  },
+  "am-15": {
+    "label": "external",
+    "band": "ambiguous",
+    "runtime": "dotnet"
+  },
+  "am-16": {
+    "label": "external",
+    "band": "ambiguous",
+    "runtime": "go"
+  },
+  "am-17": {
+    "label": "bug",
+    "band": "ambiguous",
+    "runtime": "java"
+  },
+  "am-18": {
+    "label": "external",
+    "band": "ambiguous",
+    "runtime": "node"
   }
 }

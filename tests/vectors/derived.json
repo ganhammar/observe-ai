@@ -571,5 +571,160 @@
     "expected_facts": [
       "inbound_rps_from_this_service is 40 times inbound_rps_from_this_service_7d_avg (8400 against 210)."
     ]
+  },
+  {
+    "name": "current_versus_baseline_am-13",
+    "id": "am-13",
+    "producer": "current_versus_baseline",
+    "state": {
+      "service": "report-fn",
+      "runtime": "python",
+      "level": "ERROR",
+      "message": "MemoryError building the monthly summary",
+      "stack_trace": "Traceback (most recent call last):\n  File \"/var/task/report/summarise.py\", line 61, in build_rows\n    rows.append(render(record))\nMemoryError",
+      "evidence": {
+        "platform_event": "function configuration updated 2026-09-24T06:40Z by ops: memory 1024 MB to 512 MB",
+        "memory_limit_mb": 512,
+        "prior_memory_limit_mb": 1024,
+        "max_memory_used_mb": 512,
+        "input_rows": 41200,
+        "input_rows_7d_avg": 39800,
+        "errors_started_at": "2026-09-24T06:41Z"
+      }
+    },
+    "expected_facts": [
+      "memory_limit_mb is 2 times below prior_memory_limit_mb (512 against 1024)."
+    ]
+  },
+  {
+    "name": "fixture_am-14",
+    "id": "am-14",
+    "producer": "none",
+    "state": {
+      "service": "web-bff",
+      "runtime": "node",
+      "level": "ERROR",
+      "message": "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory",
+      "stack_trace": "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\n    at buildFacets (/app/src/bff/facets.js:31:28)\n    at renderSearch (/app/src/bff/search.js:112:19)\n    at async /app/src/bff/routes.js:64:20",
+      "evidence": {
+        "heap_used_mb_series_5m": [
+          120,
+          340,
+          610,
+          890,
+          1020
+        ],
+        "memory_limit_mb": 1024,
+        "prior_memory_limit_mb": 1024,
+        "requests_in_flight": 3,
+        "requests_in_flight_7d_avg": 4,
+        "last_deploy": {
+          "service": "web-bff",
+          "at": "2026-09-24T09:02Z",
+          "change": "cache facet results per request"
+        },
+        "errors_started_at": "2026-09-24T09:21Z"
+      }
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_am-15",
+    "id": "am-15",
+    "producer": "none",
+    "state": {
+      "service": "checkout-api",
+      "runtime": "dotnet",
+      "level": "ERROR",
+      "message": "IOException: No space left on device",
+      "stack_trace": "System.IO.IOException: No space left on device : '/tmp/receipts/9f3a.pdf'\n   at System.IO.RandomAccess.WriteAtOffset(SafeFileHandle handle, ReadOnlySpan`1 buffer, Int64 fileOffset)\n   at Checkout.Receipts.ReceiptWriter.WriteAsync(Receipt receipt, CancellationToken ct)\n   at Checkout.Handlers.CheckoutHandler.HandleAsync(CheckoutCommand cmd, CancellationToken ct)",
+      "evidence": {
+        "disk_used_percent": 100,
+        "this_service_disk_writes_mb_last_hour": 3,
+        "this_service_disk_writes_mb_7d_avg": 3,
+        "host_event": "log shipper on the host stalled at 08:50Z; its local buffer grew to 48 GB",
+        "largest_directory": {
+          "path": "/var/lib/log-agent/buffer",
+          "gb": 48
+        },
+        "errors_started_at": "2026-09-24T09:31Z"
+      }
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_am-16",
+    "id": "am-16",
+    "producer": "none",
+    "state": {
+      "service": "ingest-worker",
+      "runtime": "go",
+      "level": "ERROR",
+      "message": "context deadline exceeded on every outbound call",
+      "stack_trace": "panic: context deadline exceeded\n\ngoroutine 41 [running]:\ningest/pipeline.(*Forwarder).Send(0xc0002a4000, {0xc00031c000, 0x1f4})\n\t/app/pipeline/forwarder.go:88 +0x1c5\ningest/pipeline.(*Worker).Run(0xc00012c300)\n\t/app/pipeline/worker.go:52 +0x2f1",
+      "evidence": {
+        "host_event": "hypervisor reset the instance's network interface at 09:12:04Z",
+        "errors_started_at": "2026-09-24T09:12Z",
+        "affected_services_on_host": 6,
+        "this_service_outbound_rps": 40,
+        "this_service_outbound_rps_7d_avg": 42,
+        "destination_health": "forwarder targets healthy from other hosts"
+      }
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_am-17",
+    "id": "am-17",
+    "producer": "none",
+    "state": {
+      "service": "auth-api",
+      "runtime": "java",
+      "level": "ERROR",
+      "message": "NumberFormatException parsing X-Tenant-Id",
+      "stack_trace": "java.lang.NumberFormatException: For input string: \"acme\"\n\tat java.base/java.lang.Long.parseLong(Long.java:711)\n\tat com.acme.auth.TenantResolver.resolve(TenantResolver.java:37)\n\tat com.acme.auth.filter.TenantFilter.doFilter(TenantFilter.java:29)",
+      "evidence": {
+        "request_header": {
+          "X-Tenant-Id": "acme"
+        },
+        "contract": "X-Tenant-Id is documented as the tenant slug, a string",
+        "callers_sending_this_shape": 14,
+        "callers_total": 14,
+        "last_deploy": {
+          "service": "auth-api",
+          "at": "2026-09-24T07:30Z",
+          "change": "resolve tenants by numeric id"
+        },
+        "errors_started_at": "2026-09-24T07:31Z"
+      }
+    },
+    "expected_facts": []
+  },
+  {
+    "name": "fixture_am-18",
+    "id": "am-18",
+    "producer": "none",
+    "state": {
+      "service": "notify-fn",
+      "runtime": "node",
+      "level": "ERROR",
+      "message": "RangeError: Invalid array length",
+      "stack_trace": "RangeError: Invalid array length\n    at expandRecipients (/app/src/notify/recipients.js:18:15)\n    at handler (/app/src/notify/index.js:40:22)",
+      "evidence": {
+        "request_body": {
+          "template": "digest",
+          "count": 4294967296
+        },
+        "contract": "count is documented with a maximum of 1000, enforced by the API gateway request schema",
+        "gateway_event": "api-gateway team removed request schema validation on this route at 2026-09-24T07:50Z",
+        "errors_started_at": "2026-09-24T07:52Z",
+        "callers_sending_this_shape": 1,
+        "last_deploy": {
+          "service": "notify-fn",
+          "at": "2026-09-02T14:10Z"
+        }
+      }
+    },
+    "expected_facts": []
   }
 ]

@@ -10,7 +10,7 @@ renders each as a plain sentence appended to the state. The model is then
 asked what the stated comparison means, a question it answers well.
 
 Pairing is by field-name convention, which a log pipeline with a fixed schema
-can rely on. Nothing here decides bug versus downstream; it only makes the
+can rely on. Nothing here decides bug versus external; it only makes the
 magnitudes legible.
 """
 
@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 
 RATIO_THRESHOLD = 5.0
+FALL_THRESHOLD = 2.0
 
 # Field-name pairs that mean "this happened" against "this undid it".
 ACQUIRE_RELEASE = [("opened", "disposed"), ("opened", "closed"),
@@ -77,10 +78,20 @@ def _current_versus_baseline(numbers: dict) -> list[str]:
         for name, value in readings.items():
             if stem not in name and _strip_markers(name) not in stem:
                 continue
-            sentence = _ratio_sentence(name, value, other, baseline)
+            sentence = _ratio_sentence(name, value, other, baseline) or _fall_sentence(name, value, other, baseline)
             if sentence:
                 facts.append(sentence)
     return facts
+
+
+def _fall_sentence(name: str, value: float, baseline_name: str, baseline: float) -> str | None:
+    """A reading that fell well below its baseline, such as a limit that was lowered."""
+    if value == 0:
+        return f"{name} is 0 while {baseline_name} is {baseline:g}."
+    ratio = baseline / value
+    if ratio < FALL_THRESHOLD:
+        return None
+    return f"{name} is {ratio:.0f} times below {baseline_name} ({value:g} against {baseline:g})."
 
 
 def _repetition(numbers: dict) -> list[str]:

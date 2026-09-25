@@ -63,8 +63,8 @@ public sealed class LambdaResponse
 
     public static LambdaResponse FromTriage(TriageResult result, QuestionTree tree) => new()
     {
-        OptionIds = ["bug", "downstream"],
-        Probabilities = [result.Verdict.Bug, result.Verdict.Downstream],
+        OptionIds = ["bug", "external"],
+        Probabilities = [result.Verdict.Bug, result.Verdict.External],
         Fallback = result.Verdict.Fallback,
         Signals = tree.Signals
             .Where(signal => result.Answers.Any(answer => answer.Key == signal.Key && answer.Probabilities is not null))

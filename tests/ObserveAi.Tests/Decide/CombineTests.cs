@@ -27,8 +27,8 @@ public class CombineTests
         [JsonPropertyName("expected_bug")]
         public double ExpectedBug { get; init; }
 
-        [JsonPropertyName("expected_downstream")]
-        public double ExpectedDownstream { get; init; }
+        [JsonPropertyName("expected_external")]
+        public double ExpectedExternal { get; init; }
 
         [JsonPropertyName("expected_fallback")]
         public bool ExpectedFallback { get; init; }
@@ -60,8 +60,8 @@ public class CombineTests
             Math.Abs(vector.ExpectedBug - result.Bug) < Tolerance,
             $"{vector.Name}: expected bug {vector.ExpectedBug}, got {result.Bug}");
         Assert.True(
-            Math.Abs(vector.ExpectedDownstream - result.Downstream) < Tolerance,
-            $"{vector.Name}: expected downstream {vector.ExpectedDownstream}, got {result.Downstream}");
+            Math.Abs(vector.ExpectedExternal - result.External) < Tolerance,
+            $"{vector.Name}: expected external {vector.ExpectedExternal}, got {result.External}");
         Assert.Equal(vector.ExpectedFallback, result.Fallback);
     }
 

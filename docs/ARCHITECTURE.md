@@ -24,7 +24,7 @@ flowchart TB
 
     subgraph triage[Triage]
         SEEN -->|no| DERIVE[State the numeric<br/>comparisons in code]
-        DERIVE --> TREE[7 signal questions<br/>in parallel]
+        DERIVE --> TREE[8 signal questions<br/>in parallel]
         TREE --> COMB[Combine in code<br/>noisy-OR + prior]
     end
 
@@ -59,7 +59,7 @@ As measured, the model is reliable at "does this text have property P" and "do t
 
 | Step | Question | Why not code |
 |---|---|---|
-| Triage tree | 7 grounded signals over the evidence | The measured core. See [FINDINGS.md](FINDINGS.md). |
+| Triage tree | 8 grounded signals over the evidence | The measured core. See [FINDINGS.md](FINDINGS.md). |
 | Verify source | Could this code throw this exception here? | Detects a stale checkout without resolving a commit. |
 
 Stack trace formats are distinctive enough for a regex to identify the runtime, so there is no language detection step. The repository is the GitHub organisation plus the log group's resource name, which is wrong for a service named differently from its repository; a model call cached per namespace is the path to resolving those.

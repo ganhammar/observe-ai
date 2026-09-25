@@ -18,7 +18,7 @@ public class LambdaJsonContextTests
             new TriageResult(
                 new CombineResult(0.7, 0.3, true),
                 [
-                    new TriageAnswer("baseline", new Dictionary<string, double> { ["bug"] = 0.7, ["downstream"] = 0.3 }, null),
+                    new TriageAnswer("baseline", new Dictionary<string, double> { ["bug"] = 0.7, ["external"] = 0.3 }, null),
                     new TriageAnswer("external_change", new Dictionary<string, double> { ["yes"] = 0.2, ["no"] = 0.8 }, null),
                     new TriageAnswer("repeated_work", null, "AmazonServiceException: not ready"),
                 ],
@@ -28,7 +28,7 @@ public class LambdaJsonContextTests
         var json = JsonSerializer.Serialize(response, LambdaJsonContext.Default.LambdaResponse);
         var element = JsonDocument.Parse(json).RootElement;
 
-        Assert.Equal(["bug", "downstream"], element.GetProperty("option_ids").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(["bug", "external"], element.GetProperty("option_ids").EnumerateArray().Select(e => e.GetString()));
         Assert.Equal(0.7, element.GetProperty("probabilities")[0].GetDouble());
         Assert.True(element.GetProperty("fallback").GetBoolean());
         Assert.Equal(0.98, element.GetProperty("declared_mass").GetDouble());

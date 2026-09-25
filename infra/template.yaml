@@ -207,7 +207,7 @@ Resources:
               - kinesis:ListStreams
             Resource: !Ref LogStreamArn
 
-  # Counts occurrences per distinct failure. The triage tree costs up to nine
+  # Counts occurrences per distinct failure. The triage tree costs up to ten
   # model calls, so it runs on first sighting only; every repeat after that is
   # an increment. Keyed by repository as well as fingerprint, because the same
   # framework exception from two services is two defects.

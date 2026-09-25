@@ -12,12 +12,12 @@ public sealed record TreeSignal(
     public TreeQuestion AsQuestion() => new(Key, Question, Options);
 }
 
-/// <summary>The combined bug-versus-downstream verdict for one triage row.</summary>
-public sealed record CombineResult(double Bug, double Downstream, bool Fallback);
+/// <summary>The combined bug-versus-external verdict for one triage row.</summary>
+public sealed record CombineResult(double Bug, double External, bool Fallback);
 
 /// <summary>
 /// The question and signal definitions from tree.json and the rule combining their answers into a
-/// bug-versus-downstream probability. Mirrors eval/tree.py's BASELINE, SURFACE, BUG_SIGNALS,
+/// bug-versus-external probability. Mirrors eval/tree.py's BASELINE, SURFACE, BUG_SIGNALS,
 /// DOWNSTREAM_SIGNALS, PRIOR and combine().
 /// </summary>
 public sealed class QuestionTree
@@ -57,7 +57,7 @@ public sealed class QuestionTree
     }
 
     /// <summary>
-    /// Combines typed answers, keyed by question then option id, into a bug-versus-downstream probability.
+    /// Combines typed answers, keyed by question then option id, into a bug-versus-external probability.
     /// A noisy-OR per side treats signals as independent, so one confident signal decides and weak ones
     /// accumulate. Prior is added to both sides before normalising; without it a lone 0.92 signal
     /// normalises to 1.0.
@@ -85,9 +85,9 @@ public sealed class QuestionTree
             bugValues.Add(value);
         }
         var bug = NoisyOr(bugValues);
-        var downstream = NoisyOr(Signals.Where(signal => signal.Side == "downstream").Select(signal => Yes(answers, signal.Key)));
+        var external = NoisyOr(Signals.Where(signal => signal.Side == "external").Select(signal => Yes(answers, signal.Key)));
 
-        var total = bug + downstream;
+        var total = bug + external;
         if (total == 0.0)
         {
             // Nothing fired: a failure surfacing on a call out is more often the other side's.
@@ -96,8 +96,8 @@ public sealed class QuestionTree
         }
 
         return new CombineResult(
-            (bug + Prior) / (bug + downstream + 2 * Prior),
-            (downstream + Prior) / (bug + downstream + 2 * Prior),
+            (bug + Prior) / (bug + external + 2 * Prior),
+            (external + Prior) / (bug + external + 2 * Prior),
             false);
     }
 

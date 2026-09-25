@@ -20,7 +20,7 @@ Accuracy by band:
 
 | Band | Rows | Accuracy | Balanced accuracy |
 |---|---:|---:|---:|
-| clear_downstream | 10 | 100% | 100% |
+| clear_external | 10 | 100% | 100% |
 | clear_bug | 10 | 100% | 100% |
 | ambiguous | 12 | 41.7% | 44.3% |
 
@@ -46,15 +46,15 @@ Constrained decoding hides the chat path's failure: masking to the option letter
 
 ## Evaluation
 
-`eval/fixture.py` generates 32 synthetic labelled log events across .NET, Java, Python, Node and Go, in three bands:
+`eval/fixture.py` generates 38 synthetic labelled log events across .NET, Java, Python, Node and Go, in three bands:
 
 | Band | Rows | What it tests |
 |---|---:|---|
-| `clear_downstream` | 10 | Floor check. An exception-type lookup table solves these. |
+| `clear_external` | 10 | Floor check. An exception-type lookup table solves these. |
 | `clear_bug` | 10 | Floor check, other direction. |
-| `ambiguous` | 12 | The exception type points one way and the causal story the other. |
+| `ambiguous` | 18 | The exception type points one way and the causal story the other. Six rows are platform or caller cases: a lowered memory limit, a full disk from another process, a host network reset, a gateway that stopped validating, and two input failures that are ours. |
 
-In the ambiguous band, a null reference caused by a dependency returning an empty body is labelled `downstream`, and a 400 from a dependency caused by our own arithmetic underflow is labelled `bug`. Scoring well on the clear bands and at chance on the ambiguous band means the model has learned the lookup table and nothing more.
+In the ambiguous band, a null reference caused by a dependency returning an empty body is labelled `external`, and a 400 from a dependency caused by our own arithmetic underflow is labelled `bug`. Scoring well on the clear bands and at chance on the ambiguous band means the model has learned the lookup table and nothing more.
 
 Ambiguous rows carry an `evidence` field with the signals a log pipeline already has: adjacent response metadata, dependency health, connection counts, recent deploys. The evidence states facts and never names a cause, so the model still has to relate the frames to the signals. `--no-evidence` generates a trace-only fixture:
 

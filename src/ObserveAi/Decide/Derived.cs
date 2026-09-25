@@ -14,6 +14,7 @@ namespace ObserveAi;
 public static class Derived
 {
     private const double RatioThreshold = 5.0;
+    private const double FallThreshold = 2.0;
 
     // Field-name pairs that mean "this happened" against "this undid it".
     private static readonly (string Up, string Down)[] AcquireReleasePairs =
@@ -129,13 +130,30 @@ public static class Derived
                 {
                     continue;
                 }
-                var sentence = RatioSentence(name, numbers[name], other, numbers[other]);
+                var sentence = RatioSentence(name, numbers[name], other, numbers[other])
+                    ?? FallSentence(name, numbers[name], other, numbers[other]);
                 if (sentence is not null)
                 {
                     yield return sentence;
                 }
             }
         }
+    }
+
+    /// <summary>A reading that fell well below its baseline, such as a limit that was lowered.</summary>
+    private static string? FallSentence(string name, double value, string baselineName, double baseline)
+    {
+        if (value == 0)
+        {
+            return $"{name} is 0 while {baselineName} is {PythonFloat.FormatG(baseline)}.";
+        }
+        var ratio = baseline / value;
+        if (ratio < FallThreshold)
+        {
+            return null;
+        }
+        return $"{name} is {PythonFloat.FormatCount(ratio)} times below {baselineName} " +
+            $"({PythonFloat.FormatG(value)} against {PythonFloat.FormatG(baseline)}).";
     }
 
     private static IEnumerable<string> Repetition(Dictionary<string, double> numbers)

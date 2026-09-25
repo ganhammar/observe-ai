@@ -1,17 +1,17 @@
 {
-  "version": "tree-v1",
+  "version": "tree-v2",
   "prior": 0.15,
   "baseline": {
     "key": "baseline",
-    "question": "Does this error indicate a defect in this service's own source code, or a failure in an external dependency or infrastructure it calls?",
+    "question": "Does this error indicate a defect in this service's own source code, or something outside its code: a dependency it calls, a caller that broke the contract, or the platform it runs on?",
     "options": [
       {
         "id": "bug",
-        "description": "A defect in this service's own source code. Resolving it requires a change to this repository."
+        "description": "A defect in this service's own source code, including input it should have validated. Resolving it requires a change to this repository."
       },
       {
-        "id": "downstream",
-        "description": "A failure in an external dependency or in infrastructure this service calls. This service's own code is behaving correctly."
+        "id": "external",
+        "description": "A failure outside this service's code: a dependency it calls, a caller violating the documented contract, or the platform it runs on. No change to this repository resolves it."
       }
     ]
   },
@@ -116,7 +116,7 @@
     },
     {
       "key": "external_change",
-      "side": "downstream",
+      "side": "external",
       "question": "Does the evidence show that an external party recently changed its data, limits, or configuration?",
       "options": [
         {
@@ -131,7 +131,7 @@
     },
     {
       "key": "external_unavailable",
-      "side": "downstream",
+      "side": "external",
       "question": "Does the evidence show the external party failing or refusing service for reasons unrelated to what this service sent?",
       "options": [
         {
@@ -141,6 +141,21 @@
         {
           "id": "no",
           "description": "The external party is responding normally, or its failure follows from what we sent."
+        }
+      ]
+    },
+    {
+      "key": "platform_intervention",
+      "side": "external",
+      "question": "Does the evidence show the platform or host changing or intervening independently of this service's own behaviour, such as a limit lowered, an instance recycled or throttled, or a host-level fault?",
+      "options": [
+        {
+          "id": "yes",
+          "description": "The platform or host acted or changed on its own, and the evidence describes that event."
+        },
+        {
+          "id": "no",
+          "description": "No platform event is described, or any limit reached follows from this service's own consumption."
         }
       ]
     }

@@ -3,7 +3,7 @@
 Each row carries `evidence`, which holds the surrounding signals a real log
 pipeline already has: adjacent log lines, response metadata, dependency
 status, recent deploys. The evidence never names a cause and never uses the
-words bug, defect, downstream or dependency. Deciding requires relating the
+words bug, defect, external or dependency. Deciding requires relating the
 frames to the signals.
 
 `fixture.py` can emit these rows with or without the evidence field, so the
@@ -13,7 +13,7 @@ triage from a trace alone, and whether extra context helps.
 
 # (id, label, service, runtime, message, stack, evidence)
 AMBIGUOUS = [
-    ("am-01", "downstream", "checkout-api", "dotnet",
+    ("am-01", "external", "checkout-api", "dotnet",
      "System.NullReferenceException in ChargeAsync",
      """System.NullReferenceException: Object reference not set to an instance of an object.
    at Checkout.Clients.PaymentsClient.<ChargeAsync>d__12.MoveNext()
@@ -46,7 +46,7 @@ psycopg.errors.QueryCanceled: canceling statement due to statement timeout""",
       "db_cpu_percent": 31,
       "other_clients_affected": False}),
 
-    ("am-04", "downstream", "catalog-api", "java",
+    ("am-04", "external", "catalog-api", "java",
      "InvalidFormatException deserialising supplier price",
      """com.fasterxml.jackson.databind.exc.InvalidFormatException: Cannot deserialize value of type `java.math.BigDecimal` from String "n/a": not a valid representation
 \tat com.acme.catalog.client.SupplierClient.fetchPrice(SupplierClient.java:63)
@@ -65,7 +65,7 @@ psycopg.errors.QueryCanceled: canceling statement due to statement timeout""",
       "connections_opened": 2841, "connections_disposed": 12,
       "db_max_connections": 400, "other_services_connected": 96}),
 
-    ("am-06", "downstream", "ingest-worker", "go",
+    ("am-06", "external", "ingest-worker", "go",
      "fatal error: runtime: out of memory",
      """fatal error: runtime: out of memory
 goroutine 1 [running]:
@@ -97,7 +97,7 @@ main.(*Ingestor).readAll(0xc0000b4000)
       "affected_skus": "only SKUs with no tier configuration rows",
       "outbound_calls_this_request": 0}),
 
-    ("am-09", "downstream", "notify-fn", "node",
+    ("am-09", "external", "notify-fn", "node",
      "Request failed with status code 429",
      """Error: Request failed with status code 429
     at settle (/app/node_modules/axios/lib/core/settle.js:19:12)
@@ -118,7 +118,7 @@ main.(*Ingestor).readAll(0xc0000b4000)
       "db_cpu_percent": 22,
       "occurrences_7d": 417}),
 
-    ("am-11", "downstream", "checkout-api", "dotnet",
+    ("am-11", "external", "checkout-api", "dotnet",
      "AuthenticationException: remote certificate is invalid",
      """System.Security.Authentication.AuthenticationException: The remote certificate is invalid according to the validation procedure: RemoteCertificateNotYetValid, RemoteCertificateChainErrors
    at System.Net.Security.SslStream.SendAuthResetSignal(ProtocolToken message, ExceptionDispatchInfo exception)
@@ -140,4 +140,88 @@ main.(*Ingestor).readAll(0xc0000b4000)
       "inbound_rps_from_this_service": 8400,
       "inbound_rps_from_this_service_7d_avg": 210,
       "inventory_error_rate_excluding_this_caller": 0.0003}),
+
+    # Platform and caller cases: the trace reads as this service's code, the cause is the host,
+    # a limit, or a caller.
+    ("am-13", "external", "report-fn", "python",
+     "MemoryError building the monthly summary",
+     """Traceback (most recent call last):
+  File "/var/task/report/summarise.py", line 61, in build_rows
+    rows.append(render(record))
+MemoryError""",
+     {"platform_event": "function configuration updated 2026-09-24T06:40Z by ops: memory 1024 MB to 512 MB",
+      "memory_limit_mb": 512,
+      "prior_memory_limit_mb": 1024,
+      "max_memory_used_mb": 512,
+      "input_rows": 41200,
+      "input_rows_7d_avg": 39800,
+      "errors_started_at": "2026-09-24T06:41Z"}),
+
+    ("am-14", "bug", "web-bff", "node",
+     "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory",
+     """FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+    at buildFacets (/app/src/bff/facets.js:31:28)
+    at renderSearch (/app/src/bff/search.js:112:19)
+    at async /app/src/bff/routes.js:64:20""",
+     {"heap_used_mb_series_5m": [120, 340, 610, 890, 1020],
+      "memory_limit_mb": 1024,
+      "prior_memory_limit_mb": 1024,
+      "requests_in_flight": 3,
+      "requests_in_flight_7d_avg": 4,
+      "last_deploy": {"service": "web-bff", "at": "2026-09-24T09:02Z", "change": "cache facet results per request"},
+      "errors_started_at": "2026-09-24T09:21Z"}),
+
+    ("am-15", "external", "checkout-api", "dotnet",
+     "IOException: No space left on device",
+     """System.IO.IOException: No space left on device : '/tmp/receipts/9f3a.pdf'
+   at System.IO.RandomAccess.WriteAtOffset(SafeFileHandle handle, ReadOnlySpan`1 buffer, Int64 fileOffset)
+   at Checkout.Receipts.ReceiptWriter.WriteAsync(Receipt receipt, CancellationToken ct)
+   at Checkout.Handlers.CheckoutHandler.HandleAsync(CheckoutCommand cmd, CancellationToken ct)""",
+     {"disk_used_percent": 100,
+      "this_service_disk_writes_mb_last_hour": 3,
+      "this_service_disk_writes_mb_7d_avg": 3,
+      "host_event": "log shipper on the host stalled at 08:50Z; its local buffer grew to 48 GB",
+      "largest_directory": {"path": "/var/lib/log-agent/buffer", "gb": 48},
+      "errors_started_at": "2026-09-24T09:31Z"}),
+
+    ("am-16", "external", "ingest-worker", "go",
+     "context deadline exceeded on every outbound call",
+     """panic: context deadline exceeded
+
+goroutine 41 [running]:
+ingest/pipeline.(*Forwarder).Send(0xc0002a4000, {0xc00031c000, 0x1f4})
+	/app/pipeline/forwarder.go:88 +0x1c5
+ingest/pipeline.(*Worker).Run(0xc00012c300)
+	/app/pipeline/worker.go:52 +0x2f1""",
+     {"host_event": "hypervisor reset the instance's network interface at 09:12:04Z",
+      "errors_started_at": "2026-09-24T09:12Z",
+      "affected_services_on_host": 6,
+      "this_service_outbound_rps": 40,
+      "this_service_outbound_rps_7d_avg": 42,
+      "destination_health": "forwarder targets healthy from other hosts"}),
+
+    ("am-17", "bug", "auth-api", "java",
+     "NumberFormatException parsing X-Tenant-Id",
+     """java.lang.NumberFormatException: For input string: "acme"
+	at java.base/java.lang.Long.parseLong(Long.java:711)
+	at com.acme.auth.TenantResolver.resolve(TenantResolver.java:37)
+	at com.acme.auth.filter.TenantFilter.doFilter(TenantFilter.java:29)""",
+     {"request_header": {"X-Tenant-Id": "acme"},
+      "contract": "X-Tenant-Id is documented as the tenant slug, a string",
+      "callers_sending_this_shape": 14,
+      "callers_total": 14,
+      "last_deploy": {"service": "auth-api", "at": "2026-09-24T07:30Z", "change": "resolve tenants by numeric id"},
+      "errors_started_at": "2026-09-24T07:31Z"}),
+
+    ("am-18", "external", "notify-fn", "node",
+     "RangeError: Invalid array length",
+     """RangeError: Invalid array length
+    at expandRecipients (/app/src/notify/recipients.js:18:15)
+    at handler (/app/src/notify/index.js:40:22)""",
+     {"request_body": {"template": "digest", "count": 4294967296},
+      "contract": "count is documented with a maximum of 1000, enforced by the API gateway request schema",
+      "gateway_event": "api-gateway team removed request schema validation on this route at 2026-09-24T07:50Z",
+      "errors_started_at": "2026-09-24T07:52Z",
+      "callers_sending_this_shape": 1,
+      "last_deploy": {"service": "notify-fn", "at": "2026-09-02T14:10Z"}}),
 ]
