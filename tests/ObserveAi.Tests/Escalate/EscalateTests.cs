@@ -6,11 +6,11 @@ using ObserveAi;
 namespace ObserveAi.Tests;
 
 /// <summary>
-/// Checks Escalation.RunAsync: it returns the frame verdicts and a drafted
-/// issue built from a real IssueDraft/SourceVerification pass, without ever
-/// calling GitHub itself. The per-frame "could this code throw here" question
-/// goes through a fake Invoke, and the root cause through a fake
-/// Converse that records what it was shown.
+/// Checks Escalation.RunAsync's per-frame "could this code throw here" question
+/// against a fake Invoke and its root-cause read against a fake Converse that
+/// records what it is shown, confirming it returns frame verdicts and a drafted
+/// issue built from a real IssueDraft/SourceVerification pass without calling
+/// GitHub.
 /// </summary>
 public class EscalateTests
 {

@@ -4,7 +4,7 @@ using ObserveAi;
 
 namespace ObserveAi.Tests;
 
-/// <summary>Ports the intent of tests/test_semif.py against the C# port.</summary>
+/// <summary>Ports tests/test_semif.py's checks against the C# implementation.</summary>
 public class SemifTests
 {
     private static JsonObject BaseRow() => new()

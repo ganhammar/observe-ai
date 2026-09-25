@@ -8,10 +8,10 @@ using ObserveAi;
 namespace ObserveAi.Tests;
 
 /// <summary>
-/// Exercises Triage.RunAsync against a fake Invoke: that it issues all
-/// nine of the tree's sub-questions, that they run concurrently rather than one
-/// after another, that one failing sub-question does not fail the row, and that a
-/// row with no evidence routes to the baseline answer.
+/// Exercises Triage.RunAsync against a fake Invoke, checking that it issues all
+/// nine of the tree's sub-questions concurrently, that one failing sub-question
+/// does not fail the row, and that a row with no evidence routes to the baseline
+/// answer.
 /// </summary>
 public class TriageTests
 {
@@ -114,7 +114,7 @@ public class TriageTests
         // A constrained thread pool can delay how quickly nine queued Task.Delay
         // continuations get serviced, which would make this flaky on a wall-clock
         // threshold alone; raising the minimum thread count removes that noise so
-        // MaxInFlight reflects actual concurrency rather than scheduling lag.
+        // MaxInFlight reflects concurrency rather than scheduling lag.
         ThreadPool.SetMinThreads(32, 32);
         var gate = new object();
         var inFlight = 0;

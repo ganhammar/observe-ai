@@ -126,7 +126,7 @@ public class BedrockBackendTests
     [Fact]
     public async Task MissingOptionLetterIsZeroed()
     {
-        var row = Row4WithOptions(3); // a, b, c only
+        var row = Row4WithOptions(3); // Only options a, b, and c remain.
         var invoke = Returning(CompletionBody(new() { ["A"] = -0.5, ["B"] = -1.5, ["X"] = -3.0 }));
 
         var result = await BedrockBackend.ScoreAsync(invoke, "arn:model", row);

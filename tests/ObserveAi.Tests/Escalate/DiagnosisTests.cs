@@ -2,7 +2,7 @@ using ObserveAi;
 
 namespace ObserveAi.Tests;
 
-/// <summary>The prompt the diagnosis model sees: the trace, then every fetched file, each bounded.</summary>
+/// <summary>Checks that the prompt shows the trace, then every fetched file, each bounded.</summary>
 public class DiagnosisTests
 {
     [Fact]

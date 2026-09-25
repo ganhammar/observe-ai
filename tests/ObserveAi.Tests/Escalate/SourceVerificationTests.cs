@@ -24,7 +24,7 @@ public class SourceVerificationTests
     [Theory]
     [InlineData(0.9, 0.1, true)]
     [InlineData(0.1, 0.9, false)]
-    [InlineData(0.5, 0.5, true)] // A tie reads as "not ruled out", not as a failure to verify.
+    [InlineData(0.5, 0.5, true)] // A tie counts as "not ruled out."
     public void MatchedFollowsTheHigherOption(double yes, double no, bool expected)
     {
         var probabilities = new Dictionary<string, double> { ["yes"] = yes, ["no"] = no };

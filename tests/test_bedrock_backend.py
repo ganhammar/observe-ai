@@ -107,7 +107,7 @@ def test_letter_mapping_four_options_preserves_order():
 
 
 def test_missing_option_letter_is_recorded_and_zeroed():
-    row = dict(ROW_4, options=ROW_4["options"][:3])  # a, b, c only
+    row = dict(ROW_4, options=ROW_4["options"][:3])  # Only options a, b, and c remain.
     top_logprobs = [
         {"token": "A", "logprob": -0.5, "bytes": [65]},
         {"token": "B", "logprob": -1.5, "bytes": [66]},

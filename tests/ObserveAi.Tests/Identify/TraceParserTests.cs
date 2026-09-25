@@ -4,8 +4,8 @@ namespace ObserveAi.Tests;
 
 /// <summary>
 /// Checks TraceParser against the real fixture (eval/logs.jsonl, eval/labels.json),
-/// plus hand-written traces for the one shape that fixture does not contain: a
-/// Java exception with a "Caused by:" wrapping the thing that actually broke.
+/// plus a hand-written trace for the one shape that fixture does not contain: a
+/// Java exception with a "Caused by:" wrapping the underlying exception.
 /// </summary>
 public class TraceParserTests
 {

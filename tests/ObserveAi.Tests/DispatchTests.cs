@@ -227,10 +227,10 @@ public class DispatchTests
     };
 
     /// <summary>
-    /// One batch exercising every start-executions outcome at once: an
+    /// One batch exercises every start-executions outcome at once: an
     /// unparseable line, a parseable one in a log group with no repo
-    /// convention, a first sighting, and a repeat of that same sighting. The
-    /// first sighting's execution is named after its own sanitised id.
+    /// convention, a first sighting, and a repeat of that sighting, whose
+    /// execution is named after its own sanitised id.
     /// </summary>
     [Fact]
     public async Task StartExecutionsCountsEveryOutcomeAndNamesTheExecutionAfterTheLogEventId()

@@ -63,8 +63,8 @@ public class SeenStoreTests
         await SeenStore.RecordAsync(Counter([], seen), "t", "acme/orders", "abc", Now, Retention);
 
         // A read followed by a write would let two log lines both see zero and
-        // both trigger triage. The increment and the first-sighting test have to
-        // be the same operation.
+        // both trigger triage, so the increment and the first-sighting check
+        // must be the same operation.
         var request = Assert.Single(seen);
         Assert.Contains("ADD occurrences :one", request.UpdateExpression);
         Assert.Equal(ReturnValue.ALL_NEW, request.ReturnValues);

@@ -4,10 +4,7 @@ using ObserveAi;
 
 namespace ObserveAi.Tests;
 
-/// <summary>
-/// Builds the gzipped base64 envelope in the test itself, exactly as CloudWatch
-/// Logs would deliver it on Kinesis, rather than committing a binary fixture.
-/// </summary>
+/// <summary>Builds the gzipped, base64-encoded envelope that a CloudWatch Logs subscription delivers on Kinesis.</summary>
 public class LogEnvelopeTests
 {
     private static string Envelope(string messageType, string logGroup, params string[] messages)

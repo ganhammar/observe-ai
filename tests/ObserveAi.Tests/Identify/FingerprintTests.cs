@@ -83,9 +83,9 @@ public class FingerprintTests
     [Fact]
     public void GoPanicsGroupDespiteVaryingValuesInTheMessage()
     {
-        // The same out-of-range defect hitting different indices is one defect.
-        // Go keeps its message in the exception type, so without normalisation
-        // each occurrence would open its own issue.
+        // The same out-of-range defect hitting different indices is one defect,
+        // and Go keeps its message in the exception type, so without
+        // normalisation each occurrence would open its own issue.
         const string first = """
             panic: runtime error: index out of range [5] with length 3
             goroutine 88 [running]:

@@ -3,8 +3,8 @@ using ObserveAi;
 namespace ObserveAi.Tests;
 
 /// <summary>
-/// Over-merging is the failure mode that matters: a fingerprint covering two
-/// defects hides one inside the other, and the hidden one is never fixed.
+/// Checks that traces are never over-merged: a fingerprint covering two
+/// defects would hide one inside the other, leaving it unfixed.
 /// </summary>
 public class FingerprintCollisionTests
 {
@@ -21,11 +21,10 @@ public class FingerprintCollisionTests
             byFingerprint[fingerprint].Add(row);
         }
 
-        // Rows sharing a fingerprint are only acceptable when their traces are
-        // genuinely the same text. The fixture contains one such pair on purpose:
-        // the same pool exhaustion reported once as the database running out of
-        // connections and once as this service leaking them. Nothing in the trace
-        // separates those, which is a property of stack traces, not of hashing.
+        // Rows may share a fingerprint only when their traces are the same text;
+        // the fixture holds one such pair, the same pool exhaustion reported
+        // once as the database running out of connections and once as this
+        // service leaking them, which the trace text alone does not distinguish.
         var wrong = byFingerprint.Values
             .Where(group => group.Select(row => row.StackTrace.Trim()).Distinct().Count() > 1)
             .Select(group => string.Join(", ", group.Select(row => row.Id)))
@@ -37,10 +36,9 @@ public class FingerprintCollisionTests
     [Fact]
     public void IdenticalTracesWithDifferentCausesStillGroupTogether()
     {
-        // The consequence of the above, asserted so it cannot regress unnoticed:
-        // triage runs on first sighting, so whichever of these arrives first
-        // decides the verdict for both. Separating them needs the evidence, which
-        // the fingerprint deliberately does not read.
+        // Triage runs on first sighting, so whichever of these two arrives first
+        // decides the verdict for both, and separating them needs the evidence,
+        // which the fingerprint does not read.
         var rows = EvalFixture.Load().ToDictionary(row => row.Id);
         var downstream = TraceParser.Parse(rows["dn-04"].StackTrace);
         var ourLeak = TraceParser.Parse(rows["am-05"].StackTrace);
@@ -53,12 +51,10 @@ public class FingerprintCollisionTests
     [Fact]
     public void NoLibraryFrameReadsAsApplicationCode()
     {
-        // Every third party namespace the fixture contains is now covered by the
-        // fallback vendor list, so the top in-app frame is the caller's own code
-        // and the fingerprint groups by that rather than by the client it failed
-        // inside. This passes because the list happens to cover this fixture. It
-        // is not evidence the approach scales, which is why the list carries a
-        // comment pointing at the cached model call instead.
+        // Every third-party namespace the fixture contains is covered by the
+        // fallback vendor list, so the top in-app frame is the caller's own
+        // code and the fingerprint groups by that frame; the list covers only
+        // this fixture, so a namespace outside it would not be caught here.
         var misattributed = EvalFixture.Load()
             .Select(row => (row.Id, Top: TraceParser.Parse(row.StackTrace)?.Frames.FirstOrDefault(f => f.InApp)))
             .Where(pair => pair.Top is not null && IsThirdParty(pair.Top.Method))

@@ -3,14 +3,14 @@ using ObserveAi;
 namespace ObserveAi.Tests;
 
 /// <summary>
-/// Checks path extraction against the real fixture (one representative row per
-/// runtime, every one of which reports an absolute container path, mapped back
-/// to a repository-relative guess), plus hand-written traces for shapes the
-/// fixture does not contain on its own: an already repo-relative path per
-/// runtime, an absolute path under no known mount, and a .NET frame with
-/// "in X:line N" mixed with one that has no line info at all. The remaining
-/// tests cover the GitHub Contents/Trees API requests built from those paths,
-/// the monorepo basename fallback, and FetchAsync's use of both.
+/// Checks path extraction against the real fixture, where each representative
+/// row per runtime reports an absolute container path mapped back to a
+/// repository-relative guess, and against hand-written traces for shapes the
+/// fixture lacks (an already repo-relative path per runtime, an absolute path
+/// under no known mount, and a .NET frame with "in X:line N" mixed with one
+/// with no line info), then checks the GitHub Contents/Trees API requests built
+/// from those paths, the monorepo basename fallback, and FetchAsync's use of
+/// both.
 /// </summary>
 public class SourceFetchTests
 {
@@ -35,8 +35,8 @@ public class SourceFetchTests
     [Fact]
     public void PythonAbsolutePathFromTheRealFixtureIsMappedToARepoRelativePath()
     {
-        // am-03's frame is /var/task/report/summarise.py: a real Lambda mount
-        // path, stripped as a known mount rather than dropped outright.
+        // am-03's frame is /var/task/report/summarise.py, the real Lambda mount
+        // path, stripped as a known mount.
         var row = Row("am-03");
         var trace = TraceParser.Parse(row.StackTrace);
 
@@ -86,7 +86,7 @@ public class SourceFetchTests
     [Fact]
     public void GoAbsolutePathFromTheRealFixtureIsMappedToARepoRelativePath()
     {
-        var row = Row("am-06"); // /app/ingest/read.go: an absolute container path.
+        var row = Row("am-06"); // /app/ingest/read.go is an absolute container path.
         var trace = TraceParser.Parse(row.StackTrace);
 
         var paths = SourceFetch.PathsFor(trace!, row.StackTrace);
@@ -126,14 +126,14 @@ public class SourceFetchTests
         var paths = SourceFetch.PathsFor(parsed!, trace);
 
         // The third line names a real file but carries no "(...)" location, so
-        // it never became a frame at all; this is unrelated to path safety.
+        // it never becomes a frame.
         Assert.Equal(["src/bff/facets.js", "src/bff/search.js"], paths);
     }
 
     [Fact]
     public void NodeAbsolutePathsFromTheRealFixtureAreMappedToRepoRelativePaths()
     {
-        var row = Row("bg-04"); // /app/src/bff/facets.js and friends: absolute container paths.
+        var row = Row("bg-04"); // /app/src/bff/facets.js and the other frames use absolute container paths.
         var trace = TraceParser.Parse(row.StackTrace);
 
         var paths = SourceFetch.PathsFor(trace!, row.StackTrace);
