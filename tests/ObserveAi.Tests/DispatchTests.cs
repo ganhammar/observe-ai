@@ -118,12 +118,28 @@ public class DispatchTests
             ["verdict"] = new JsonObject { ["bug"] = 0.9, ["downstream"] = 0.1, ["fallback"] = false },
         });
 
-        // No frame carries a fetched "source", so this must never call Bedrock.
-        var response = await Function.DispatchAsync(evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext());
+        // Nothing fetches, so no frame is verified and the readout is never called;
+        // the diagnosis still runs, from the trace alone.
+        Environment.SetEnvironmentVariable("DIAGNOSIS_MODEL_ID", "eu.model");
+        var prompts = new List<string>();
+        LambdaResponse response;
+        try
+        {
+            response = await Function.DispatchAsync(
+                evt, new NeverCalledInvoker(), "arn:model", "tree", new FakeContext(),
+                getSource: (_, _) => Task.FromResult<string?>(null),
+                converse: (_, _, user, _) => { prompts.Add(user); return Task.FromResult("Index past the end."); });
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DIAGNOSIS_MODEL_ID", null);
+        }
 
         Assert.NotNull(response.Escalate);
         Assert.NotEmpty(response.Escalate!.FetchRequests);
         Assert.Empty(response.Escalate.FrameVerdicts);
+        Assert.Contains("Index past the end.", response.Escalate.Draft.Body);
+        Assert.Single(prompts);
         Assert.Null(response.Results);
         Assert.Null(response.Identify);
     }

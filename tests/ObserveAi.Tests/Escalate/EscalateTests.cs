@@ -9,7 +9,8 @@ namespace ObserveAi.Tests;
 /// Checks Pipeline.EscalateAsync: it returns the fetch requests and a drafted
 /// issue built from a real IssueDraft/SourceVerification pass, without ever
 /// calling GitHub itself. The per-frame "could this code throw here" question
-/// goes through a fake Bedrock invoker rather than a real model.
+/// goes through a fake Bedrock invoker, and the root cause through a fake
+/// Converse that records what it was shown.
 /// </summary>
 public class EscalateTests
 {
@@ -45,6 +46,17 @@ public class EscalateTests
         return Encoding.UTF8.GetBytes(payload.ToJsonString());
     }
 
+    private sealed class FakeDiagnosis(string answer)
+    {
+        public List<(string ModelId, string Prompt)> Calls { get; } = [];
+
+        public Task<string> Converse(string modelId, string system, string user, CancellationToken cancellationToken)
+        {
+            Calls.Add((modelId, user));
+            return Task.FromResult(answer);
+        }
+    }
+
     private static readonly ParsedTrace Trace = new(
         "dotnet", "System.IndexOutOfRangeException",
         [
@@ -59,18 +71,19 @@ public class EscalateTests
         """;
 
     [Fact]
-    public async Task ReturnsFetchRequestsAndADraftWithoutCallingGitHub()
+    public async Task VerifiesFetchedFramesDiagnosesFromTheSourceAndDrafts()
     {
+        const string source = "public void Resolve(int index) { return tiers[index]; }";
         var request = new EscalateRequest(
             "acme/catalog", "abc1234", Trace, RawTrace,
-            FrameSources: ["public void Resolve(int index) { return tiers[index]; }", null],
+            Sources: new Dictionary<string, string> { ["src/Pricing/Tiers/TierResolver.cs"] = source },
             Verdict: new CombineResult(0.9, 0.1, false),
             Occurrences: 5,
-            FirstSeen: DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
-            RootCause: "The tier list is shorter than the resolved index.");
+            FirstSeen: DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
         var fake = new FakeInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }));
+        var diagnosis = new FakeDiagnosis("The tier list is shorter than the resolved index.");
 
-        var result = await Pipeline.EscalateAsync(fake, "arn:model", request);
+        var result = await Pipeline.EscalateAsync(fake, "arn:model", diagnosis.Converse, "eu.model", request);
 
         var fetchRequest = Assert.Single(result.FetchRequests);
         Assert.Equal("src/Pricing/Tiers/TierResolver.cs", fetchRequest.Path);
@@ -84,25 +97,35 @@ public class EscalateTests
         Assert.True(verdict.Matched);
         Assert.Single(fake.Questions);
 
+        // The diagnosis model sees the trace and the fetched file, once.
+        var call = Assert.Single(diagnosis.Calls);
+        Assert.Equal("eu.model", call.ModelId);
+        Assert.Contains("TierResolver.Resolve(Int32 index)", call.Prompt);
+        Assert.Contains(source, call.Prompt);
+
         Assert.Equal("System.IndexOutOfRangeException in Pricing.Tiers.TierResolver.Resolve", result.Draft.Title);
         Assert.Contains("5 times", result.Draft.Body);
         Assert.Contains("The tier list is shorter than the resolved index.", result.Draft.Body);
         Assert.Contains("1 of 1 matched.", result.Draft.Body);
+        Assert.Contains("- `src/Pricing/Tiers/TierResolver.cs`", result.Draft.Body);
     }
 
     [Fact]
-    public async Task NoFetchedSourcesAsksTheModelNothingAndStillDraftsAnIssue()
+    public async Task NoFetchedSourcesSkipsVerificationAndDiagnosesFromTheTraceAlone()
     {
         var request = new EscalateRequest(
-            "acme/catalog", "main", Trace, RawTrace, FrameSources: [null, null],
+            "acme/catalog", "main", Trace, RawTrace, Sources: new Dictionary<string, string>(),
             Verdict: new CombineResult(0.6, 0.4, false), Occurrences: 1,
-            FirstSeen: DateTimeOffset.Parse("2026-09-01T00:00:00Z"), RootCause: "Unclear without a checkout.");
+            FirstSeen: DateTimeOffset.Parse("2026-09-01T00:00:00Z"));
         var fake = new FakeInvoker(CompletionBody(new Dictionary<string, double> { ["A"] = -0.1, ["B"] = -3.0 }));
+        var diagnosis = new FakeDiagnosis("Unclear without a checkout.");
 
-        var result = await Pipeline.EscalateAsync(fake, "arn:model", request);
+        var result = await Pipeline.EscalateAsync(fake, "arn:model", diagnosis.Converse, "eu.model", request);
 
         Assert.Empty(result.FrameVerdicts);
         Assert.Empty(fake.Questions);
+        Assert.Contains("No source file named by the trace could be fetched.", Assert.Single(diagnosis.Calls).Prompt);
         Assert.Contains("0 of 0 matched.", result.Draft.Body);
+        Assert.Contains("(none; no file named by the trace could be fetched)", result.Draft.Body);
     }
 }

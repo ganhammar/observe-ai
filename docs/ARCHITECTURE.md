@@ -37,23 +37,25 @@ flowchart TB
     end
 
     subgraph escalate[Escalate]
-        GATE -->|high| FETCH[Sparse checkout<br/>only the frame paths]
+        GATE -->|high| CAP{under rate cap?}
+        CAP -->|no| ROLLUP[roll into one<br/>incident issue]
+        CAP -->|yes| FETCH[Fetch only the files<br/>the frames name]
         FETCH --> VERIFY{Source matches<br/>the trace?}
         VERIFY -->|no| FLAG[Draft, marked unverified]
-        VERIFY -->|yes| DRAFT[Claude drafts<br/>root cause]
+        VERIFY -->|yes| DRAFT[Nova 2 Lite reads<br/>the root cause]
         FLAG --> DRAFT
-        DRAFT --> CAP{under rate cap?}
-        CAP -->|yes| ISSUE[GitHub issue]
-        CAP -->|no| ROLLUP[roll into one<br/>incident issue]
+        DRAFT --> ISSUE[GitHub issue]
     end
 
     classDef model fill:#2d3f5e,stroke:#5b7bb5,color:#fff
-    class REPO,TREE,VERIFY model
+    class REPO,TREE,VERIFY,DRAFT model
 ```
 
 Shaded steps call a model. Everything else is ordinary code.
 
 ## Where the 4B is used, and why there
+
+Every model call but one is the 4B readout. The exception is the root cause paragraph in a filed issue, which is the one generative call in the pipeline: `Diagnosis.DiagnoseAsync` sends the trace and the fetched files to a managed Bedrock model (`DiagnosisModelId`, defaulting to Nova 2 Lite through the `eu.` inference profile) once per issue, after the tree has said ours and the caps have said file. That ordering is what keeps the expensive call rare.
 
 Today's measurements set the rule: the model is reliable at "does this text have property P" and "do these two mean the same", and unreliable at arithmetic and multi-hop attribution. Every use below is the first kind.
 

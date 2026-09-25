@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -35,17 +37,38 @@ public static class SourceFetch
     public static readonly IReadOnlyList<string> DefaultMountPrefixes =
         ["/app/", "/var/task/", "/usr/src/app/", "/home/app/", "/workspace/", "/src/"];
 
+    /// <summary>One GET returning the response text, or null when the resource does not exist.</summary>
+    public delegate Task<string?> Get(string url, CancellationToken cancellationToken);
+
     /// <summary>
-    /// The distinct file paths behind the trace's in-app frames, in frame order,
-    /// capped at maxFiles. rawTrace must be the text TraceParser parsed into
-    /// trace, since Frame does not retain a path to read back. A path rooted at a
-    /// known container mount (mountPrefixes, defaulting to DefaultMountPrefixes)
-    /// has that mount stripped to guess the repository-relative path.
+    /// The real Get: a bearer-token GET asking GitHub for raw file content, so a
+    /// Contents request answers with the file itself rather than base64 in JSON.
+    /// The Trees endpoint ignores that media type and still answers JSON.
     /// </summary>
-    public static IReadOnlyList<string> PathsFor(
-        ParsedTrace trace, string rawTrace, int maxFiles = 5, IReadOnlyList<string>? mountPrefixes = null)
+    public static Get Against(HttpClient http, string token) => async (url, cancellationToken) =>
     {
-        var lines = rawTrace.Replace("\r\n", "\n").Split('\n');
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.UserAgent.ParseAdd("observe-ai");
+        request.Headers.Accept.ParseAdd("application/vnd.github.raw+json");
+        var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+    };
+
+    /// <summary>
+    /// The repository-relative path behind each of trace.Frames, or null for a
+    /// vendor frame, a frame the trace names no file for, or an unsafe path.
+    /// rawTrace must be the text TraceParser parsed into trace, since Frame does
+    /// not retain a path to read back. A path rooted at a known container mount
+    /// (mountPrefixes, defaulting to DefaultMountPrefixes) has that mount
+    /// stripped to guess the repository-relative path.
+    /// </summary>
+    public static IReadOnlyList<string?> FramePaths(
+        ParsedTrace trace, string rawTrace, IReadOnlyList<string>? mountPrefixes = null)
+    {
+        var lines = rawTrace.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         if (trace.Runtime == "java")
         {
             var lastCause = Array.FindLastIndex(lines, l => l.TrimStart().StartsWith("Caused by:"));
@@ -63,17 +86,20 @@ public static class SourceFetch
         };
 
         var prefixes = mountPrefixes ?? DefaultMountPrefixes;
-        var paths = new List<string>();
+        var paths = new string?[trace.Frames.Count];
         for (var i = 0; i < trace.Frames.Count && i < perFrame.Count; i++)
         {
             if (!trace.Frames[i].InApp || perFrame[i] is not { } raw) continue;
             var path = MapMountPath(raw, prefixes);
-            if (!IsSafePath(path) || paths.Contains(path)) continue;
-            paths.Add(path);
-            if (paths.Count == maxFiles) break;
+            paths[i] = IsSafePath(path) ? path : null;
         }
         return paths;
     }
+
+    /// <summary>The distinct paths from FramePaths in frame order, capped at maxFiles.</summary>
+    public static IReadOnlyList<string> PathsFor(
+        ParsedTrace trace, string rawTrace, int maxFiles = 5, IReadOnlyList<string>? mountPrefixes = null) =>
+        FramePaths(trace, rawTrace, mountPrefixes).OfType<string>().Distinct().Take(maxFiles).ToList();
 
     /// <summary>The Contents API request for each path at the given ref, returned as data for the caller's HTTP delegate to run.</summary>
     public static IReadOnlyList<SourceFetchRequest> RequestsFor(string repo, string commitish, IReadOnlyList<string> paths)
@@ -114,7 +140,7 @@ public static class SourceFetch
     /// a 404; nothing here touches HTTP itself, so a test can supply a fake.
     /// </summary>
     public static async Task<FetchResult> FetchAsync(
-        Func<string, CancellationToken, Task<string?>> get, string repo, string commitish, IReadOnlyList<string> paths,
+        Get get, string repo, string commitish, IReadOnlyList<string> paths,
         CancellationToken cancellationToken = default)
     {
         var sources = new Dictionary<string, string>();
@@ -136,7 +162,7 @@ public static class SourceFetch
     }
 
     private static async Task<IReadOnlyList<string>?> FetchTreeAsync(
-        Func<string, CancellationToken, Task<string?>> get, string repo, string commitish, CancellationToken cancellationToken)
+        Get get, string repo, string commitish, CancellationToken cancellationToken)
     {
         var body = await get(TreeRequest(repo, commitish), cancellationToken).ConfigureAwait(false);
         if (body is null) return null;

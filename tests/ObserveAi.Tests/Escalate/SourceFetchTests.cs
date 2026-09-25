@@ -297,4 +297,26 @@ public class SourceFetchTests
 
         Assert.Empty(paths);
     }
+
+    [Fact]
+    public void FramePathsLinesUpWithTheFramesAndLeavesVendorFramesNull()
+    {
+        const string raw = """
+            System.IndexOutOfRangeException: Index was outside the bounds of the array.
+               at Pricing.Tiers.TierResolver.Resolve(Int32 index) in /app/src/Pricing/Tiers/TierResolver.cs:line 42
+               at System.Linq.Enumerable.First[TSource](IEnumerable`1 source)
+               at Pricing.Api.Quote.Handle(Request r) in /app/src/Pricing/Api/Quote.cs:line 10
+            """;
+        var trace = new ParsedTrace("dotnet", "System.IndexOutOfRangeException",
+        [
+            new Frame("Pricing.Tiers.TierResolver.Resolve", true),
+            new Frame("System.Linq.Enumerable.First", false),
+            new Frame("Pricing.Api.Quote.Handle", true),
+        ]);
+
+        var paths = SourceFetch.FramePaths(trace, raw);
+
+        Assert.Equal(["src/Pricing/Tiers/TierResolver.cs", null, "src/Pricing/Api/Quote.cs"], paths);
+        Assert.Equal(["src/Pricing/Tiers/TierResolver.cs", "src/Pricing/Api/Quote.cs"], SourceFetch.PathsFor(trace, raw));
+    }
 }

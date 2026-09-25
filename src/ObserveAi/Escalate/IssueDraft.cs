@@ -53,14 +53,17 @@ public static class IssueDraft
         // The verification sentence, stating its own confidence in the checkout.
         body.Append(verification.Sentence).Append("\n\n");
 
-        // The model's root cause.
-        body.Append("**Root cause**\n\n").Append(rootCause.Trim()).Append("\n\n");
+        // The model's root cause, when it produced one.
+        if (rootCause.Trim().Length > 0)
+        {
+            body.Append("**Root cause**\n\n").Append(rootCause.Trim()).Append("\n\n");
+        }
 
         // The frames it actually read, so a human can check the work.
         body.Append("**Frames read**\n\n");
         if (framesRead.Count == 0)
         {
-            body.Append("(none; verification ran with no source available)\n");
+            body.Append("(none; no file named by the trace could be fetched)\n");
         }
         else
         {

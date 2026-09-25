@@ -69,6 +69,18 @@ public class IssueDraftTests
             summary, "Unclear; every frame is vendor code.", []);
 
         Assert.Equal("java.lang.NullPointerException in java.base/java.util.Objects.requireNonNull", draft.Title);
-        Assert.Contains("(none; verification ran with no source available)", draft.Body);
+        Assert.Contains("(none; no file named by the trace could be fetched)", draft.Body);
+    }
+
+    [Fact]
+    public void AnEmptyRootCauseLeavesTheSectionOut()
+    {
+        var summary = SourceVerification.Summarise("main@abc1234", []);
+
+        var draft = IssueDraft.Build(
+            Trace, Verdict, occurrences: 1, DateTimeOffset.Parse("2026-09-01T00:00:00Z"), summary, "", []);
+
+        Assert.DoesNotContain("Root cause", draft.Body);
+        Assert.Contains("(none; no file named by the trace could be fetched)", draft.Body);
     }
 }

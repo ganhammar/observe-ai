@@ -17,6 +17,17 @@ Parameters:
       the function is not usable without a real imported model.
     AllowedPattern: '^arn:aws:bedrock:[a-z0-9-]+:[0-9]{12}:imported-model/.+$'
     ConstraintDescription: Must be a Bedrock imported-model ARN.
+  DiagnosisModelId:
+    Type: String
+    Default: eu.amazon.nova-2-lite-v1:0
+    AllowedPattern: '^eu\.[a-z0-9-]+\..+$'
+    ConstraintDescription: >
+      Must be an EU cross-region inference profile ID (eu.<provider>.<model>).
+    Description: >
+      Managed Bedrock model Diagnosis.DiagnoseAsync reads source with when an
+      issue is about to be filed. The eu. profile is required: the bare model
+      ID is not enabled for on-demand invocation in this region, and the
+      profile keeps the request inside EU regions.
   LogLevel:
     Type: String
     Default: INFO
@@ -115,11 +126,13 @@ Resources:
       # when the imported model copy has scaled to zero after 5 minutes of
       # no traffic and has to reactivate. 60 seconds gives that reactivation
       # path, plus normal inference latency and retries, room to complete
-      # without the Lambda timing out first.
-      Timeout: 60
+      # without the Lambda timing out first. Escalate additionally fetches up
+      # to five files from GitHub and waits on one generative call.
+      Timeout: 90
       Environment:
         Variables:
           MODEL_ARN: !Ref ModelArn
+          DIAGNOSIS_MODEL_ID: !Ref DiagnosisModelId
           BEDROCK_REGION: !Ref AWS::Region
           LOG_LEVEL: !Ref LogLevel
           SEMIF_MODE: !Ref SemifMode
@@ -150,6 +163,19 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource: !Ref ModelArn
+            # A cross-region profile needs the profile itself plus the underlying
+            # foundation model in every region it may route to, which for an eu.
+            # profile is every EU region. The model ID is the profile ID with
+            # its geo prefix removed.
+            - Sid: InvokeDiagnosisModelOnly
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource:
+                - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/${DiagnosisModelId}
+                - !Sub
+                  - arn:aws:bedrock:eu-*::foundation-model/${FoundationModelId}
+                  - FoundationModelId: !Select [1, !Split ['eu.', !Ref DiagnosisModelId]]
             - Sid: CountOccurrencesOnly
               Effect: Allow
               Action:

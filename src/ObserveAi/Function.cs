@@ -25,7 +25,9 @@ namespace ObserveAi;
 /// </summary>
 public static class Function
 {
-    private static readonly Lazy<IBedrockInvoker> LazyClient = new(CreateClient);
+    private static readonly Lazy<AmazonBedrockRuntimeClient> LazyRuntime = new(CreateRuntime);
+    private static readonly Lazy<IBedrockInvoker> LazyClient = new(() => new AmazonBedrockInvoker(LazyRuntime.Value));
+    private static readonly Lazy<Diagnosis.Converse> LazyConverse = new(() => Diagnosis.Against(LazyRuntime.Value));
     private static readonly Lazy<IAmazonDynamoDB> LazyDynamo = new(() => new AmazonDynamoDBClient());
     private static readonly Lazy<IAmazonSecretsManager> LazySecretsManager = new(() => new AmazonSecretsManagerClient());
     private static readonly Lazy<IAmazonStepFunctions> LazyStepFunctions = new(() => new AmazonStepFunctionsClient());
@@ -65,7 +67,8 @@ public static class Function
     internal static Task<LambdaResponse> DispatchAsync(
         JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, string mode, ILambdaContext context,
         Caps.UpdateItem? updateRate = null, StartExecution? startExecution = null,
-        ReadSecret? readSecret = null, IssueFiler.CallGitHub? callGitHub = null, SeenStore.UpdateItem? recordSeen = null)
+        ReadSecret? readSecret = null, IssueFiler.CallGitHub? callGitHub = null, SeenStore.UpdateItem? recordSeen = null,
+        SourceFetch.Get? getSource = null, Diagnosis.Converse? converse = null)
     {
         if (lambdaEvent.ValueKind == JsonValueKind.Object
             && lambdaEvent.TryGetProperty("Records", out var records) && records.ValueKind == JsonValueKind.Array)
@@ -85,7 +88,7 @@ public static class Function
             "resolve-repo" => Task.FromResult(RunResolveRepo(lambdaEvent)),
             "triage" => ScoreRowsAsync(lambdaEvent, client, modelArn, mode, context),
             "check-rate" => RunCheckRateAsync(lambdaEvent, updateRate),
-            "escalate" => RunEscalateAsync(lambdaEvent, client, modelArn, context),
+            "escalate" => RunEscalateAsync(lambdaEvent, client, modelArn, readSecret, getSource, converse, context),
             "file-issue" => RunFileIssueAsync(lambdaEvent, readSecret, callGitHub),
             _ => throw new InvalidOperationException($"Unknown action: '{action}'"),
         };
@@ -245,26 +248,41 @@ public static class Function
         return [lambdaEvent];
     }
 
+    /// <summary>
+    /// Fetches the files the trace names, then runs the escalate stage over
+    /// them. The token read and the GitHub reads happen here so that the stage
+    /// itself stays a function over data.
+    /// </summary>
     private static async Task<LambdaResponse> RunEscalateAsync(
-        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, ILambdaContext context)
+        JsonElement lambdaEvent, IBedrockInvoker client, string modelArn, ReadSecret? readSecret,
+        SourceFetch.Get? getSource, Diagnosis.Converse? converse, ILambdaContext context)
     {
         var request = ParseEscalateRequest(lambdaEvent);
-        var result = await Pipeline.EscalateAsync(client, modelArn, request).ConfigureAwait(false);
+        var paths = SourceFetch.PathsFor(request.Trace, request.RawTrace);
+        if (getSource is null)
+        {
+            var token = await (readSecret ?? ReadGitHubTokenAsync)(RequireEnv("GITHUB_TOKEN_SECRET_ARN"), default)
+                .ConfigureAwait(false);
+            getSource = SourceFetch.Against(LazyHttp.Value, token);
+        }
+        var fetched = await SourceFetch.FetchAsync(getSource, request.Repo, request.Commitish, paths).ConfigureAwait(false);
+
+        var result = await Pipeline.EscalateAsync(
+            client, modelArn, converse ?? LazyConverse.Value, RequireEnv("DIAGNOSIS_MODEL_ID"),
+            request with { Sources = fetched.Sources }).ConfigureAwait(false);
         var matched = result.FrameVerdicts.Count(v => v.Matched);
-        context.Logger.LogInformation($"Escalated {request.Repo}@{request.Commitish}: {matched}/{result.FrameVerdicts.Count} frames matched");
+        context.Logger.LogInformation(
+            $"Escalated {request.Repo}@{request.Commitish}: {fetched.Sources.Count}/{paths.Count} files fetched, {matched}/{result.FrameVerdicts.Count} frames matched");
         return new LambdaResponse { Escalate = EscalateResultDto.From(result) };
     }
 
-    /// <summary>trace.frames[i].source is the fetched span for that frame, or absent when nothing has been checked out for it yet.</summary>
     private static EscalateRequest ParseEscalateRequest(JsonElement e)
     {
         var traceEl = e.GetProperty("trace");
         var frames = new List<Frame>();
-        var sources = new List<string?>();
         foreach (var frame in traceEl.GetProperty("frames").EnumerateArray())
         {
             frames.Add(new Frame(frame.GetProperty("method").GetString()!, frame.GetProperty("inApp").GetBoolean()));
-            sources.Add(frame.TryGetProperty("source", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null);
         }
         var trace = new ParsedTrace(traceEl.GetProperty("runtime").GetString()!, traceEl.GetProperty("exceptionType").GetString()!, frames);
         var v = e.GetProperty("verdict");
@@ -272,10 +290,10 @@ public static class Function
             v.GetProperty("bug").GetDouble(), v.GetProperty("downstream").GetDouble(), v.TryGetProperty("fallback", out var fb) && fb.GetBoolean());
 
         return new EscalateRequest(
-            RequireString(e, "repo"), RequireString(e, "commitish"), trace, RequireString(e, "rawTrace"), sources, verdict,
+            RequireString(e, "repo"), RequireString(e, "commitish"), trace, RequireString(e, "rawTrace"),
+            new Dictionary<string, string>(), verdict,
             e.TryGetProperty("occurrences", out var occ) ? occ.GetInt64() : 1,
-            e.TryGetProperty("firstSeen", out var firstSeen) ? firstSeen.GetDateTimeOffset() : DateTimeOffset.UtcNow,
-            e.TryGetProperty("rootCause", out var rootCause) ? rootCause.GetString() ?? "" : "");
+            e.TryGetProperty("firstSeen", out var firstSeen) ? firstSeen.GetDateTimeOffset() : DateTimeOffset.UtcNow);
     }
 
     /// <summary>Reads the token out of band and lets IssueFiler decide whether this is a fresh issue or a reopen of one already tracked.</summary>
@@ -308,7 +326,7 @@ public static class Function
     private static string RequireEnv(string name) =>
         Environment.GetEnvironmentVariable(name) ?? throw new InvalidOperationException($"{name} environment variable is not set");
 
-    private static IBedrockInvoker CreateClient()
+    private static AmazonBedrockRuntimeClient CreateRuntime()
     {
         var region = RequireEnv("BEDROCK_REGION");
         var config = new AmazonBedrockRuntimeConfig
@@ -317,12 +335,13 @@ public static class Function
         };
         config.RetryMode = RequestRetryMode.Standard;
         // A Bedrock model that has scaled to zero can sit there until something
-        // times out; with the old MaxErrorRetry of 10 that something was the whole
-        // 60 second Lambda invocation, billed in full for a request that never
-        // returned. A small retry count with a per-attempt timeout well inside the
-        // Lambda timeout fails the row instead, with an error the caller can act on.
+        // times out. A small retry count with a per-attempt timeout well inside
+        // the Lambda timeout fails the row with an error the caller can act on,
+        // instead of billing the whole invocation for a request that never returned.
         config.MaxErrorRetry = 3;
-        config.Timeout = TimeSpan.FromSeconds(10);
-        return new AmazonBedrockInvoker(new AmazonBedrockRuntimeClient(config));
+        // 20 seconds covers a root cause paragraph from the diagnosis model; the
+        // readout answers in well under a second once the model copy is warm.
+        config.Timeout = TimeSpan.FromSeconds(20);
+        return new AmazonBedrockRuntimeClient(config);
     }
 }

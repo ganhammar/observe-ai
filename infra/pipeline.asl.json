@@ -116,7 +116,8 @@
           "Next": "EscalationFailed"
         }
       ],
-      "Next": "FileIssue"
+      "Next": "FileIssue",
+      "Comment": "Fetches the files the frames name from GitHub, verifies each against the trace with the readout, and has the diagnosis model write the root cause. Runs after the cap so the one generative call is only paid for an issue that will be filed."
     },
     "EscalationFailed": {
       "Type": "Fail",

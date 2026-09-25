@@ -27,15 +27,15 @@ public sealed record ExecutionInput(
     [property: JsonPropertyName("frames")] IReadOnlyList<Frame> Frames);
 
 /// <summary>
-/// What escalate needs. FrameSources[i] is the fetched span for Trace.Frames[i],
-/// or null when nothing has been fetched for that frame yet; nothing here calls
-/// GitHub, so every field is data the caller already has.
+/// What escalate needs. Sources holds the fetched files by repository-relative
+/// path, the same paths SourceFetch.PathsFor names for the trace; nothing here
+/// calls GitHub, so every field is data the caller already has.
 /// </summary>
 public sealed record EscalateRequest(
-    string Repo, string Commitish, ParsedTrace Trace, string RawTrace, IReadOnlyList<string?> FrameSources,
-    CombineResult Verdict, long Occurrences, DateTimeOffset FirstSeen, string RootCause);
+    string Repo, string Commitish, ParsedTrace Trace, string RawTrace, IReadOnlyDictionary<string, string> Sources,
+    CombineResult Verdict, long Occurrences, DateTimeOffset FirstSeen);
 
-/// <summary>Escalate's outcome: what to fetch, what the fetched source would have verified, and the issue drafted from both.</summary>
+/// <summary>Escalate's outcome: what was asked for, whether the fetched source verified per frame, and the issue drafted from both.</summary>
 public sealed record EscalateResult(
     IReadOnlyList<SourceFetchRequest> FetchRequests, IReadOnlyList<FrameVerdict> FrameVerdicts, Draft Draft);
 
@@ -134,23 +134,24 @@ public static class Pipeline
     };
 
     /// <summary>
-    /// Plans the fetch and drafts the issue for one escalated defect. Never
-    /// calls GitHub itself: the caller runs FetchRequests and opens the issue in
-    /// Draft. Only the per-frame "could this code throw here" questions go to
-    /// the model.
+    /// Verifies the fetched source frame by frame, has the diagnosis model read
+    /// it, and drafts the issue. The per-frame "could this code throw here"
+    /// questions go to the readout model; the root cause paragraph is the one
+    /// generative call. Never calls GitHub itself.
     /// </summary>
     public static async Task<EscalateResult> EscalateAsync(
-        IBedrockInvoker client, string modelArn, EscalateRequest request, CancellationToken cancellationToken = default)
+        IBedrockInvoker client, string modelArn, Diagnosis.Converse converse, string diagnosisModelId,
+        EscalateRequest request, CancellationToken cancellationToken = default)
     {
-        var paths = SourceFetch.PathsFor(request.Trace, request.RawTrace);
-        var requests = SourceFetch.RequestsFor(request.Repo, request.Commitish, paths);
+        var framePaths = SourceFetch.FramePaths(request.Trace, request.RawTrace);
+        var requests = SourceFetch.RequestsFor(
+            request.Repo, request.Commitish, SourceFetch.PathsFor(request.Trace, request.RawTrace));
 
         var verdicts = new List<FrameVerdict>();
         for (var i = 0; i < request.Trace.Frames.Count; i++)
         {
             var frame = request.Trace.Frames[i];
-            var source = i < request.FrameSources.Count ? request.FrameSources[i] : null;
-            if (!frame.InApp || string.IsNullOrEmpty(source))
+            if (framePaths[i] is not { } path || !request.Sources.TryGetValue(path, out var source))
             {
                 continue;
             }
@@ -166,8 +167,11 @@ public static class Pipeline
 
         var summary = SourceVerification.Summarise(
             $"{request.Repo}@{request.Commitish}", verdicts.Select(v => v.Matched).ToList());
+        var rootCause = await Diagnosis.DiagnoseAsync(
+            converse, diagnosisModelId, request.RawTrace, request.Sources, cancellationToken).ConfigureAwait(false);
         var draft = IssueDraft.Build(
-            request.Trace, request.Verdict, request.Occurrences, request.FirstSeen, summary, request.RootCause, paths);
+            request.Trace, request.Verdict, request.Occurrences, request.FirstSeen, summary, rootCause,
+            [.. request.Sources.Keys]);
 
         return new EscalateResult(requests, verdicts, draft);
     }

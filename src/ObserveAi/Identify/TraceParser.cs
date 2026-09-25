@@ -63,7 +63,8 @@ public static class TraceParser
 
     public static ParsedTrace? Parse(string text, IReadOnlyCollection<string> appPrefixes)
     {
-        var lines = text.Replace("\r\n", "\n").Split('\n');
+        // The Python Lambda runtime joins a traceback's lines with a bare carriage return.
+        var lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         var spec = Specs.FirstOrDefault(s => s.Detect(lines));
         if (spec is null) return null;
 
@@ -102,8 +103,16 @@ public static class TraceParser
 
     private static string BeforeFirstColon(string text) => text.Split(':')[0].Trim();
 
-    private static string ExtractPythonType(string[] lines) =>
-        BeforeFirstColon(lines.LastOrDefault(l => l.Trim().Length > 0) ?? "");
+    // A native Python traceback ends with the exception line. The Python Lambda
+    // runtime logs it first instead, prefixed with "[ERROR]", and ends with the
+    // innermost source line.
+    private static string ExtractPythonType(string[] lines)
+    {
+        var first = lines.FirstOrDefault(l => l.Trim().Length > 0)?.Trim() ?? "";
+        return first.StartsWith("[ERROR] ", StringComparison.Ordinal)
+            ? BeforeFirstColon(first["[ERROR] ".Length..])
+            : BeforeFirstColon(lines.LastOrDefault(l => l.Trim().Length > 0) ?? "");
+    }
 
     // Go is the one runtime whose exception type carries a message, and "index out
     // of range [5] with length 3" would otherwise fingerprint separately for every
