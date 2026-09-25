@@ -4,7 +4,6 @@ import math
 
 import pytest
 
-from observe_ai import handler as handler_module
 from observe_ai import semif
 from observe_ai.bedrock_backend import score
 
@@ -223,103 +222,6 @@ def test_invalid_row_raises_before_calling_bedrock():
         score(client, "arn:model", bad_row)
 
     assert client.calls == []
-
-
-def test_handler_batch_with_one_invalid_row(monkeypatch):
-    top_logprobs = [
-        {"token": "A", "logprob": -0.1, "bytes": [65]},
-        {"token": "B", "logprob": -2.5, "bytes": [66]},
-    ]
-    stub_client = StubClient(make_body(top_logprobs, "A", -0.1))
-    monkeypatch.setattr(handler_module, "_get_client", lambda: stub_client)
-    monkeypatch.setenv("MODEL_ARN", "arn:model")
-    monkeypatch.setenv("BEDROCK_REGION", "eu-central-1")
-
-    invalid_row = dict(ROW_2, id="row-invalid", options=ROW_2["options"][:1])
-    event = {"rows": [ROW_2, invalid_row]}
-
-    response = handler_module.handler(event, None)
-
-    assert "requestContext" not in event
-    results = response["results"]
-    assert len(results) == 2
-    assert results[0]["id"] == "row-2"
-    assert "error" not in results[0]
-    assert results[1]["id"] == "row-invalid"
-    assert "error" in results[1]
-    assert "2-16" in results[1]["error"]
-
-
-def test_handler_single_row_without_wrapper(monkeypatch):
-    top_logprobs = [
-        {"token": "A", "logprob": -0.1, "bytes": [65]},
-        {"token": "B", "logprob": -2.5, "bytes": [66]},
-    ]
-    stub_client = StubClient(make_body(top_logprobs, "A", -0.1))
-    monkeypatch.setattr(handler_module, "_get_client", lambda: stub_client)
-    monkeypatch.setenv("MODEL_ARN", "arn:model")
-    monkeypatch.setenv("BEDROCK_REGION", "eu-central-1")
-
-    response = handler_module.handler(ROW_2, None)
-
-    assert response["results"][0]["id"] == "row-2"
-
-
-def test_handler_rejects_non_dict_row(monkeypatch):
-    monkeypatch.setenv("MODEL_ARN", "arn:model")
-    monkeypatch.setenv("BEDROCK_REGION", "eu-central-1")
-
-    response = handler_module.handler({"rows": ["not a row"]}, None)
-
-    results = response["results"]
-    assert len(results) == 1
-    assert results[0]["id"] is None
-    assert "must be a JSON object" in results[0]["error"]
-
-
-def test_handler_records_client_error_per_row_without_failing_the_batch(monkeypatch):
-    from botocore.exceptions import ClientError
-
-    def fake_score(client, model_arn, row, *, api):
-        if row["id"] == "row-2":
-            raise ClientError({"Error": {"Code": "ThrottlingException", "Message": "Rate exceeded"}}, "InvokeModel")
-        return {"id": row["id"], "option_ids": [], "probabilities": []}
-
-    monkeypatch.setattr(handler_module, "_get_client", lambda: object())
-    monkeypatch.setattr(handler_module, "score", fake_score)
-    monkeypatch.setenv("MODEL_ARN", "arn:model")
-    monkeypatch.setenv("BEDROCK_REGION", "eu-central-1")
-
-    other_row = dict(ROW_2, id="row-3")
-    event = {"rows": [ROW_2, other_row]}
-
-    response = handler_module.handler(event, None)
-
-    results = response["results"]
-    assert results[0]["id"] == "row-2"
-    assert "ClientError" in results[0]["error"]
-    assert "ThrottlingException" in results[0]["error"]
-    assert results[1]["id"] == "row-3"
-    assert "error" not in results[1]
-
-
-def test_handler_records_botocore_error_with_class_name(monkeypatch):
-    from botocore.exceptions import BotoCoreError
-
-    def fake_score(client, model_arn, row, *, api):
-        raise BotoCoreError()
-
-    monkeypatch.setattr(handler_module, "_get_client", lambda: object())
-    monkeypatch.setattr(handler_module, "score", fake_score)
-    monkeypatch.setenv("MODEL_ARN", "arn:model")
-    monkeypatch.setenv("BEDROCK_REGION", "eu-central-1")
-
-    response = handler_module.handler(ROW_2, None)
-
-    result = response["results"][0]
-    assert result["id"] == "row-2"
-    assert "BotoCoreError" in result["error"]
-
 
 # --- raw completion path and dual logprobs shapes ---
 

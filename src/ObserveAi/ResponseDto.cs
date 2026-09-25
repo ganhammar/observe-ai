@@ -7,7 +7,7 @@ namespace ObserveAi;
 /// One row's result. Nullable throughout because a successful row and a failed
 /// row populate disjoint sets of fields; DefaultIgnoreCondition.WhenWritingNull
 /// on the serializer context drops the unused half, matching the two distinct
-/// dict shapes returned by score() and by handler._score_row's error path.
+/// shapes a scored row and a rejected row produce.
 /// </summary>
 public sealed class RowResultDto
 {
