@@ -16,12 +16,12 @@ degrades the result instead of derailing the rest of the tree.
 import json
 from pathlib import Path
 
-# The definitions live in src/ObserveAi/tree.json so the C# runtime can embed
-# the same bytes it is deployed with. Loading rather than duplicating them is
-# what stops the two implementations drifting; tests/vectors/combine.json
+# The definitions live in src/ObserveAi/Decide/tree.json so the C# runtime can
+# embed the same bytes it is deployed with. Loading rather than duplicating
+# them is what stops the two implementations drifting; tests/vectors/combine.json
 # guards the combining rule on top of that.
 _DEFINITION = json.loads((Path(__file__).resolve().parents[1]
-                          / "src" / "ObserveAi" / "tree.json").read_text())
+                          / "src" / "ObserveAi" / "Decide" / "tree.json").read_text())
 
 PRIOR = _DEFINITION["prior"]
 BASELINE = _DEFINITION["baseline"]

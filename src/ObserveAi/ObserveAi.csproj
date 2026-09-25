@@ -43,8 +43,8 @@
     <!-- tree.json is the single source of truth shared
          with the Python side. Embedding it keeps the deployment zip
          self-contained with no extra file to stage alongside the binary. -->
-    <EmbeddedResource Include="tree.json">
-      <Link>tree.json</Link>
+    <EmbeddedResource Include="Decide/tree.json">
+      <Link>Decide/tree.json</Link>
       <LogicalName>ObserveAi.tree.json</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
