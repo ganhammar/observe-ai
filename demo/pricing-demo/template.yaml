@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  A pricing function that throws on purpose, so the observe-ai pipeline has a
+  real log group, a real traceback and a real repository to test against.
+
+Resources:
+  PricingDemo:
+    Type: AWS::Serverless::Function
+    Properties:
+      # The log group is named after the function, and the pipeline names the
+      # repository after the log group, so this name is the demo's identity.
+      FunctionName: pricing-demo
+      Runtime: python3.13
+      Handler: handler.handler
+      CodeUri: .
+      Architectures:
+        - arm64
+      MemorySize: 128
+      Timeout: 10
+
+  PricingDemoLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/pricing-demo
+      RetentionInDays: 7
