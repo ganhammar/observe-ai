@@ -84,7 +84,9 @@ Two constraints worth knowing before planning around this:
 
 ## Not included yet
 
-Structural stack-trace fingerprinting and deduplication. In production that layer belongs upstream of this one and removes most of the volume, since a single repeating defect usually accounts for the bulk of error logs. Triage quality matters less than not calling the model 9,800 times for the same crash.
+- **Evidence gathering.** The tree's 0.833 on the ambiguous band needs the evidence field the fixture carries by hand. Nothing in the pipeline produces it, so a real log is triaged by the flat question at 0.417. See the last sections of [docs/FINDINGS.md](docs/FINDINGS.md).
+- **Commit resolution.** Escalation reads `main`. The verification step says when the checkout does not match the trace, but nothing yet resolves which commit was running.
+- **The held-for-review path.** A verdict between the thresholds stops the execution with a reason and nothing picks it up.
 
 ## Attribution
 
